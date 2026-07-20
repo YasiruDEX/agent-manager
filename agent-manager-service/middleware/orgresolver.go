@@ -20,6 +20,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
@@ -51,10 +52,18 @@ func GetResolvedOrg(ctx context.Context) (ResolvedOrg, bool) {
 func OUIDFromRequest(r *http.Request) string {
 	org, ok := GetResolvedOrg(r.Context())
 	if !ok {
-		slog.Error("resolved org missing from request context — RequireOrgMatch not applied", "path", r.URL.Path)
+		slog.Error("resolved org missing from request context — RequireOrgMatch not applied", "path", sanitizeForLog(r.URL.Path))
 		return ""
 	}
 	return org.OUID
+}
+
+// sanitizeForLog strips CR/LF characters from untrusted input before it is
+// written to logs, preventing log forging via injected newlines that could
+// fake extra log entries or corrupt log-based tooling.
+func sanitizeForLog(s string) string {
+	replacer := strings.NewReplacer("\n", "", "\r", "")
+	return replacer.Replace(s)
 }
 
 // OrgResolver resolves an org handle to a Thunder OU ID.
