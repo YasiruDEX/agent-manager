@@ -1,0 +1,75 @@
+openapi: 3.0.3
+info:
+  title: Google Maps OpenAI MCP Agent
+  version: 1.0.0
+servers:
+  - url: http://localhost:9099
+paths:
+  /chat:
+    post:
+      summary: Chat with the Google Maps agent
+      operationId: chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - message
+              properties:
+                session_id:
+                  type: string
+                message:
+                  type: string
+                stream:
+                  type: boolean
+                  default: false
+                  description: >-
+                    When true (or when the request sends `Accept: text/event-stream`),
+                    the response is a Server-Sent Events stream instead of a single
+                    JSON body. See the "SSE response" description below.
+      responses:
+        "200":
+          description: >-
+            Successful response. Non-streaming requests receive a single JSON body
+            (schema below). Streaming requests (`stream: true` or
+            `Accept: text/event-stream`) instead receive a `text/event-stream` body
+            composed of these named SSE events, in order:
+              - `stage` — `{"node": string, "status": "start"|"complete", "label": string}`,
+                emitted as each pipeline node begins/finishes.
+              - `token` — `{"node": string, "text": string}`, one per generated token
+                of the final answer.
+              - `done` — `{"text": string}`, the complete final answer.
+              - `error` — `{"message": string}`, emitted instead of `done` on failure.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - response
+                properties:
+                  response:
+                    type: string
+            text/event-stream:
+              schema:
+                type: string
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  agent:
+                    type: string
+                  mcp_url:
+                    type: string

@@ -1,0 +1,115 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --font-display: "Inter", system-ui, -apple-system, sans-serif;
+  --shadow-glow: 0 0 40px -10px color-mix(in oklab, var(--primary) 50%, transparent);
+}
+
+/* Dark-first design. The reference is a dark UI with warm brown/black
+ * surfaces and vivid orange accents. We drive everything from :root so
+ * no `.dark` class is needed. */
+:root {
+  --radius: 0.625rem;
+
+  /* Warm near-black backgrounds */
+  --background: oklch(0.16 0.012 40);
+  --foreground: oklch(0.96 0.005 60);
+
+  --card: oklch(0.20 0.014 40);
+  --card-foreground: oklch(0.96 0.005 60);
+
+  --popover: oklch(0.20 0.014 40);
+  --popover-foreground: oklch(0.96 0.005 60);
+
+  /* Vivid orange primary (~#F97316) */
+  --primary: oklch(0.72 0.19 47);
+  --primary-foreground: oklch(0.15 0.01 40);
+  --primary-glow: oklch(0.78 0.18 55);
+
+  --secondary: oklch(0.24 0.014 40);
+  --secondary-foreground: oklch(0.96 0.005 60);
+
+  --muted: oklch(0.22 0.012 40);
+  --muted-foreground: oklch(0.68 0.02 60);
+
+  --accent: oklch(0.28 0.03 45);
+  --accent-foreground: oklch(0.96 0.005 60);
+
+  --destructive: oklch(0.58 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(0.28 0.014 40);
+  --input: oklch(0.24 0.014 40);
+  --ring: oklch(0.72 0.19 47);
+
+  --sidebar: oklch(0.13 0.01 40);
+  --sidebar-foreground: oklch(0.88 0.01 60);
+  --sidebar-accent: oklch(0.24 0.02 45);
+  --sidebar-accent-foreground: oklch(0.96 0.005 60);
+  --sidebar-border: oklch(0.22 0.012 40);
+
+  --gradient-primary: linear-gradient(135deg, var(--primary), var(--primary-glow));
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html, body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-display);
+  }
+}
+
+@utility btn-gradient {
+  background-image: var(--gradient-primary);
+  color: var(--color-primary-foreground);
+  box-shadow: var(--shadow-glow);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  &:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+  &:disabled {
+    opacity: 0.5;
+    filter: none;
+    transform: none;
+    cursor: not-allowed;
+  }
+}

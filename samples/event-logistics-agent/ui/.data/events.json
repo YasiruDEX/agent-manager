@@ -1,0 +1,1010 @@
+[
+  {
+    "id": "88c324b1-fce5-46d9-b1e4-1aa9a680fe43",
+    "venueAddress": "Hilton Hotel, Colombo",
+    "eventDate": "2026-11-06 16:49",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:16:45.467Z",
+    "updatedAt": "2026-07-17T11:17:07.171Z",
+    "resolvedLat": 6.9325497,
+    "resolvedLon": 79.8447402,
+    "mapsData": {
+      "venue": {
+        "name": "Hilton Colombo",
+        "address": "2 Sir Chittampalam A Gardiner Mawatha, Colombo, Sri Lanka",
+        "latitude": 6.9325497,
+        "longitude": 79.8447402,
+        "summary": "The Hilton Colombo is a five-star hotel featuring bright rooms and suites, 17 event spaces, and six bars and restaurants. It is family-friendly and offers various amenities including a game room, sauna, and massage services."
+      },
+      "hotels": [
+        {
+          "name": "Grand Oriental Hotel",
+          "distance": "0.5 miles",
+          "notes": "Located nearby with historical charm and modern amenities."
+        },
+        {
+          "name": "Fairway Colombo",
+          "distance": "0.6 miles",
+          "notes": "Contemporary hotel with a restaurant and close proximity to attractions."
+        },
+        {
+          "name": "Dutch Heritage Colombo",
+          "distance": "0.7 miles",
+          "notes": "Offers a unique cultural experience with traditional architecture."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available nearby with several public car parks.",
+        "structures": [
+          "Hemas Public Car Park",
+          "The Kingsbury Hotel Parking Lot"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue is wheelchair accessible with nearby parking options.",
+        "features": [
+          "Wheelchair accessible entrances",
+          "Designated parking spaces"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784287024,
+          "dt_utc": "2026-07-17 11:17 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 30.02,
+          "feels_like_c": 36.09,
+          "humidity_pct": 74,
+          "wind_speed_ms": 6.09,
+          "wind_gust_ms": 7.47,
+          "cloud_cover_pct": 70,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 30.02,
+        "feels_like_c": 36.09,
+        "humidity_pct": 74,
+        "wind_speed_ms": 6.09,
+        "wind_gust_ms": 7.47,
+        "cloud_cover_pct": 70,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9325497,
+        "lon": 79.8447402,
+        "event_date": "2026-11-06",
+        "dt_unix": 1793966400
+      }
+    },
+    "report": {
+      "venue_name": "Hilton Colombo",
+      "overall_risk_level": "moderate",
+      "executive_summary": "The Hilton Colombo offers a luxurious setting for outdoor events, but potential weather risks and accessibility must be considered. Planning for contingencies is essential to ensure guest comfort and safety.",
+      "weather_risk": {
+        "summary": "The weather forecast indicates warm temperatures with high humidity, which could impact guest comfort.",
+        "points": [
+          "High humidity levels (74%) may cause discomfort.",
+          "Temperatures around 30°C could lead to heat-related issues."
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The venue is well-equipped with nearby hotels and accessible parking options.",
+        "points": [
+          "Multiple nearby hotels within walking distance.",
+          "Public car parks available for guest convenience."
+        ]
+      },
+      "critical_failure_points": [
+        "Severe weather conditions leading to event cancellation.",
+        "Inadequate cooling or shade for guests during high temperatures."
+      ],
+      "contingency_plan": [
+        "Provide shaded areas and cooling stations for guests.",
+        "Have a backup indoor venue option in case of inclement weather."
+      ],
+      "weather_windows": [
+        "16:00 - 18:00 is critical for managing guest comfort due to high temperatures and humidity."
+      ]
+    }
+  },
+  {
+    "id": "4cef7e6e-8692-48bb-b42e-489c391b2ed1",
+    "venueAddress": "Hilton Hotel, Colombo",
+    "eventDate": "2026-10-14",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:17:43.226Z",
+    "updatedAt": "2026-07-17T11:17:43.226Z",
+    "resolvedLat": 6.9325497,
+    "resolvedLon": 79.8447402,
+    "mapsData": {
+      "venue": {
+        "name": "Hilton Colombo",
+        "address": "2 Sir Chittampalam A Gardiner Mawatha, Colombo, Sri Lanka",
+        "latitude": 6.9325497,
+        "longitude": 79.8447402,
+        "summary": "The Hilton Colombo is a five-star hotel featuring bright rooms and suites, 17 event spaces, and six bars and restaurants. It is family-friendly, offers child care, and is considered good for kids."
+      },
+      "hotels": [
+        {
+          "name": "Grand Oriental Hotel",
+          "distance": "0.5 miles",
+          "notes": "Historic hotel with a central location."
+        },
+        {
+          "name": "Fairway Colombo",
+          "distance": "0.6 miles",
+          "notes": "Modern hotel with a rooftop bar and restaurant."
+        },
+        {
+          "name": "Dutch Heritage Colombo",
+          "distance": "0.7 miles",
+          "notes": "Offers a blend of heritage and modern amenities."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available nearby with multiple options.",
+        "structures": [
+          "Hemas Public Car Park",
+          "The Kingsbury Hotel Parking Lot"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue is wheelchair accessible with nearby parking options.",
+        "features": [
+          "Wheelchair accessible entrances",
+          "Designated parking spaces"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784286567,
+          "dt_utc": "2026-07-17 11:09 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 29.46,
+          "feels_like_c": 34.86,
+          "humidity_pct": 75,
+          "wind_speed_ms": 6.09,
+          "wind_gust_ms": 7.47,
+          "cloud_cover_pct": 70,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 29.46,
+        "feels_like_c": 34.86,
+        "humidity_pct": 75,
+        "wind_speed_ms": 6.09,
+        "wind_gust_ms": 7.47,
+        "cloud_cover_pct": 70,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9325497,
+        "lon": 79.8447402,
+        "event_date": "2026-10-14",
+        "dt_unix": 1791979200
+      }
+    },
+    "report": {
+      "venue_name": "Hilton Colombo",
+      "overall_risk_level": "low",
+      "executive_summary": "The Hilton Colombo provides a luxurious setting for an indoor wedding with ample facilities and accessibility options. The weather forecast indicates favorable conditions, minimizing outdoor risk factors.",
+      "weather_risk": {
+        "summary": "The weather is expected to be warm with no precipitation, making it suitable for an indoor event.",
+        "points": [
+          "High humidity may affect comfort levels indoors.",
+          "No rain expected, reducing outdoor contingency concerns."
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The venue offers multiple event spaces and is well-equipped for large gatherings. Nearby hotels provide additional accommodation options.",
+        "points": [
+          "17 event spaces available for various setups.",
+          "Multiple nearby hotels within walking distance."
+        ]
+      },
+      "critical_failure_points": [
+        "Unexpected technical failures in audio/visual equipment.",
+        "Last-minute guest accessibility issues."
+      ],
+      "contingency_plan": [
+        "Have backup audio/visual equipment on-site.",
+        "Ensure additional staff are available for guest assistance."
+      ],
+      "weather_windows": [
+        "No significant weather windows to monitor, as conditions are stable."
+      ]
+    }
+  },
+  {
+    "id": "9688b7c9-3beb-47ce-9f64-2ffb4746beb1",
+    "venueAddress": "Hilton Hotel, Colombo",
+    "eventDate": "2026-10-14",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:18:31.285Z",
+    "updatedAt": "2026-07-17T11:18:31.285Z",
+    "resolvedLat": 6.9325497,
+    "resolvedLon": 79.8447402,
+    "mapsData": {
+      "venue": {
+        "name": "Hilton Colombo",
+        "address": "2 Sir Chittampalam A Gardiner Mawatha, Colombo, Sri Lanka",
+        "latitude": 6.9325497,
+        "longitude": 79.8447402,
+        "summary": "The Hilton Colombo is a five-star hotel featuring bright rooms and suites, 17 event spaces, and six bars and restaurants. It is family-friendly, offers child care, and is considered good for kids."
+      },
+      "hotels": [
+        {
+          "name": "Oak Ray Colombo City Hotel",
+          "distance": "0.5 miles",
+          "notes": "Located nearby with essential amenities."
+        },
+        {
+          "name": "Grand Oriental Hotel",
+          "distance": "0.6 miles",
+          "notes": "Offers a historic ambiance and dining options."
+        },
+        {
+          "name": "Fairway Colombo",
+          "distance": "0.7 miles",
+          "notes": "Modern hotel with a rooftop bar and restaurant."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available nearby with multiple options.",
+        "structures": [
+          "Hemas Public Car Park",
+          "The Kingsbury Hotel Parking Lot"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue is wheelchair accessible with suitable facilities.",
+        "features": [
+          "Wheelchair accessible entrances",
+          "Accessible restrooms"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784286567,
+          "dt_utc": "2026-07-17 11:09 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 29.46,
+          "feels_like_c": 34.86,
+          "humidity_pct": 75,
+          "wind_speed_ms": 6.09,
+          "wind_gust_ms": 7.47,
+          "cloud_cover_pct": 70,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 29.46,
+        "feels_like_c": 34.86,
+        "humidity_pct": 75,
+        "wind_speed_ms": 6.09,
+        "wind_gust_ms": 7.47,
+        "cloud_cover_pct": 70,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9325497,
+        "lon": 79.8447402,
+        "event_date": "2026-10-14",
+        "dt_unix": 1791979200
+      }
+    },
+    "report": {
+      "venue_name": "Hilton Colombo",
+      "overall_risk_level": "low",
+      "executive_summary": "The Hilton Colombo is well-equipped for an indoor wedding, providing ample space and facilities. The weather conditions on the event date are favorable, minimizing outdoor risks.",
+      "weather_risk": {
+        "summary": "Weather conditions are expected to be stable with no precipitation.",
+        "points": [
+          "No rain expected on the event date",
+          "Temperatures will be warm, but manageable indoors"
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The venue offers convenient parking and is accessible for all guests.",
+        "points": [
+          "Multiple nearby parking options available",
+          "Wheelchair accessible facilities"
+        ]
+      },
+      "critical_failure_points": [
+        "Unexpected power outage",
+        "Technical difficulties with audio/visual equipment"
+      ],
+      "contingency_plan": [
+        "Backup generator on-site",
+        "Technical support team available for troubleshooting"
+      ],
+      "weather_windows": [
+        "No significant weather windows to monitor, as conditions are stable throughout the day"
+      ]
+    }
+  },
+  {
+    "id": "cda4a5b2-a098-4807-a0e4-a05de1f0cce1",
+    "venueAddress": "Hilton Hotel, Colombo",
+    "eventDate": "2026-10-15",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:18:55.703Z",
+    "updatedAt": "2026-07-17T11:18:55.703Z",
+    "resolvedLat": 6.9325497,
+    "resolvedLon": 79.8447402,
+    "mapsData": {
+      "venue": {
+        "name": "Hilton Colombo",
+        "address": "2 Sir Chittampalam A Gardiner Mawatha, Colombo, Sri Lanka",
+        "latitude": 6.9325497,
+        "longitude": 79.8447402,
+        "summary": "The Hilton Colombo is a five-star hotel featuring bright rooms and suites, 17 event spaces, and six bars and restaurants. It is family-friendly, offers child care, and is considered good for kids."
+      },
+      "hotels": [
+        {
+          "name": "Grand Oriental Hotel",
+          "distance": "0.5 miles",
+          "notes": "Located near the waterfront, offers historical charm."
+        },
+        {
+          "name": "Fairway Colombo",
+          "distance": "0.6 miles",
+          "notes": "Modern hotel with a rooftop bar and city views."
+        },
+        {
+          "name": "Dutch Heritage Colombo",
+          "distance": "0.7 miles",
+          "notes": "Features traditional architecture and a cozy atmosphere."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available nearby with multiple options.",
+        "structures": [
+          "Hemas Public Car Park",
+          "The Kingsbury Hotel Parking Lot"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue is wheelchair accessible with suitable facilities.",
+        "features": [
+          "Wheelchair accessible entrances",
+          "Accessible restrooms"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784287024,
+          "dt_utc": "2026-07-17 11:17 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 30.02,
+          "feels_like_c": 36.09,
+          "humidity_pct": 74,
+          "wind_speed_ms": 6.09,
+          "wind_gust_ms": 7.47,
+          "cloud_cover_pct": 70,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 30.02,
+        "feels_like_c": 36.09,
+        "humidity_pct": 74,
+        "wind_speed_ms": 6.09,
+        "wind_gust_ms": 7.47,
+        "cloud_cover_pct": 70,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9325497,
+        "lon": 79.8447402,
+        "event_date": "2026-10-15",
+        "dt_unix": 1792065600
+      }
+    },
+    "report": {
+      "venue_name": "Hilton Colombo",
+      "overall_risk_level": "low",
+      "executive_summary": "The Hilton Colombo is well-equipped for an indoor wedding, providing ample space and amenities. The risk factors are minimal, with favorable weather conditions expected.",
+      "weather_risk": {
+        "summary": "Weather conditions are projected to be stable with no precipitation expected.",
+        "points": [
+          "Temperature is expected to be around 30°C, which is manageable for indoor events.",
+          "Humidity levels may be high, but indoor venues typically have climate control."
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The venue offers multiple event spaces and is easily accessible.",
+        "points": [
+          "Multiple nearby hotels for guest accommodation.",
+          "Parking available at nearby public car parks."
+        ]
+      },
+      "critical_failure_points": [
+        "Unexpected technical issues with AV equipment.",
+        "Insufficient catering staff during peak service times."
+      ],
+      "contingency_plan": [
+        "Have backup AV equipment on-site.",
+        "Ensure additional catering staff are on standby."
+      ],
+      "weather_windows": [
+        "No significant weather windows to monitor, as conditions are stable throughout the day."
+      ]
+    }
+  },
+  {
+    "id": "f88db88a-62d5-467b-a6cc-6b400e6ed62e",
+    "venueAddress": "Hilton Hotel, Colombo",
+    "eventDate": "2026-10-14",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:36:07.856Z",
+    "updatedAt": "2026-07-17T11:36:07.856Z",
+    "resolvedLat": 6.9325497,
+    "resolvedLon": 79.8447402,
+    "mapsData": {
+      "venue": {
+        "name": "Hilton Colombo",
+        "address": "2 Sir Chittampalam A Gardiner Mawatha, Colombo, Sri Lanka",
+        "latitude": 6.9325497,
+        "longitude": 79.8447402,
+        "summary": "The Hilton Colombo is a five-star hotel featuring bright rooms and suites, 17 event spaces, and six bars and restaurants. It is family-friendly, offers child care, and is considered good for kids."
+      },
+      "hotels": [
+        {
+          "name": "Fairway Colombo",
+          "distance": "0.5 miles",
+          "notes": "Located close to the venue, offers modern amenities."
+        },
+        {
+          "name": "Dutch Heritage Colombo",
+          "distance": "0.5 miles",
+          "notes": "Features a unique heritage design and is family-friendly."
+        },
+        {
+          "name": "The Steuart by Citrus",
+          "distance": "0.6 miles",
+          "notes": "Offers comfortable accommodations with a central location."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available nearby with multiple options.",
+        "structures": [
+          "Hemas Public Car Park",
+          "The Kingsbury Hotel Parking Lot"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue is wheelchair accessible and provides various facilities for guests with disabilities.",
+        "features": [
+          "Wheelchair accessible entrances",
+          "Accessible restrooms"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784288164,
+          "dt_utc": "2026-07-17 11:36 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 29.46,
+          "feels_like_c": 35.09,
+          "humidity_pct": 76,
+          "wind_speed_ms": 5.52,
+          "wind_gust_ms": 7.28,
+          "cloud_cover_pct": 64,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 29.46,
+        "feels_like_c": 35.09,
+        "humidity_pct": 76,
+        "wind_speed_ms": 5.52,
+        "wind_gust_ms": 7.28,
+        "cloud_cover_pct": 64,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9325497,
+        "lon": 79.8447402,
+        "event_date": "2026-10-14",
+        "dt_unix": 1791979200
+      }
+    },
+    "report": {
+      "venue_name": "Hilton Colombo",
+      "overall_risk_level": "low",
+      "executive_summary": "The Hilton Colombo offers a luxurious setting for an indoor wedding with ample facilities and accessibility. The weather forecast indicates favorable conditions, minimizing outdoor risks.",
+      "weather_risk": {
+        "summary": "The weather is expected to be warm with no precipitation, indicating a low risk for indoor events.",
+        "points": [
+          "High humidity may affect comfort levels indoors.",
+          "Temperature may require climate control measures."
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The venue is centrally located with multiple nearby hotels and parking options available.",
+        "points": [
+          "Fairway Colombo and Dutch Heritage Colombo are within 0.5 miles.",
+          "Parking available at Hemas Public Car Park and The Kingsbury Hotel."
+        ]
+      },
+      "critical_failure_points": [
+        "Unexpected technical issues with AV equipment.",
+        "Insufficient climate control leading to discomfort."
+      ],
+      "contingency_plan": [
+        "Have backup AV equipment on-site.",
+        "Ensure adequate air conditioning is operational."
+      ],
+      "weather_windows": [
+        "No significant weather windows expected, allowing for a smooth indoor setup."
+      ]
+    }
+  },
+  {
+    "id": "c3d99b46-b75d-4cb9-84cb-be4fa3ad2e5e",
+    "venueAddress": "Galadari Hotel, Galle",
+    "eventDate": "2026-10-14",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:39:12.404Z",
+    "updatedAt": "2026-07-17T11:39:12.404Z",
+    "resolvedLat": 6.9316682,
+    "resolvedLon": 79.843027,
+    "mapsData": {
+      "venue": {
+        "name": "The Galadari Hotel",
+        "address": "64 Lotus Rd, Colombo 00100, Sri Lanka",
+        "latitude": 6.9316682,
+        "longitude": 79.843027,
+        "summary": "The Galadari Hotel is an elegant hotel featuring warm rooms and suites, an outdoor pool, a gym, and multiple dining options. It offers various amenities including a spa, meeting rooms, and is wheelchair accessible."
+      },
+      "hotels": [
+        {
+          "name": "Radisson Blu Resort, Galle",
+          "distance": "Approximately 5 miles",
+          "notes": "A luxury resort with modern amenities and beachfront access."
+        },
+        {
+          "name": "Sky White Villa",
+          "distance": "Approximately 5 miles",
+          "notes": "A cozy villa offering a homely atmosphere and personalized service."
+        },
+        {
+          "name": "Yunal Inn",
+          "distance": "Approximately 5 miles",
+          "notes": "A budget-friendly option with basic amenities and a convenient location."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available at nearby facilities with wheelchair accessibility.",
+        "structures": [
+          "One Galle Face Car Park",
+          "Galle Face Car Park"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue and nearby parking facilities are wheelchair accessible.",
+        "features": [
+          "Wheelchair-accessible entrance",
+          "Wheelchair-accessible restroom"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784288164,
+          "dt_utc": "2026-07-17 11:36 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 29.46,
+          "feels_like_c": 35.09,
+          "humidity_pct": 76,
+          "wind_speed_ms": 5.52,
+          "wind_gust_ms": 7.28,
+          "cloud_cover_pct": 64,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 29.46,
+        "feels_like_c": 35.09,
+        "humidity_pct": 76,
+        "wind_speed_ms": 5.52,
+        "wind_gust_ms": 7.28,
+        "cloud_cover_pct": 64,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9316682,
+        "lon": 79.843027,
+        "event_date": "2026-10-14",
+        "dt_unix": 1791979200
+      }
+    },
+    "report": {
+      "venue_name": "Galadari Hotel",
+      "overall_risk_level": "low",
+      "executive_summary": "The Galadari Hotel in Galle provides a sophisticated setting for an indoor wedding, with excellent amenities and accessibility. The weather forecast is favorable, indicating a low risk for indoor events.",
+      "weather_risk": {
+        "summary": "The weather is expected to be warm with no precipitation, which is ideal for an indoor wedding.",
+        "points": [
+          "High humidity may affect comfort levels indoors.",
+          "Temperature management may be necessary."
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The venue is well-equipped with multiple dining options and meeting rooms, ensuring a seamless experience.",
+        "points": [
+          "Nearby luxury hotels such as Radisson Blu Resort and Sky White Villa.",
+          "Parking available at nearby facilities with wheelchair accessibility."
+        ]
+      },
+      "critical_failure_points": [
+        "Technical issues with sound or lighting equipment.",
+        "Insufficient climate control leading to discomfort."
+      ],
+      "contingency_plan": [
+        "Have backup AV equipment available.",
+        "Ensure HVAC systems are fully operational."
+      ],
+      "weather_windows": [
+        "No significant weather windows expected, allowing for a smooth indoor setup."
+      ]
+    }
+  },
+  {
+    "id": "c2b3e731-7f96-4f3e-9332-da784548b07d",
+    "venueAddress": "Galadari Hotel, Galle",
+    "eventDate": "2026-10-14",
+    "status": "ready",
+    "createdAt": "2026-07-17T11:43:52.904Z",
+    "updatedAt": "2026-07-17T11:43:52.904Z",
+    "resolvedLat": 6.9316682,
+    "resolvedLon": 79.843027,
+    "mapsData": {
+      "venue": {
+        "name": "The Galadari Hotel",
+        "address": "64 Lotus Rd, Colombo 00100, Sri Lanka",
+        "latitude": 6.9316682,
+        "longitude": 79.843027,
+        "summary": "The Galadari Hotel is an elegant hotel featuring warm rooms and suites, an outdoor pool, a gym, three restaurants, and two bars. It offers various amenities including a spa, meeting rooms, and is known for its ocean views and high tea."
+      },
+      "hotels": [
+        {
+          "name": "Radisson Blu Resort, Galle",
+          "distance": "Approximately 5 miles",
+          "notes": "A luxury resort with various amenities."
+        },
+        {
+          "name": "Sky White Villa",
+          "distance": "Approximately 5 miles",
+          "notes": "A cozy villa offering a comfortable stay."
+        },
+        {
+          "name": "Yunal Inn",
+          "distance": "Approximately 5 miles",
+          "notes": "A budget-friendly option with basic amenities."
+        }
+      ],
+      "parking": {
+        "summary": "Parking is available at nearby locations with accessible options.",
+        "structures": [
+          "One Galle Face Car Park",
+          "Galle Face Car Park"
+        ]
+      },
+      "accessibility": {
+        "summary": "The venue and nearby parking facilities are wheelchair accessible.",
+        "features": [
+          "Wheelchair-accessible entrance",
+          "Wheelchair-accessible restroom"
+        ]
+      }
+    },
+    "weatherData": {
+      "lat": null,
+      "lon": null,
+      "timezone": 19800,
+      "raw_data": [
+        {
+          "dt": 1784288164,
+          "dt_utc": "2026-07-17 11:36 UTC",
+          "sunrise": 1784248326,
+          "sunrise_utc": "2026-07-17 00:32 UTC",
+          "sunset": 1784293258,
+          "sunset_utc": "2026-07-17 13:00 UTC",
+          "moon_phase": null,
+          "temp_c": 29.46,
+          "feels_like_c": 35.09,
+          "humidity_pct": 76,
+          "wind_speed_ms": 5.52,
+          "wind_gust_ms": 7.28,
+          "cloud_cover_pct": 64,
+          "uvi": null,
+          "visibility_m": 10000,
+          "conditions": [
+            {
+              "id": 803,
+              "main": "Clouds",
+              "description": "broken clouds",
+              "icon": "04d"
+            }
+          ],
+          "rain_mm": 0,
+          "snow_mm": 0,
+          "precipitation_probability_pct": 0
+        }
+      ],
+      "summary": {
+        "sunrise_utc": "2026-07-17 00:32 UTC",
+        "sunset_utc": "2026-07-17 13:00 UTC",
+        "temp_c": 29.46,
+        "feels_like_c": 35.09,
+        "humidity_pct": 76,
+        "wind_speed_ms": 5.52,
+        "wind_gust_ms": 7.28,
+        "cloud_cover_pct": 64,
+        "precipitation_probability_pct": 0,
+        "rain_mm": 0,
+        "snow_mm": 0,
+        "uvi": null,
+        "moon_phase": null,
+        "conditions": [
+          {
+            "id": 803,
+            "main": "Clouds",
+            "description": "broken clouds",
+            "icon": "04d"
+          }
+        ]
+      },
+      "request_params": {
+        "lat": 6.9316682,
+        "lon": 79.843027,
+        "event_date": "2026-10-14",
+        "dt_unix": 1791979200
+      }
+    },
+    "report": {
+      "venue_name": "The Galadari Hotel",
+      "overall_risk_level": "low",
+      "executive_summary": "The Galadari Hotel offers a suitable environment for an indoor wedding with ample amenities and accessibility features. The weather conditions are favorable, minimizing any outdoor risks.",
+      "weather_risk": {
+        "summary": "Weather conditions indicate a low likelihood of rain and moderate temperatures.",
+        "points": [
+          "No expected precipitation on the event date",
+          "Temperatures are comfortable for indoor events"
+        ]
+      },
+      "venue_logistics": {
+        "summary": "The hotel provides various amenities and is easily accessible, with nearby parking options available.",
+        "points": [
+          "Multiple luxury accommodations within 5 miles",
+          "Wheelchair accessible facilities"
+        ]
+      },
+      "critical_failure_points": [
+        "Unexpected power outage affecting indoor lighting",
+        "Last-minute venue booking issues"
+      ],
+      "contingency_plan": [
+        "Backup generator for power outages",
+        "Alternative venue options within close proximity"
+      ],
+      "weather_windows": [
+        "No significant weather windows to monitor, as conditions are stable"
+      ]
+    }
+  }
+]
