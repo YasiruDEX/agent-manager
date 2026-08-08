@@ -19,6 +19,7 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
@@ -26,7 +27,7 @@ import (
 func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentConfigurationController) {
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		rbac.AgentUpdate, ctrl.CreateAgentModelConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", ctrl.CreateAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
@@ -41,17 +42,17 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentUpdate, ctrl.UpdateAgentModelConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", ctrl.UpdateAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentDelete, ctrl.DeleteAgentModelConfig,
+		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-model-config", ctrl.DeleteAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
-		rbac.AgentUpdate, ctrl.CreateAgentMCPConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", ctrl.CreateAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
@@ -66,12 +67,12 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentUpdate, ctrl.UpdateAgentMCPConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", ctrl.UpdateAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentDelete, ctrl.DeleteAgentMCPConfig,
+		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-mcp-config", ctrl.DeleteAgentMCPConfig),
 	)
 
 	// Per-config MCP API keys (external agents): the key an agent uses to call its
@@ -83,17 +84,17 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys",
-		rbac.AgentAPIKeyManage, ctrl.CreateMCPConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", ctrl.CreateMCPConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RotateMCPConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", ctrl.RotateMCPConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RevokeMCPConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", ctrl.RevokeMCPConfigAPIKey),
 	)
 
 	// Per-config LLM API keys (external agents): the key an agent uses to call its
@@ -105,16 +106,16 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys",
-		rbac.AgentAPIKeyManage, ctrl.CreateLLMConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", ctrl.CreateLLMConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RotateLLMConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", ctrl.RotateLLMConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RevokeLLMConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", ctrl.RevokeLLMConfigAPIKey),
 	)
 }

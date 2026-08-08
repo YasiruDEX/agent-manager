@@ -19,9 +19,10 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 func registerCatalogRoutes(rr *middleware.RouteRegistrar, ctrl controllers.CatalogController) {
-	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/catalog", rbac.CatalogRead, ctrl.ListCatalog)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/catalog", rbac.CatalogRead, growthanalytics.Track("amp.marketplace.view-catalog", ctrl.ListCatalog))
 }

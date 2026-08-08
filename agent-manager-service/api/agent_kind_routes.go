@@ -19,17 +19,18 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 func registerAgentKindRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentKindController) {
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds", rbac.AgentKindRead, ctrl.ListKinds)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindRead, ctrl.GetKind)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindUpdate, ctrl.UpdateKind)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindDelete, ctrl.DeleteKind)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/agent-kinds/{kindName}/versions", rbac.AgentKindUpdate, ctrl.AddVersion)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindUpdate, growthanalytics.Track("amp.marketplace.manage-kind", ctrl.UpdateKind))
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindDelete, growthanalytics.Track("amp.marketplace.manage-kind", ctrl.DeleteKind))
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/agent-kinds/{kindName}/versions", rbac.AgentKindUpdate, growthanalytics.Track("amp.marketplace.manage-kind.add-version", ctrl.AddVersion))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}/versions", rbac.AgentKindRead, ctrl.ListVersions)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}/versions/{versionTag}", rbac.AgentKindRead, ctrl.GetVersion)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/agent-kinds/{kindName}/versions/{versionTag}", rbac.AgentKindDelete, ctrl.DeleteVersion)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/agent-kinds/{kindName}/versions/{versionTag}", rbac.AgentKindDelete, growthanalytics.Track("amp.marketplace.manage-kind.add-version", ctrl.DeleteVersion))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}/agents", rbac.AgentKindRead, ctrl.ListKindAgents)
 }

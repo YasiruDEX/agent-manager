@@ -19,15 +19,16 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterLLMDeploymentRoutes registers all LLM deployment-related routes
 func RegisterLLMDeploymentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMDeploymentController) {
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{providerId}/deployments", rbac.LLMProviderDeploy, ctrl.DeployLLMProvider)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{providerId}/deployments/undeploy", rbac.LLMProviderDeploy, ctrl.UndeployLLMProviderDeployment)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{providerId}/deployments/restore", rbac.LLMProviderDeploy, ctrl.RestoreLLMProviderDeployment)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{providerId}/deployments", rbac.LLMProviderDeploy, growthanalytics.Track("amp.connections.deploy-llm-provider", ctrl.DeployLLMProvider))
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{providerId}/deployments/undeploy", rbac.LLMProviderDeploy, growthanalytics.Track("amp.connections.deploy-llm-provider", ctrl.UndeployLLMProviderDeployment))
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{providerId}/deployments/restore", rbac.LLMProviderDeploy, growthanalytics.Track("amp.connections.deploy-llm-provider", ctrl.RestoreLLMProviderDeployment))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}/deployments", rbac.LLMProviderRead, ctrl.GetLLMProviderDeployments)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}/deployments/{deploymentId}", rbac.LLMProviderRead, ctrl.GetLLMProviderDeployment)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{providerId}/deployments/{deploymentId}", rbac.LLMProviderDeploy, ctrl.DeleteLLMProviderDeployment)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{providerId}/deployments/{deploymentId}", rbac.LLMProviderDeploy, growthanalytics.Track("amp.connections.deploy-llm-provider", ctrl.DeleteLLMProviderDeployment))
 }

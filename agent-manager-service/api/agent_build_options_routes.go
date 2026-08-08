@@ -19,8 +19,9 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 )
 
 func registerAgentBuildOptionsRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentBuildOptionsController) {
-	rr.HandleFuncWithValidation("GET /orgs/{orgName}/agent-build-options", ctrl.GetAgentBuildOptions)
+	rr.HandleFuncWithValidation("GET /orgs/{orgName}/agent-build-options", growthanalytics.Track("amp.marketplace.view-build-options", ctrl.GetAgentBuildOptions))
 }

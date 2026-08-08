@@ -19,30 +19,31 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 func registerAgentIdentityRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentIdentityController) {
 	// Groups
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups", rbac.AgentIdentityRead, ctrl.ListGroups)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups", rbac.AgentIdentityCreate, ctrl.CreateGroup)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups", rbac.AgentIdentityCreate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.CreateGroup))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityRead, ctrl.GetGroup)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityUpdate, ctrl.UpdateGroup)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityDelete, ctrl.DeleteGroup)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityUpdate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.UpdateGroup))
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityDelete, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.DeleteGroup))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members", rbac.AgentIdentityRead, ctrl.GetGroupMembers)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/add", rbac.AgentIdentityUpdate, ctrl.AddGroupMembers)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/remove", rbac.AgentIdentityUpdate, ctrl.RemoveGroupMembers)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/add", rbac.AgentIdentityUpdate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.AddGroupMembers))
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/remove", rbac.AgentIdentityUpdate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.RemoveGroupMembers))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/roles", rbac.AgentIdentityRead, ctrl.GetGroupRoles)
 
 	// Roles
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/roles", rbac.AgentIdentityRead, ctrl.ListRoles)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles", rbac.AgentIdentityCreate, ctrl.CreateRole)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles", rbac.AgentIdentityCreate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.CreateRole))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityRead, ctrl.GetRole)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityUpdate, ctrl.UpdateRole)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityDelete, ctrl.DeleteRole)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityUpdate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.UpdateRole))
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityDelete, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.DeleteRole))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments", rbac.AgentIdentityRead, ctrl.GetRoleAssignments)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/add", rbac.AgentIdentityUpdate, ctrl.AddRoleAssignees)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/remove", rbac.AgentIdentityUpdate, ctrl.RemoveRoleAssignees)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/add", rbac.AgentIdentityUpdate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.AddRoleAssignees))
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/remove", rbac.AgentIdentityUpdate, growthanalytics.Track("amp.security-access.identity-group-role", ctrl.RemoveRoleAssignees))
 
 	// Agents picker
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/agents", rbac.AgentIdentityRead, ctrl.ListAgents)

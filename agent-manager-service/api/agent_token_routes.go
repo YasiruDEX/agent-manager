@@ -21,12 +21,13 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // registerAgentTokenRoutes registers the agent token API routes
 func registerAgentTokenRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentTokenController) {
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/token", rbac.AgentTokenManage, ctrl.GenerateToken)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/token", rbac.AgentTokenManage, growthanalytics.Track("amp.security-access.agent-token", ctrl.GenerateToken))
 }
 
 // registerJWKSRoute registers the JWKS endpoint on the provided mux

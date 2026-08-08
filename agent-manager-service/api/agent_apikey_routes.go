@@ -19,14 +19,15 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterAgentAPIKeyRoutes registers API key routes for agents
 func RegisterAgentAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentAPIKeyController) {
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys", rbac.AgentAPIKeyManage, ctrl.CreateAPIKey)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/test", rbac.AgentAPIKeyManage, ctrl.IssueTestAPIKey)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys", rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.issue-api-key", ctrl.CreateAPIKey))
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/test", rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.issue-api-key", ctrl.IssueTestAPIKey))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys", rbac.AgentAPIKeyManage, ctrl.ListAPIKeys)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/{keyName}", rbac.AgentAPIKeyManage, ctrl.RevokeAPIKey)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/{keyName}", rbac.AgentAPIKeyManage, ctrl.RotateAPIKey)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/{keyName}", rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.issue-api-key.rotate", ctrl.RevokeAPIKey))
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/{keyName}", rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.issue-api-key.rotate", ctrl.RotateAPIKey))
 }
