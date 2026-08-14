@@ -60,6 +60,10 @@ type Config struct {
 	IsOnPremDeployment       bool
 	ServerPublicURL          string
 
+	// GrowthAnalytics configures feature-usage telemetry export for the SaaS
+	// deployment. Always a no-op when IsOnPremDeployment is true.
+	GrowthAnalytics GrowthAnalyticsConfig
+
 	// ThunderHostBaseDomain is the domain suffix env-Thunder's developer-facing
 	// hostnames are built from: "<org>-<env>.thunder.<ThunderHostBaseDomain>".
 	// Default "amp.localhost" matches local dev (k3d + the *.amp.localhost wildcard
@@ -269,6 +273,15 @@ type ObserverConfig struct {
 	// It has NO fallback to URL: empty means "observer not configured" and
 	// clients surface that loudly.
 	PublicURL string
+}
+
+// GrowthAnalyticsConfig configures feature-usage telemetry export to Moesif.
+type GrowthAnalyticsConfig struct {
+	// MoesifApplicationID is the Moesif collector Application ID. Empty
+	// disables telemetry export entirely — the middleware/growthanalytics
+	// package no-ops when this is unset, so the OSS/on-prem build (which
+	// never sets it) never emits telemetry.
+	MoesifApplicationID string `json:"-"`
 }
 
 type POSTGRESQL struct {

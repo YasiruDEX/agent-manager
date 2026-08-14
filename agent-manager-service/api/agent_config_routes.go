@@ -19,6 +19,7 @@ package api
 import (
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
@@ -26,52 +27,52 @@ import (
 func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentConfigurationController) {
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		rbac.AgentUpdate, ctrl.CreateAgentModelConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("create"), ctrl.CreateAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		rbac.AgentRead, ctrl.ListAgentModelConfigs,
+		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("list"), ctrl.ListAgentModelConfigs),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentRead, ctrl.GetAgentModelConfig,
+		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("get"), ctrl.GetAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentUpdate, ctrl.UpdateAgentModelConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("update"), ctrl.UpdateAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentDelete, ctrl.DeleteAgentModelConfig,
+		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("delete"), ctrl.DeleteAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
-		rbac.AgentUpdate, ctrl.CreateAgentMCPConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("create"), ctrl.CreateAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
-		rbac.AgentRead, ctrl.ListAgentMCPConfigs,
+		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("list"), ctrl.ListAgentMCPConfigs),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentRead, ctrl.GetAgentMCPConfig,
+		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("get"), ctrl.GetAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentUpdate, ctrl.UpdateAgentMCPConfig,
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("update"), ctrl.UpdateAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentDelete, ctrl.DeleteAgentMCPConfig,
+		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("delete"), ctrl.DeleteAgentMCPConfig),
 	)
 
 	// Per-config MCP API keys (external agents): the key an agent uses to call its
@@ -117,4 +118,11 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
 		rbac.AgentAPIKeyManage, ctrl.RevokeLLMConfigAPIKey,
 	)
+}
+
+// bindActionDims builds the growth-analytics dimensions shared by
+// "amp.agent-development.bind-model-config" and "bind-mcp-config", tagging
+// which CRUD action this specific route performs on the binding.
+func bindActionDims(action string) map[string]interface{} {
+	return map[string]interface{}{"action": action}
 }
