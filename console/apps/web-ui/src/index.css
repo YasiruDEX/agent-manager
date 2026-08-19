@@ -1,5 +1,6 @@
 /* CSS Reset for proper viewport handling */
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -10,7 +11,9 @@ html {
   box-sizing: border-box;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: inherit;
 }
 
@@ -46,20 +49,6 @@ html[data-color-scheme="dark"] {
   vector-effect: non-scaling-stroke;
 }
 
-/* Opaque stand-in for the translucent input surface, used only by the autofill
-   override below.
-
-   Blink paints the autofill background as its own layer, so it cannot be made
-   transparent — neither `background-color` nor `background-clip: text` removes
-   it, and an inset box-shadow is the only thing that covers it. That forces an
-   opaque colour, but the real surface is not opaque: background.acrylic (25%
-   alpha) over a Card over a page gradient that shifts warm near the top-left.
-   These two values approximate that surface mid-page. They are the only thing
-   to retune if the theme's palette or body gradient changes.
-
-   To resample after a theme change, autofill a field and run in DevTools:
-     getComputedStyle(document.querySelector('.MuiOutlinedInput-root')).backgroundColor
-   composited over its parent, or just eyedrop a non-autofilled input. */
 :root {
   --am-autofill-surface: #f7f6f5;
 }
@@ -68,12 +57,6 @@ html[data-color-scheme="dark"] {
   --am-autofill-surface: #26211f;
 }
 
-/* Browser autofill background override.
-   WebKit/Blink paint an internal light-blue background (and dark text) on
-   autofilled fields with a UA !important rule that ordinary background-color
-   declarations cannot beat. The inset box-shadow is not part of that rule, so
-   it is the one way to repaint the field. Text and caret still come from the
-   theme, so only the surface is an approximation. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
