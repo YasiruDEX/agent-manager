@@ -46,13 +46,34 @@ html[data-color-scheme="dark"] {
   vector-effect: non-scaling-stroke;
 }
 
+/* Opaque stand-in for the translucent input surface, used only by the autofill
+   override below.
+
+   Blink paints the autofill background as its own layer, so it cannot be made
+   transparent — neither `background-color` nor `background-clip: text` removes
+   it, and an inset box-shadow is the only thing that covers it. That forces an
+   opaque colour, but the real surface is not opaque: background.acrylic (25%
+   alpha) over a Card over a page gradient that shifts warm near the top-left.
+   These two values approximate that surface mid-page. They are the only thing
+   to retune if the theme's palette or body gradient changes.
+
+   To resample after a theme change, autofill a field and run in DevTools:
+     getComputedStyle(document.querySelector('.MuiOutlinedInput-root')).backgroundColor
+   composited over its parent, or just eyedrop a non-autofilled input. */
+:root {
+  --am-autofill-surface: #f7f6f5;
+}
+
+html[data-color-scheme="dark"] {
+  --am-autofill-surface: #26211f;
+}
+
 /* Browser autofill background override.
    WebKit/Blink paint an internal light-blue background (and dark text) on
    autofilled fields with a UA !important rule that ordinary background-color
-   declarations cannot beat. An inset box-shadow is not part of that rule, so
-   it is the one way to repaint the field. Two stacked shadows reproduce the
-   real input surface: the translucent acrylic layer composited over the page
-   background, matching a non-autofilled input in both colour schemes. */
+   declarations cannot beat. The inset box-shadow is not part of that rule, so
+   it is the one way to repaint the field. Text and caret still come from the
+   theme, so only the surface is an approximation. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -65,16 +86,12 @@ select:-webkit-autofill,
 select:-webkit-autofill:hover,
 select:-webkit-autofill:focus,
 select:-webkit-autofill:active {
-  -webkit-box-shadow:
-    0 0 0 1000px var(--oxygen-palette-background-acrylic) inset,
-    0 0 0 1000px var(--oxygen-palette-background-default) inset !important;
-  box-shadow:
-    0 0 0 1000px var(--oxygen-palette-background-acrylic) inset,
-    0 0 0 1000px var(--oxygen-palette-background-default) inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--am-autofill-surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--am-autofill-surface) inset !important;
   -webkit-text-fill-color: var(--oxygen-palette-text-primary) !important;
   caret-color: var(--oxygen-palette-text-primary);
   /* Chrome animates the autofill background in on focus; parking the
-     transition far in the future keeps the shadow from flashing blue. */
+     transition far in the future keeps it from flashing blue. */
   transition: background-color 5000s ease-in-out 0s;
 }
 
