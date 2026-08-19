@@ -45,3 +45,45 @@ html[data-color-scheme="dark"] {
 .lucide:not(.lucide-logo) * {
   vector-effect: non-scaling-stroke;
 }
+
+/* Browser autofill background override.
+   WebKit/Blink paint an internal light-blue background (and dark text) on
+   autofilled fields with a UA !important rule that ordinary background-color
+   declarations cannot beat. An inset box-shadow is not part of that rule, so
+   it is the one way to repaint the field. Two stacked shadows reproduce the
+   real input surface: the translucent acrylic layer composited over the page
+   background, matching a non-autofilled input in both colour schemes. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-box-shadow:
+    0 0 0 1000px var(--oxygen-palette-background-acrylic) inset,
+    0 0 0 1000px var(--oxygen-palette-background-default) inset !important;
+  box-shadow:
+    0 0 0 1000px var(--oxygen-palette-background-acrylic) inset,
+    0 0 0 1000px var(--oxygen-palette-background-default) inset !important;
+  -webkit-text-fill-color: var(--oxygen-palette-text-primary) !important;
+  caret-color: var(--oxygen-palette-text-primary);
+  /* Chrome animates the autofill background in on focus; parking the
+     transition far in the future keeps the shadow from flashing blue. */
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Chrome also forces its own font onto the first line of an autofilled
+   field, which breaks the theme typography. */
+input:-webkit-autofill::first-line,
+textarea:-webkit-autofill::first-line,
+select:-webkit-autofill::first-line {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
