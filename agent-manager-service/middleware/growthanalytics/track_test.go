@@ -17,6 +17,7 @@
 package growthanalytics
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -172,6 +173,66 @@ func TestTrack_DispatchesToCorrectHandlerAndFeatureCode(t *testing.T) {
 	if logBody, ok := options["Log_Body"].(bool); !ok || logBody {
 		t.Errorf("Log_Body = %v, want false (request/response bodies must never be forwarded)", options["Log_Body"])
 	}
+}
+
+func TestTrack_SetDimension_ReportsValueDiscoveredInsideTheHandler(t *testing.T) {
+	withGrowthAnalyticsConfig(t, false, "test-application-id")
+	resetSharedState(t)
+
+	var metadata map[string]interface{}
+	var options map[string]interface{}
+	moesifWrap = fakeMoesifWrap(&metadata, &options)
+
+	// Simulates create-agent: the route has no static creation_method dimension
+	// (nil), because it isn't known until the controller parses the request
+	// body — the controller calls SetDimension itself once it knows.
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		SetDimension(r.Context(), "creation_method", "external")
+		w.WriteHeader(http.StatusAccepted)
+	}
+	tracked := Track("amp.agent-development.create-agent", nil, handler)
+
+	tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
+
+	if got := metadata["creation_method"]; got != "external" {
+		t.Errorf("creation_method = %v, want external", got)
+	}
+	if got := metadata["growth_action"]; got != "amp.agent-development.create-agent" {
+		t.Errorf("growth_action = %v, want amp.agent-development.create-agent", got)
+	}
+}
+
+func TestTrack_SetDimension_OverridesAStaticDimensionOfTheSameName(t *testing.T) {
+	withGrowthAnalyticsConfig(t, false, "test-application-id")
+	resetSharedState(t)
+
+	var metadata map[string]interface{}
+	var options map[string]interface{}
+	moesifWrap = fakeMoesifWrap(&metadata, &options)
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		SetDimension(r.Context(), "creation_method", "from-kind")
+	}
+	// A wrong static value, same as the bug being fixed — SetDimension must win.
+	tracked := Track("amp.agent-development.create-agent",
+		map[string]interface{}{"creation_method": "platform-hosted"}, handler)
+
+	tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
+
+	if got := metadata["creation_method"]; got != "from-kind" {
+		t.Errorf("creation_method = %v, want from-kind (SetDimension should override the static value)", got)
+	}
+}
+
+func TestSetDimension_NoOpOutsideATrackedRequest(t *testing.T) {
+	// A unit test calling a controller directly (no Track wrapper, no
+	// request context set up by it) must not panic.
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("SetDimension panicked outside a tracked request: %v", rec)
+		}
+	}()
+	SetDimension(context.Background(), "creation_method", "external")
 }
 
 func TestTrack_DynamicOutcome_ReflectsRealResponseStatus(t *testing.T) {

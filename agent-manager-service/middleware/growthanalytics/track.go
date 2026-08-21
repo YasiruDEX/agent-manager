@@ -51,7 +51,53 @@ const (
 	dimensionsKey
 	targetHandlerKey
 	statusHolderKey
+	overridesKey
 )
+
+// dimensionOverrides carries dimension values a handler only learns after
+// looking at the request body (e.g. create-agent's creation_method, which
+// depends on the payload's provisioning type) from the handler back to
+// Get_Metadata. Track's static `dimensions` argument can't express these —
+// it's fixed at route-registration time — so a handler reports them at
+// request time instead, via SetDimension.
+type dimensionOverrides struct {
+	mu   sync.Mutex
+	vals map[string]interface{}
+}
+
+func (d *dimensionOverrides) set(key string, value interface{}) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.vals == nil {
+		d.vals = make(map[string]interface{})
+	}
+	d.vals[key] = value
+}
+
+func (d *dimensionOverrides) snapshot() map[string]interface{} {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make(map[string]interface{}, len(d.vals))
+	for k, v := range d.vals {
+		out[k] = v
+	}
+	return out
+}
+
+// SetDimension lets a handler wrapped by Track report a dimension value that
+// can only be known once the handler actually runs and inspects the request
+// — e.g. amp.agent-development.create-agent's creation_method, which depends
+// on the request body's provisioning type, not just which route fired.
+// Overrides win over any static dimension of the same name passed to Track.
+//
+// It's a no-op if called outside a Track-wrapped request (e.g. a unit test
+// that calls the controller directly), so handlers can call it
+// unconditionally without checking whether tracking is enabled.
+func SetDimension(ctx context.Context, key string, value interface{}) {
+	if o, ok := ctx.Value(overridesKey).(*dimensionOverrides); ok {
+		o.set(key, value)
+	}
+}
 
 // DynamicOutcome is a sentinel value: pass it under the "outcome" key in
 // Track's dimensions to have the actual outcome ("success"/"failure")
@@ -143,6 +189,7 @@ func Track(featureCode string, dimensions map[string]interface{}, handler http.H
 		ctx = context.WithValue(ctx, dimensionsKey, dimensions)
 		ctx = context.WithValue(ctx, targetHandlerKey, handler)
 		ctx = context.WithValue(ctx, statusHolderKey, &statusHolder{code: http.StatusOK})
+		ctx = context.WithValue(ctx, overridesKey, &dimensionOverrides{})
 		sharedWrapped.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
@@ -172,7 +219,17 @@ func initShared(cfg *config.Config) {
 			fc, _ := req.Context().Value(featureCodeKey).(string)
 			dims, _ := req.Context().Value(dimensionsKey).(map[string]interface{})
 			holder, _ := req.Context().Value(statusHolderKey).(*statusHolder)
-			metadata := buildMetadata(fc, resolveDimensions(dims, holder), config.GetConfig().PackageVersion)
+			resolved := resolveDimensions(dims, holder)
+			if o, ok := req.Context().Value(overridesKey).(*dimensionOverrides); ok {
+				overrides := o.snapshot()
+				if len(overrides) > 0 && resolved == nil {
+					resolved = make(map[string]interface{}, len(overrides))
+				}
+				for k, v := range overrides {
+					resolved[k] = v
+				}
+			}
+			metadata := buildMetadata(fc, resolved, config.GetConfig().PackageVersion)
 
 			// Fire-and-forget from the caller's perspective, but still logged:
 			// this is the last point we control before the event is handed off

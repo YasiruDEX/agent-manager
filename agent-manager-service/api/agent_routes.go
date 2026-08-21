@@ -25,14 +25,9 @@ import (
 
 func registerAgentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentController) {
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents", rbac.AgentCreate,
-		growthanalytics.Track("amp.agent-development.create-agent", map[string]interface{}{
-			"creation_method": "platform-hosted",
-		}, ctrl.CreateAgent))
+		growthanalytics.Track("amp.agent-development.create-agent", nil, ctrl.CreateAgent))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents", rbac.AgentRead,
 		growthanalytics.Track("amp.agent-development.create-agent", readActionDims("list"), ctrl.ListAgents))
-	// Deliberately not tracked: a name suggestion, not an agent being created —
-	// firing create-agent's adoption event here would count people who
-	// generated a name and never created anything.
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/utils/generate-name", rbac.AgentCreate, ctrl.GenerateName)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}", rbac.AgentRead,
 		growthanalytics.Track("amp.agent-development.create-agent", readActionDims("get"), ctrl.GetAgent))
