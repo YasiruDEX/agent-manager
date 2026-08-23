@@ -32,12 +32,12 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("list"), ctrl.ListAgentModelConfigs),
+		rbac.AgentRead, ctrl.ListAgentModelConfigs,
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("get"), ctrl.GetAgentModelConfig),
+		rbac.AgentRead, ctrl.GetAgentModelConfig,
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
@@ -57,12 +57,12 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
-		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("list"), ctrl.ListAgentMCPConfigs),
+		rbac.AgentRead, ctrl.ListAgentMCPConfigs,
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentRead, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("get"), ctrl.GetAgentMCPConfig),
+		rbac.AgentRead, ctrl.GetAgentMCPConfig,
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
