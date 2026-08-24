@@ -32,7 +32,7 @@ func registerIdentityRoutes(rr *middleware.RouteRegistrar, ctrl controllers.Iden
 		growthanalytics.Track("amp.org-management.invite-user", inviteUserDims("created-user-directly", "created-user-directly"), ctrl.CreateUser))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/users/{userID}/profile", rbac.ProfileRead, ctrl.GetUserProfile)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/identities/users/{userID}/profile", rbac.ProfileUpdateAttributes,
-		growthanalytics.Track("amp.org-management.update-profile", nil, ctrl.UpdateCurrentUserProfile))
+		growthanalytics.Track("amp.org-management.update-profile", actionDims("updated-profile"), ctrl.UpdateCurrentUserProfile))
 	rr.HandleFuncWithValidationAndAnyAuthz("GET /orgs/{orgName}/identities/users/{userID}", ctrl.GetUser, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 	// UpdateUser/DeleteUser share invite-user's feature code per the taxonomy
 	// mapping, but its "method" dimension only covers the two creation paths —

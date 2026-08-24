@@ -25,7 +25,7 @@ import (
 
 func registerAgentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentController) {
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents", rbac.AgentCreate,
-		growthanalytics.Track("amp.agent-development.create-agent", nil, ctrl.CreateAgent))
+		growthanalytics.Track("amp.agent-development.create-agent", actionDims("created-agent"), ctrl.CreateAgent))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents", rbac.AgentRead, ctrl.ListAgents)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/utils/generate-name", rbac.AgentCreate, ctrl.GenerateName)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}", rbac.AgentRead, ctrl.GetAgent)
@@ -37,29 +37,30 @@ func registerAgentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentCo
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/resource-configs", rbac.AgentUpdate,
 		growthanalytics.Track("amp.agent-development.update-agent", updateTargetDims("resource-configs"), ctrl.UpdateAgentResourceConfigs))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}", rbac.AgentDelete,
-		growthanalytics.Track("amp.agent-development.delete-agent", nil, ctrl.DeleteAgent))
+		growthanalytics.Track("amp.agent-development.delete-agent", actionDims("deleted-agent"), ctrl.DeleteAgent))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/builds", rbac.AgentBuild,
 		growthanalytics.Track("amp.agent-development.build-agent", map[string]interface{}{
+			"action":  "built-agent",
 			"outcome": growthanalytics.DynamicOutcome,
 		}, ctrl.BuildAgent))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/builds", rbac.AgentRead, ctrl.ListAgentBuilds)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/builds/{buildName}", rbac.AgentRead, ctrl.GetBuild)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/deployments", rbac.AgentDeployNonProduction,
-		growthanalytics.Track("amp.deployment-ops.deploy-agent", nil, ctrl.DeployAgent))
+		growthanalytics.Track("amp.deployment-ops.deploy-agent", actionDims("deployed-agent"), ctrl.DeployAgent))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/promote", rbac.AgentPromote,
-		growthanalytics.Track("amp.deployment-ops.deploy-agent.promote", nil, ctrl.PromoteAgent))
+		growthanalytics.Track("amp.deployment-ops.deploy-agent.promote", actionDims("promoted-agent-deployment"), ctrl.PromoteAgent))
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/deploy-settings", rbac.AgentUpdate,
 		growthanalytics.Track("amp.agent-development.update-agent", updateTargetDims("deploy-settings"), ctrl.UpdateAgentDeploySettings))
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/configurations", rbac.AgentUpdate,
 		growthanalytics.Track("amp.agent-development.update-agent", updateTargetDims("configurations"), ctrl.UpdateAgentConfigurations))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/tracing-token/regenerate", rbac.AgentTokenManage,
-		growthanalytics.Track("amp.security-access.agent-token", tokenTypeDims("tracing-token"), ctrl.RegenerateTracingToken))
+		growthanalytics.Track("amp.security-access.agent-token", tokenTypeDims("tracing-token", "regenerated-tracing-token"), ctrl.RegenerateTracingToken))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/deployments", rbac.AgentRead, ctrl.GetAgentDeployments)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/deployments/state", rbac.AgentSuspend, ctrl.UpdateDeploymentState)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/endpoints", rbac.AgentRead, ctrl.GetAgentEndpoints)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/configurations", rbac.AgentRead, ctrl.GetAgentConfigurations)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/publish-kind", rbac.AgentKindCreate,
-		growthanalytics.Track("amp.agent-development.publish-kind", nil, ctrl.PublishKind))
+		growthanalytics.Track("amp.agent-development.publish-kind", actionDims("published-agent-as-kind"), ctrl.PublishKind))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities", rbac.AgentUpdate, ctrl.GetAgentIdentity)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities", rbac.AgentUpdate,
 		growthanalytics.Track("amp.security-access.agent-identity", actionDims("provisioned-agent-identity"), ctrl.ProvisionAgentIdentity))

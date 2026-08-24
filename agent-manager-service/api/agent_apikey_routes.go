@@ -37,7 +37,8 @@ func RegisterAgentAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 }
 
 // keyPurposeDims builds the growth-analytics dimensions for
-// "amp.security-access.issue-api-key"'s key_purpose dimension.
+// "amp.security-access.issue-api-key": key_purpose distinguishes production
+// vs. test, while action is fixed since both routes perform the same action.
 func keyPurposeDims(purpose string) map[string]interface{} {
-	return map[string]interface{}{"key_purpose": purpose}
+	return map[string]interface{}{"key_purpose": purpose, "action": "issued-agent-api-key"}
 }

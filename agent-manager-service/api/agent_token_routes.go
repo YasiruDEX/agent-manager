@@ -28,7 +28,7 @@ import (
 // registerAgentTokenRoutes registers the agent token API routes
 func registerAgentTokenRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentTokenController) {
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/token", rbac.AgentTokenManage,
-		growthanalytics.Track("amp.security-access.agent-token", tokenTypeDims("agent-token"), ctrl.GenerateToken))
+		growthanalytics.Track("amp.security-access.agent-token", tokenTypeDims("agent-token", "generated-agent-token"), ctrl.GenerateToken))
 }
 
 // registerJWKSRoute registers the JWKS endpoint on the provided mux
@@ -38,7 +38,7 @@ func registerJWKSRoute(mux *http.ServeMux, ctrl controllers.AgentTokenController
 }
 
 // tokenTypeDims builds the growth-analytics dimensions for
-// "amp.security-access.agent-token"'s token_type dimension.
-func tokenTypeDims(tokenType string) map[string]interface{} {
-	return map[string]interface{}{"token_type": tokenType}
+// "amp.security-access.agent-token"'s token_type and action dimensions.
+func tokenTypeDims(tokenType, action string) map[string]interface{} {
+	return map[string]interface{}{"token_type": tokenType, "action": action}
 }
