@@ -27,7 +27,7 @@ import (
 func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentConfigurationController) {
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("create"), ctrl.CreateAgentModelConfig),
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", actionDims("create"), ctrl.CreateAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
@@ -42,17 +42,17 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("update"), ctrl.UpdateAgentModelConfig),
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-model-config", actionDims("update"), ctrl.UpdateAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-model-config", bindActionDims("delete"), ctrl.DeleteAgentModelConfig),
+		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-model-config", actionDims("delete"), ctrl.DeleteAgentModelConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
-		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("create"), ctrl.CreateAgentMCPConfig),
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", actionDims("create"), ctrl.CreateAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
@@ -67,12 +67,12 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("update"), ctrl.UpdateAgentMCPConfig),
+		rbac.AgentUpdate, growthanalytics.Track("amp.agent-development.bind-mcp-config", actionDims("update"), ctrl.UpdateAgentMCPConfig),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
-		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-mcp-config", bindActionDims("delete"), ctrl.DeleteAgentMCPConfig),
+		rbac.AgentDelete, growthanalytics.Track("amp.agent-development.bind-mcp-config", actionDims("delete"), ctrl.DeleteAgentMCPConfig),
 	)
 
 	// Per-config MCP API keys (external agents): the key an agent uses to call its
@@ -120,9 +120,11 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 	)
 }
 
-// bindActionDims builds the growth-analytics dimensions shared by
-// "amp.agent-development.bind-model-config" and "bind-mcp-config", tagging
-// which CRUD action this specific route performs on the binding.
-func bindActionDims(action string) map[string]interface{} {
+// actionDims builds a growth-analytics dimensions map tagging which action a
+// route performs, for any taxonomy feature whose declared dimensions are just
+// an "action" enum (e.g. bind-model-config/bind-mcp-config's create/update/
+// delete, deploy-llm-provider's deploy/undeploy/restore, llm-provider-api-key's
+// create/rotate/revoke).
+func actionDims(action string) map[string]interface{} {
 	return map[string]interface{}{"action": action}
 }
