@@ -538,6 +538,7 @@ func (c *agentController) DeployAgent(w http.ResponseWriter, r *http.Request) {
 		handleCommonErrors(w, err, "Failed to deploy agent")
 		return
 	}
+	growthanalytics.SetDimension(ctx, "environment_type", deployedEnv)
 
 	response := &spec.DeploymentResponse{
 		AgentName:   agentName,
