@@ -27,8 +27,8 @@ import (
 func RegisterGitSecretRoutes(rr *middleware.RouteRegistrar, ctrl controllers.GitSecretController) {
 	// Git Secrets (org-level)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/git-secrets", rbac.GitSecretCreate,
-		growthanalytics.Track("amp.source-control.manage-git-secret", actionDims("create"), ctrl.CreateGitSecret))
+		growthanalytics.Track("amp.source-control.manage-git-secret", actionDims("created-git-secret"), ctrl.CreateGitSecret))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/git-secrets", rbac.GitSecretRead, ctrl.ListGitSecrets)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/git-secrets/{secretName}", rbac.GitSecretDelete,
-		growthanalytics.Track("amp.source-control.manage-git-secret", actionDims("delete"), ctrl.DeleteGitSecret))
+		growthanalytics.Track("amp.source-control.manage-git-secret", actionDims("deleted-git-secret"), ctrl.DeleteGitSecret))
 }

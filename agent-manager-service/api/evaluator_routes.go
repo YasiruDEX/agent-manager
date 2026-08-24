@@ -29,12 +29,12 @@ func registerEvaluatorRoutes(rr *middleware.RouteRegistrar, controller controlle
 
 	// Custom evaluator CRUD — registered before the {evaluatorId} catch-all
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/evaluators/custom", rbac.EvaluatorCreate,
-		growthanalytics.Track("amp.observability.custom-evaluator", actionDims("create"), controller.CreateCustomEvaluator))
+		growthanalytics.Track("amp.observability.custom-evaluator", actionDims("created-custom-evaluator"), controller.CreateCustomEvaluator))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/evaluators/custom/{identifier}", rbac.EvaluatorRead, controller.GetCustomEvaluator)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/evaluators/custom/{identifier}", rbac.EvaluatorUpdate,
-		growthanalytics.Track("amp.observability.custom-evaluator", actionDims("update"), controller.UpdateCustomEvaluator))
+		growthanalytics.Track("amp.observability.custom-evaluator", actionDims("updated-custom-evaluator"), controller.UpdateCustomEvaluator))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/evaluators/custom/{identifier}", rbac.EvaluatorDelete,
-		growthanalytics.Track("amp.observability.custom-evaluator", actionDims("delete"), controller.DeleteCustomEvaluator))
+		growthanalytics.Track("amp.observability.custom-evaluator", actionDims("deleted-custom-evaluator"), controller.DeleteCustomEvaluator))
 
 	// GET /orgs/{orgName}/evaluators/{evaluatorId} - Get evaluator details (built-in or custom)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/evaluators/{evaluatorId}", rbac.EvaluatorRead, controller.GetEvaluator)

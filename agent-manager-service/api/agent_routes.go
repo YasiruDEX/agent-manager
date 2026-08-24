@@ -62,11 +62,11 @@ func registerAgentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentCo
 		growthanalytics.Track("amp.agent-development.publish-kind", nil, ctrl.PublishKind))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities", rbac.AgentUpdate, ctrl.GetAgentIdentity)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities", rbac.AgentUpdate,
-		growthanalytics.Track("amp.security-access.agent-identity", actionDims("provision"), ctrl.ProvisionAgentIdentity))
+		growthanalytics.Track("amp.security-access.agent-identity", actionDims("provisioned-agent-identity"), ctrl.ProvisionAgentIdentity))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities", rbac.AgentUpdate,
-		growthanalytics.Track("amp.security-access.agent-identity", actionDims("regenerate-secret"), ctrl.RegenerateAgentIdentitySecret))
+		growthanalytics.Track("amp.security-access.agent-identity", actionDims("regenerated-agent-identity-secret"), ctrl.RegenerateAgentIdentitySecret))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities", rbac.AgentUpdate,
-		growthanalytics.Track("amp.security-access.agent-identity", actionDims("revoke-secret"), ctrl.RevokeAgentIdentitySecret))
+		growthanalytics.Track("amp.security-access.agent-identity", actionDims("revoked-agent-identity-secret"), ctrl.RevokeAgentIdentitySecret))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/roles", rbac.AgentUpdate, ctrl.GetAgentRoles)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/groups", rbac.AgentUpdate, ctrl.GetAgentGroups)
 }

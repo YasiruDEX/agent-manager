@@ -27,33 +27,33 @@ func registerAgentIdentityRoutes(rr *middleware.RouteRegistrar, ctrl controllers
 	// Groups
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups", rbac.AgentIdentityRead, ctrl.ListGroups)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups", rbac.AgentIdentityCreate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "create"), ctrl.CreateGroup))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "created-agent-identity-group"), ctrl.CreateGroup))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityRead, ctrl.GetGroup)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityUpdate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "update"), ctrl.UpdateGroup))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "updated-agent-identity-group"), ctrl.UpdateGroup))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}", rbac.AgentIdentityDelete,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "delete"), ctrl.DeleteGroup))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "deleted-agent-identity-group"), ctrl.DeleteGroup))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members", rbac.AgentIdentityRead, ctrl.GetGroupMembers)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/add", rbac.AgentIdentityUpdate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "assign-member"), ctrl.AddGroupMembers))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "added-agent-identity-group-member"), ctrl.AddGroupMembers))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/remove", rbac.AgentIdentityUpdate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "remove-member"), ctrl.RemoveGroupMembers))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("group", "removed-agent-identity-group-member"), ctrl.RemoveGroupMembers))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/roles", rbac.AgentIdentityRead, ctrl.GetGroupRoles)
 
 	// Roles
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/roles", rbac.AgentIdentityRead, ctrl.ListRoles)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles", rbac.AgentIdentityCreate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "create"), ctrl.CreateRole))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "created-agent-identity-role"), ctrl.CreateRole))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityRead, ctrl.GetRole)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityUpdate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "update"), ctrl.UpdateRole))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "updated-agent-identity-role"), ctrl.UpdateRole))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}", rbac.AgentIdentityDelete,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "delete"), ctrl.DeleteRole))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "deleted-agent-identity-role"), ctrl.DeleteRole))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments", rbac.AgentIdentityRead, ctrl.GetRoleAssignments)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/add", rbac.AgentIdentityUpdate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "assign-member"), ctrl.AddRoleAssignees))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "added-agent-identity-role-assignee"), ctrl.AddRoleAssignees))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/remove", rbac.AgentIdentityUpdate,
-		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "remove-member"), ctrl.RemoveRoleAssignees))
+		growthanalytics.Track("amp.security-access.identity-group-role", identityGroupRoleDims("role", "removed-agent-identity-role-assignee"), ctrl.RemoveRoleAssignees))
 
 	// Agents picker
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/agents", rbac.AgentIdentityRead, ctrl.ListAgents)

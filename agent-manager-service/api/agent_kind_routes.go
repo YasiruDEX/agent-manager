@@ -27,14 +27,14 @@ func registerAgentKindRoutes(rr *middleware.RouteRegistrar, ctrl controllers.Age
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds", rbac.AgentKindRead, ctrl.ListKinds)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindRead, ctrl.GetKind)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindUpdate,
-		growthanalytics.Track("amp.discovery.manage-kind", actionDims("update"), ctrl.UpdateKind))
+		growthanalytics.Track("amp.discovery.manage-kind", actionDims("updated-agent-kind"), ctrl.UpdateKind))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/agent-kinds/{kindName}", rbac.AgentKindDelete,
-		growthanalytics.Track("amp.discovery.manage-kind", actionDims("delete"), ctrl.DeleteKind))
+		growthanalytics.Track("amp.discovery.manage-kind", actionDims("deleted-agent-kind"), ctrl.DeleteKind))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/agent-kinds/{kindName}/versions", rbac.AgentKindUpdate,
-		growthanalytics.Track("amp.discovery.manage-kind.add-version", nil, ctrl.AddVersion))
+		growthanalytics.Track("amp.discovery.manage-kind.add-version", actionDims("added-agent-kind-version"), ctrl.AddVersion))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}/versions", rbac.AgentKindRead, ctrl.ListVersions)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}/versions/{versionTag}", rbac.AgentKindRead, ctrl.GetVersion)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/agent-kinds/{kindName}/versions/{versionTag}", rbac.AgentKindDelete,
-		growthanalytics.Track("amp.discovery.manage-kind.add-version", nil, ctrl.DeleteVersion))
+		growthanalytics.Track("amp.discovery.manage-kind.add-version", actionDims("deleted-agent-kind-version"), ctrl.DeleteVersion))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/agent-kinds/{kindName}/agents", rbac.AgentKindRead, ctrl.ListKindAgents)
 }

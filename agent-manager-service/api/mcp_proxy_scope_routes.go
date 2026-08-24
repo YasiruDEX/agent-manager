@@ -26,10 +26,10 @@ import (
 func registerMCPProxyScopeRoutes(rr *middleware.RouteRegistrar, ctrl controllers.MCPProxyScopeController) {
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/mcp-proxies/{proxyId}/scopes", rbac.ScopeRead, ctrl.ListMCPProxyScopes)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/mcp-proxies/{proxyId}/scopes", rbac.ScopeCreate,
-		growthanalytics.Track("amp.connections.manage-mcp-scope", actionDims("create"), ctrl.CreateMCPProxyScope))
+		growthanalytics.Track("amp.connections.manage-mcp-scope", actionDims("created-mcp-scope"), ctrl.CreateMCPProxyScope))
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}", rbac.ScopeUpdate,
-		growthanalytics.Track("amp.connections.manage-mcp-scope", actionDims("update"), ctrl.UpdateMCPProxyScope))
+		growthanalytics.Track("amp.connections.manage-mcp-scope", actionDims("updated-mcp-scope"), ctrl.UpdateMCPProxyScope))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}", rbac.ScopeDelete,
-		growthanalytics.Track("amp.connections.manage-mcp-scope", actionDims("delete"), ctrl.DeleteMCPProxyScope))
+		growthanalytics.Track("amp.connections.manage-mcp-scope", actionDims("deleted-mcp-scope"), ctrl.DeleteMCPProxyScope))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/scopes", rbac.AgentIdentityRead, ctrl.ListAgentIdentityScopes)
 }

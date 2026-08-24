@@ -25,24 +25,24 @@ import (
 
 func RegisterGatewayRoutes(rr *middleware.RouteRegistrar, ctrl controllers.GatewayController) {
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/gateways", rbac.GatewayCreate,
-		growthanalytics.Track("amp.deployment-ops.register-gateway", nil, ctrl.RegisterGateway))
+		growthanalytics.Track("amp.deployment-ops.register-gateway", actionDims("registered-gateway"), ctrl.RegisterGateway))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways", rbac.GatewayRead, ctrl.ListGateways)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/{gatewayID}", rbac.GatewayRead, ctrl.GetGateway)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/gateways/{gatewayID}", rbac.GatewayUpdate,
-		growthanalytics.Track("amp.deployment-ops.register-gateway", nil, ctrl.UpdateGateway))
+		growthanalytics.Track("amp.deployment-ops.register-gateway", actionDims("updated-gateway"), ctrl.UpdateGateway))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/gateways/{gatewayID}", rbac.GatewayDelete,
-		growthanalytics.Track("amp.deployment-ops.register-gateway", nil, ctrl.DeleteGateway))
+		growthanalytics.Track("amp.deployment-ops.register-gateway", actionDims("deleted-gateway"), ctrl.DeleteGateway))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/gateways/{gatewayID}/environments/{envID}", rbac.GatewayUpdate,
-		growthanalytics.Track("amp.deployment-ops.register-gateway.assign-environment", actionDims("assign"), ctrl.AssignGatewayToEnvironment))
+		growthanalytics.Track("amp.deployment-ops.register-gateway.assign-environment", actionDims("assigned-gateway-to-environment"), ctrl.AssignGatewayToEnvironment))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/gateways/{gatewayID}/environments/{envID}", rbac.GatewayUpdate,
-		growthanalytics.Track("amp.deployment-ops.register-gateway.assign-environment", actionDims("remove"), ctrl.RemoveGatewayFromEnvironment))
+		growthanalytics.Track("amp.deployment-ops.register-gateway.assign-environment", actionDims("removed-gateway-from-environment"), ctrl.RemoveGatewayFromEnvironment))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/{gatewayID}/environments", rbac.GatewayRead, ctrl.GetGatewayEnvironments)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/{gatewayID}/health", rbac.GatewayRead, ctrl.CheckGatewayHealth)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/{gatewayID}/tokens", rbac.GatewayTokenManage, ctrl.ListGatewayTokens)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/gateways/{gatewayID}/tokens", rbac.GatewayTokenManage,
-		growthanalytics.Track("amp.deployment-ops.register-gateway.token", actionDims("rotate"), ctrl.RotateGatewayToken))
+		growthanalytics.Track("amp.deployment-ops.register-gateway.token", actionDims("rotated-gateway-token"), ctrl.RotateGatewayToken))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/gateways/{gatewayID}/tokens/{tokenID}", rbac.GatewayTokenManage,
-		growthanalytics.Track("amp.deployment-ops.register-gateway.token", actionDims("revoke"), ctrl.RevokeGatewayToken))
+		growthanalytics.Track("amp.deployment-ops.register-gateway.token", actionDims("revoked-gateway-token"), ctrl.RevokeGatewayToken))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/status", rbac.GatewayRead, ctrl.GetGatewayStatus)
 
 	// Identity providers (token issuers mirrored from the gateway runtime config)
@@ -50,8 +50,8 @@ func RegisterGatewayRoutes(rr *middleware.RouteRegistrar, ctrl controllers.Gatew
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identity-providers/discover", rbac.GatewayUpdate, ctrl.DiscoverOidcConfiguration)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/{gatewayID}/identity-providers", rbac.GatewayRead, ctrl.ListGatewayIdentityProviders)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}", rbac.GatewayUpdate,
-		growthanalytics.Track("amp.deployment-ops.register-gateway.identity-provider", actionDims("configure"), ctrl.UpsertGatewayIdentityProvider))
+		growthanalytics.Track("amp.deployment-ops.register-gateway.identity-provider", actionDims("configured-gateway-identity-provider"), ctrl.UpsertGatewayIdentityProvider))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}", rbac.GatewayUpdate,
-		growthanalytics.Track("amp.deployment-ops.register-gateway.identity-provider", actionDims("remove"), ctrl.DeleteGatewayIdentityProvider))
+		growthanalytics.Track("amp.deployment-ops.register-gateway.identity-provider", actionDims("removed-gateway-identity-provider"), ctrl.DeleteGatewayIdentityProvider))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{environmentId}/identity-providers", rbac.GatewayRead, ctrl.ListEnvironmentIdentityProviders)
 }

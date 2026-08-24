@@ -31,9 +31,9 @@ func RegisterAgentAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 		growthanalytics.Track("amp.security-access.issue-api-key", keyPurposeDims("test"), ctrl.IssueTestAPIKey))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys", rbac.AgentAPIKeyManage, ctrl.ListAPIKeys)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/{keyName}", rbac.AgentAPIKeyManage,
-		growthanalytics.Track("amp.security-access.issue-api-key.rotate", actionDims("revoke"), ctrl.RevokeAPIKey))
+		growthanalytics.Track("amp.security-access.issue-api-key.rotate", actionDims("revoked-agent-api-key"), ctrl.RevokeAPIKey))
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/{keyName}", rbac.AgentAPIKeyManage,
-		growthanalytics.Track("amp.security-access.issue-api-key.rotate", actionDims("rotate"), ctrl.RotateAPIKey))
+		growthanalytics.Track("amp.security-access.issue-api-key.rotate", actionDims("rotated-agent-api-key"), ctrl.RotateAPIKey))
 }
 
 // keyPurposeDims builds the growth-analytics dimensions for

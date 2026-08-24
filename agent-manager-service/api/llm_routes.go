@@ -27,28 +27,28 @@ import (
 func RegisterLLMRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMController) {
 	// LLM Provider Templates
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-provider-templates", rbac.LLMProviderTemplateCreate,
-		growthanalytics.Track("amp.connections.create-llm-provider.template", nil, ctrl.CreateLLMProviderTemplate))
+		growthanalytics.Track("amp.connections.create-llm-provider.template", actionDims("created-provider-template"), ctrl.CreateLLMProviderTemplate))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-provider-templates", rbac.LLMProviderTemplateRead, ctrl.ListLLMProviderTemplates)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-provider-templates/{templateId}", rbac.LLMProviderTemplateRead, ctrl.GetLLMProviderTemplate)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-provider-templates/{templateId}", rbac.LLMProviderTemplateUpdate,
-		growthanalytics.Track("amp.connections.create-llm-provider.template", nil, ctrl.UpdateLLMProviderTemplate))
+		growthanalytics.Track("amp.connections.create-llm-provider.template", actionDims("updated-provider-template"), ctrl.UpdateLLMProviderTemplate))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-provider-templates/{templateId}", rbac.LLMProviderTemplateDelete,
-		growthanalytics.Track("amp.connections.create-llm-provider.template", nil, ctrl.DeleteLLMProviderTemplate))
+		growthanalytics.Track("amp.connections.create-llm-provider.template", actionDims("deleted-provider-template"), ctrl.DeleteLLMProviderTemplate))
 
 	// LLM Providers
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers", rbac.LLMProviderCreate,
-		growthanalytics.Track("amp.connections.create-llm-provider", nil, ctrl.CreateLLMProvider))
+		growthanalytics.Track("amp.connections.create-llm-provider", actionDims("created-llm-provider"), ctrl.CreateLLMProvider))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers", rbac.LLMProviderRead, ctrl.ListLLMProviders)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/policies", rbac.LLMProviderRead, ctrl.ListAvailableLLMPolicies)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderRead, ctrl.GetLLMProvider)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}/llm-proxies", rbac.LLMProxyRead, ctrl.ListLLMProxiesByProvider)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}/consumers", rbac.LLMProviderRead, ctrl.ListLLMProviderConsumers)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderUpdate,
-		growthanalytics.Track("amp.connections.create-llm-provider", nil, ctrl.UpdateLLMProvider))
+		growthanalytics.Track("amp.connections.create-llm-provider", actionDims("updated-llm-provider"), ctrl.UpdateLLMProvider))
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{providerId}/catalog", rbac.LLMProviderUpdate,
-		growthanalytics.Track("amp.connections.create-llm-provider", nil, ctrl.UpdateLLMProviderCatalogStatus))
+		growthanalytics.Track("amp.connections.create-llm-provider", actionDims("updated-llm-provider-catalog-status"), ctrl.UpdateLLMProviderCatalogStatus))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderDelete,
-		growthanalytics.Track("amp.connections.create-llm-provider", nil, ctrl.DeleteLLMProvider))
+		growthanalytics.Track("amp.connections.create-llm-provider", actionDims("deleted-llm-provider"), ctrl.DeleteLLMProvider))
 
 	// LLM Proxies
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/llm-proxies", rbac.LLMProxyCreate, ctrl.CreateLLMProxy)

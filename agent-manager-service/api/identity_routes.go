@@ -27,66 +27,71 @@ func registerIdentityRoutes(rr *middleware.RouteRegistrar, ctrl controllers.Iden
 	// Users
 	rr.HandleFuncWithValidationAndAnyAuthz("GET /orgs/{orgName}/identities/users", ctrl.ListUsers, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/users/invite", rbac.OrgInviteMember,
-		growthanalytics.Track("amp.org-management.invite-user", methodDims("invite"), ctrl.InviteUser))
+		growthanalytics.Track("amp.org-management.invite-user", inviteUserDims("invited-user", "invited-user"), ctrl.InviteUser))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/users", rbac.OrgInviteMember,
-		growthanalytics.Track("amp.org-management.invite-user", methodDims("direct-create"), ctrl.CreateUser))
+		growthanalytics.Track("amp.org-management.invite-user", inviteUserDims("created-user-directly", "created-user-directly"), ctrl.CreateUser))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/users/{userID}/profile", rbac.ProfileRead, ctrl.GetUserProfile)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/identities/users/{userID}/profile", rbac.ProfileUpdateAttributes,
 		growthanalytics.Track("amp.org-management.update-profile", nil, ctrl.UpdateCurrentUserProfile))
 	rr.HandleFuncWithValidationAndAnyAuthz("GET /orgs/{orgName}/identities/users/{userID}", ctrl.GetUser, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 	// UpdateUser/DeleteUser share invite-user's feature code per the taxonomy
-	// mapping, but its "method" dimension enum (invite/direct-create) only
-	// covers creation — so these two carry an "action" dimension instead of a
-	// method value that doesn't exist for them.
+	// mapping, but its "method" dimension only covers the two creation paths —
+	// so these two set only the always-present "action" dimension, no method.
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/identities/users/{userID}", rbac.OrgInviteMember,
-		growthanalytics.Track("amp.org-management.invite-user", actionDims("update"), ctrl.UpdateUser))
+		growthanalytics.Track("amp.org-management.invite-user", inviteUserDims("", "updated-user"), ctrl.UpdateUser))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/identities/users/{userID}", rbac.OrgRemoveMember,
-		growthanalytics.Track("amp.org-management.invite-user", actionDims("delete"), ctrl.DeleteUser))
+		growthanalytics.Track("amp.org-management.invite-user", inviteUserDims("", "deleted-user"), ctrl.DeleteUser))
 	rr.HandleFuncWithValidationAndAnyAuthz("GET /orgs/{orgName}/identities/users/{userID}/groups", ctrl.GetUserGroups, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/users/{userID}/roles", rbac.RoleRead, ctrl.GetUserRoles)
 
 	// Groups
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/groups", rbac.GroupRead, ctrl.ListGroups)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/groups", rbac.GroupCreate,
-		growthanalytics.Track("amp.org-management.manage-group", actionDims("create"), ctrl.CreateGroup))
+		growthanalytics.Track("amp.org-management.manage-group", actionDims("created-org-group"), ctrl.CreateGroup))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/groups/{groupID}", rbac.GroupRead, ctrl.GetGroup)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/identities/groups/{groupID}", rbac.GroupUpdate,
-		growthanalytics.Track("amp.org-management.manage-group", actionDims("update"), ctrl.UpdateGroup))
+		growthanalytics.Track("amp.org-management.manage-group", actionDims("updated-org-group"), ctrl.UpdateGroup))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/identities/groups/{groupID}", rbac.GroupDelete,
-		growthanalytics.Track("amp.org-management.manage-group", actionDims("delete"), ctrl.DeleteGroup))
+		growthanalytics.Track("amp.org-management.manage-group", actionDims("deleted-org-group"), ctrl.DeleteGroup))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/groups/{groupID}/members", rbac.GroupRead, ctrl.GetGroupMembers)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/groups/{groupID}/members/add", rbac.GroupUpdate,
-		growthanalytics.Track("amp.org-management.manage-group", actionDims("add-members"), ctrl.AddGroupMembers))
+		growthanalytics.Track("amp.org-management.manage-group", actionDims("added-org-group-members"), ctrl.AddGroupMembers))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/groups/{groupID}/members/remove", rbac.GroupUpdate,
-		growthanalytics.Track("amp.org-management.manage-group", actionDims("remove-members"), ctrl.RemoveGroupMembers))
+		growthanalytics.Track("amp.org-management.manage-group", actionDims("removed-org-group-members"), ctrl.RemoveGroupMembers))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/groups/{groupID}/roles", rbac.GroupRead, ctrl.GetGroupRoles)
 
 	// Roles
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/roles", rbac.RoleRead, ctrl.ListRoles)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/roles", rbac.RoleCreate,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("create"), ctrl.CreateRole))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("created-org-role"), ctrl.CreateRole))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/roles/{roleID}", rbac.RoleRead, ctrl.GetRole)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/identities/roles/{roleID}", rbac.RoleUpdate,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("update"), ctrl.UpdateRole))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("updated-org-role"), ctrl.UpdateRole))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/identities/roles/{roleID}", rbac.RoleDelete,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("delete"), ctrl.DeleteRole))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("deleted-org-role"), ctrl.DeleteRole))
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/roles/{roleID}/assignments", rbac.RoleRead, ctrl.GetRoleAssignments)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/roles/{roleID}/permissions/add", rbac.RoleUpdate,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("add-permissions"), ctrl.AddRolePermissions))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("added-org-role-permissions"), ctrl.AddRolePermissions))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/roles/{roleID}/permissions/remove", rbac.RoleUpdate,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("remove-permissions"), ctrl.RemoveRolePermissions))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("removed-org-role-permissions"), ctrl.RemoveRolePermissions))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/roles/{roleID}/assignees/add", rbac.RoleUpdate,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("add-assignees"), ctrl.AddRoleAssignees))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("added-org-role-assignees"), ctrl.AddRoleAssignees))
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/identities/roles/{roleID}/assignees/remove", rbac.RoleUpdate,
-		growthanalytics.Track("amp.org-management.manage-role", actionDims("remove-assignees"), ctrl.RemoveRoleAssignees))
+		growthanalytics.Track("amp.org-management.manage-role", actionDims("removed-org-role-assignees"), ctrl.RemoveRoleAssignees))
 
 	// Permissions catalog
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identities/permissions", rbac.RoleRead, ctrl.ListAMPPermissions)
 }
 
-// methodDims builds the growth-analytics dimensions for
-// "amp.org-management.invite-user"'s method dimension, tagging how the user
-// was added to the organization (invited vs. created directly).
-func methodDims(method string) map[string]interface{} {
-	return map[string]interface{}{"method": method}
+// inviteUserDims builds the growth-analytics dimensions for
+// "amp.org-management.invite-user": "action" is always set to the full
+// lifecycle action, while "method" is set only on the two creation paths
+// (invited-user/created-user-directly) per the taxonomy's method enum, which
+// doesn't cover update/delete — pass method="" to omit it for those.
+func inviteUserDims(method, action string) map[string]interface{} {
+	dims := map[string]interface{}{"action": action}
+	if method != "" {
+		dims["method"] = method
+	}
+	return dims
 }

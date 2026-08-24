@@ -27,9 +27,9 @@ import (
 func RegisterLLMProviderAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMProviderAPIKeyController) {
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{id}/api-keys", rbac.LLMProviderAPIKeyManage, ctrl.ListAPIKeys)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{id}/api-keys", rbac.LLMProviderAPIKeyManage,
-		growthanalytics.Track("amp.connections.llm-provider-api-key", actionDims("create"), ctrl.CreateAPIKey))
+		growthanalytics.Track("amp.connections.llm-provider-api-key", actionDims("issued-provider-api-key"), ctrl.CreateAPIKey))
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", rbac.LLMProviderAPIKeyManage,
-		growthanalytics.Track("amp.connections.llm-provider-api-key", actionDims("revoke"), ctrl.RevokeAPIKey))
+		growthanalytics.Track("amp.connections.llm-provider-api-key", actionDims("revoked-provider-api-key"), ctrl.RevokeAPIKey))
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", rbac.LLMProviderAPIKeyManage,
-		growthanalytics.Track("amp.connections.llm-provider-api-key", actionDims("rotate"), ctrl.RotateAPIKey))
+		growthanalytics.Track("amp.connections.llm-provider-api-key", actionDims("rotated-provider-api-key"), ctrl.RotateAPIKey))
 }
