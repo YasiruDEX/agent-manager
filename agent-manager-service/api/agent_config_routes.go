@@ -84,17 +84,17 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys",
-		rbac.AgentAPIKeyManage, ctrl.CreateMCPConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", configScopedAPIKeyDims("mcp-config", "create"), ctrl.CreateMCPConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RotateMCPConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", configScopedAPIKeyDims("mcp-config", "rotate"), ctrl.RotateMCPConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RevokeMCPConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", configScopedAPIKeyDims("mcp-config", "revoke"), ctrl.RevokeMCPConfigAPIKey),
 	)
 
 	// Per-config LLM API keys (external agents): the key an agent uses to call its
@@ -106,18 +106,25 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys",
-		rbac.AgentAPIKeyManage, ctrl.CreateLLMConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", configScopedAPIKeyDims("model-config", "create"), ctrl.CreateLLMConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RotateLLMConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", configScopedAPIKeyDims("model-config", "rotate"), ctrl.RotateLLMConfigAPIKey),
 	)
 
 	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
-		rbac.AgentAPIKeyManage, ctrl.RevokeLLMConfigAPIKey,
+		rbac.AgentAPIKeyManage, growthanalytics.Track("amp.security-access.config-scoped-api-key", configScopedAPIKeyDims("model-config", "revoke"), ctrl.RevokeLLMConfigAPIKey),
 	)
+}
+
+// configScopedAPIKeyDims builds the growth-analytics dimensions for
+// "amp.security-access.config-scoped-api-key", tagging which kind of binding
+// the key is scoped to and which CRUD action this route performs on it.
+func configScopedAPIKeyDims(configType, action string) map[string]interface{} {
+	return map[string]interface{}{"config_type": configType, "action": action}
 }
 
 // actionDims builds a growth-analytics dimensions map tagging which action a
