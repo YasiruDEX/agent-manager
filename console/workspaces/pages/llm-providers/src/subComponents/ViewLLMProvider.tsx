@@ -160,14 +160,19 @@ export const ViewLLMProvider: React.FC = () => {
       titleTail={
         <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 1 }}>
           <Tooltip title="Edit provider name and description">
-            <IconButton
-              size="small"
-              onClick={() => setIsEditDrawerOpen(true)}
-              aria-label="Edit provider"
-              disabled={!providerData}
-            >
-              <Edit size={16} />
-            </IconButton>
+            {/* MUI/oxygen-ui Tooltip needs a non-disabled child to receive
+                pointer/focus events — a disabled IconButton alone never
+                triggers the tooltip. */}
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => setIsEditDrawerOpen(true)}
+                aria-label="Edit provider"
+                disabled={!providerData}
+              >
+                <Edit size={16} />
+              </IconButton>
+            </span>
           </Tooltip>
           {templateDisplayName && (
             <Chip
