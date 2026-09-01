@@ -19,6 +19,7 @@
 package repositories
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -65,7 +66,7 @@ func TestLLMProviderRepo_Update_SyncsArtifactName(t *testing.T) {
 			Template: provider.Configuration.Template,
 		},
 	}
-	require.NoError(t, repo.Update(updates, provider.UUID.String(), orgUUID))
+	require.NoError(t, repo.Update(context.Background(), updates, provider.UUID.String(), orgUUID))
 
 	var artifact models.Artifact
 	require.NoError(t, gdb.First(&artifact, "uuid = ?", provider.UUID).Error)
@@ -109,7 +110,7 @@ func TestLLMProviderRepo_Update_EmptyNameLeavesArtifactNameUnchanged(t *testing.
 			Template: provider.Configuration.Template,
 		},
 	}
-	require.NoError(t, repo.Update(updates, provider.UUID.String(), orgUUID))
+	require.NoError(t, repo.Update(context.Background(), updates, provider.UUID.String(), orgUUID))
 
 	var artifact models.Artifact
 	require.NoError(t, gdb.First(&artifact, "uuid = ?", provider.UUID).Error)

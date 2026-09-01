@@ -41,7 +41,7 @@ type LLMProviderRepository interface {
 	GetByHandle(handle, orgUUID string) (*models.LLMProvider, error)
 	List(orgUUID string, limit, offset int) ([]*models.LLMProvider, error)
 	Count(orgUUID string) (int, error)
-	Update(p *models.LLMProvider, providerID string, orgUUID string) error
+	Update(ctx context.Context, p *models.LLMProvider, providerID string, orgUUID string) error
 	Delete(providerID, orgUUID string) error
 	Exists(providerID, orgUUID string) (bool, error)
 	HasAssociatedProxies(ctx context.Context, providerUUID uuid.UUID) (bool, error)
@@ -197,10 +197,10 @@ func (r *LLMProviderRepo) Count(orgUUID string) (int, error) {
 }
 
 // Update modifies an existing LLM provider
-func (r *LLMProviderRepo) Update(p *models.LLMProvider, providerID string, orgUUID string) error {
+func (r *LLMProviderRepo) Update(ctx context.Context, p *models.LLMProvider, providerID string, orgUUID string) error {
 	slog.Info("LLMProviderRepo.Update: starting", "providerID", providerID, "orgUUID", orgUUID)
 
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		slog.Info("LLMProviderRepo.Update: resolved UUID", "providerID", providerID)
 
 		parsedUUID, err := uuid.Parse(providerID)
@@ -234,7 +234,7 @@ func (r *LLMProviderRepo) Update(p *models.LLMProvider, providerID string, orgUU
 		// silent no-op from the user's perspective.
 		if p.Configuration.Name != "" {
 			slog.Info("LLMProviderRepo.Update: updating artifact name", "handle", providerID)
-			if err := r.artifactRepo.Update(tx, &models.Artifact{
+			if err := r.artifactRepo.Update(tx.WithContext(ctx), &models.Artifact{
 				UUID: parsedUUID,
 				OUID: orgUUID,
 				Name: p.Configuration.Name,
