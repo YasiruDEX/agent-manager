@@ -29,6 +29,7 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import { Edit } from "@wso2/oxygen-ui-icons-react";
+import { getErrorMessage } from "@agent-management-platform/shared-component";
 import {
   DrawerWrapper,
   DrawerHeader,
@@ -120,9 +121,7 @@ export function EditLLMProviderDrawer({
         });
         onClose();
       } catch (err) {
-        setSaveError(
-          err instanceof Error ? err.message : "Failed to update LLM provider",
-        );
+        setSaveError(getErrorMessage(err) || "Failed to update LLM provider");
       }
     },
     [formData, validateForm, onUpdate, onClose],
