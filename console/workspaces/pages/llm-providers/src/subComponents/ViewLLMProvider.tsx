@@ -30,14 +30,13 @@ import {
 import { CreatedMetadata, PageLayout } from "@agent-management-platform/views";
 import {
   Box,
+  Button,
   Card,
   Chip,
   Divider,
-  IconButton,
   Stack,
   Tab,
   Tabs,
-  Tooltip,
 } from "@wso2/oxygen-ui";
 import { Edit } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useParams } from "react-router-dom";
@@ -157,23 +156,20 @@ export const ViewLLMProvider: React.FC = () => {
           ? { src: templateLogoUrl, alt: templateDisplayName, color: "transparent" }
           : undefined
       }
+      actions={
+        providerData ? (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Edit size={16} />}
+            onClick={() => setIsEditDrawerOpen(true)}
+          >
+            Edit LLM Provider
+          </Button>
+        ) : undefined
+      }
       titleTail={
         <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 1 }}>
-          <Tooltip title="Edit provider name and description">
-            {/* MUI/oxygen-ui Tooltip needs a non-disabled child to receive
-                pointer/focus events — a disabled IconButton alone never
-                triggers the tooltip. */}
-            <span>
-              <IconButton
-                size="small"
-                onClick={() => setIsEditDrawerOpen(true)}
-                aria-label="Edit provider"
-                disabled={!providerData}
-              >
-                <Edit size={16} />
-              </IconButton>
-            </span>
-          </Tooltip>
           {templateDisplayName && (
             <Chip
               label={templateDisplayName}
