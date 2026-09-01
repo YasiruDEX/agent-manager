@@ -203,7 +203,7 @@ func (r *LLMProviderRepo) Update(p *models.LLMProvider, providerID string, orgUU
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		slog.Info("LLMProviderRepo.Update: resolved UUID", "providerID", providerID)
 
-		_, err := uuid.Parse(providerID)
+		parsedUUID, err := uuid.Parse(providerID)
 		if err != nil {
 			return fmt.Errorf("error parsing provider id: %s, error: %w", providerID, err)
 		}
@@ -227,6 +227,21 @@ func (r *LLMProviderRepo) Update(p *models.LLMProvider, providerID string, orgUU
 		if result.RowsAffected == 0 {
 			slog.Warn("LLMProviderRepo.Update: no rows affected", "handle", providerID)
 			return gorm.ErrRecordNotFound
+		}
+
+		// The displayed name (list + detail responses) is read from the artifacts
+		// table, not from configuration.name — keep them in sync or a rename is a
+		// silent no-op from the user's perspective.
+		if p.Configuration.Name != "" {
+			slog.Info("LLMProviderRepo.Update: updating artifact name", "handle", providerID)
+			if err := r.artifactRepo.Update(tx, &models.Artifact{
+				UUID: parsedUUID,
+				OUID: orgUUID,
+				Name: p.Configuration.Name,
+			}); err != nil {
+				slog.Error("LLMProviderRepo.Update: failed to update artifact name", "handle", providerID, "error", err)
+				return fmt.Errorf("failed to update artifact name: %w", err)
+			}
 		}
 
 		slog.Info("LLMProviderRepo.Update: completed successfully", "handle", providerID, "rowsAffected", result.RowsAffected)
