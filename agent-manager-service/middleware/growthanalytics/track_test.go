@@ -22,68 +22,101 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
-	moesifmiddleware "github.com/moesif/moesifmiddleware-go"
-
+	"github.com/wso2/agent-manager/agent-manager-service/clients/moesifcollector"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 )
 
-// withGrowthAnalyticsConfig sets the SaaS/on-prem and Moesif Application ID
-// fields on the process-wide config for the duration of the test, restoring
-// the originals on cleanup — same pattern used elsewhere in this repo
-// (see api/well_known_routes_test.go) since config.GetConfig() returns a
-// pointer to the single package-level Config.
-func withGrowthAnalyticsConfig(t *testing.T, onPrem bool, applicationID string) {
+// withGrowthAnalyticsConfig sets the SaaS/on-prem and collector fields on
+// the process-wide config for the duration of the test, restoring the
+// originals on cleanup — same pattern used elsewhere in this repo (see
+// api/well_known_routes_test.go) since config.GetConfig() returns a pointer
+// to the single package-level Config.
+func withGrowthAnalyticsConfig(t *testing.T, onPrem bool, baseURL, token string) {
 	t.Helper()
 	cfg := config.GetConfig()
 	origOnPrem := cfg.IsOnPremDeployment
-	origAppID := cfg.GrowthAnalytics.MoesifApplicationID
+	origGA := cfg.GrowthAnalytics
 	cfg.IsOnPremDeployment = onPrem
-	cfg.GrowthAnalytics.MoesifApplicationID = applicationID
+	cfg.GrowthAnalytics = config.GrowthAnalyticsConfig{
+		MoesifCollectorBaseURL: baseURL,
+		MoesifCollectorToken:   token,
+	}
 	t.Cleanup(func() {
 		cfg.IsOnPremDeployment = origOnPrem
-		cfg.GrowthAnalytics.MoesifApplicationID = origAppID
+		cfg.GrowthAnalytics = origGA
 	})
 }
 
-// resetSharedState clears the package-level Moesif singleton so each test
-// that exercises the "enabled" path starts from a clean sync.Once, and
-// restores the real moesifWrap on cleanup so no test leaks a fake into
-// another package's test run within the same binary.
-func resetSharedState(t *testing.T) {
+// fakeSender substitutes for the real moesifcollector.Client, so tests never
+// make a network call. Each SendEvent also publishes on calls, since Track
+// dispatches the send on a detached goroutine — tests need a way to wait
+// deterministically for it rather than racing a background send.
+type fakeSender struct {
+	mu    sync.Mutex
+	sent  []moesifcollector.Event
+	err   error
+	calls chan moesifcollector.Event
+}
+
+func newFakeSender() *fakeSender {
+	return &fakeSender{calls: make(chan moesifcollector.Event, 8)}
+}
+
+func (f *fakeSender) SendEvent(_ context.Context, evt moesifcollector.Event) error {
+	f.mu.Lock()
+	f.sent = append(f.sent, evt)
+	f.mu.Unlock()
+	f.calls <- evt
+	return f.err
+}
+
+// withFakeSender substitutes newSender for the duration of the test,
+// restoring the original on cleanup.
+func withFakeSender(t *testing.T) *fakeSender {
 	t.Helper()
-	origWrap := moesifWrap
-	initOnce = sync.Once{}
-	sharedWrapped = nil
-	t.Cleanup(func() {
-		moesifWrap = origWrap
-		initOnce = sync.Once{}
-		sharedWrapped = nil
-	})
+	fs := newFakeSender()
+	orig := newSender
+	newSender = func(config.GrowthAnalyticsConfig) eventSender { return fs }
+	t.Cleanup(func() { newSender = orig })
+	return fs
 }
 
-func TestTrack_NoOp_OnPremOrNoApplicationID(t *testing.T) {
+func waitForEvent(t *testing.T, fs *fakeSender) moesifcollector.Event {
+	t.Helper()
+	select {
+	case evt := <-fs.calls:
+		return evt
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for event to be sent to the collector")
+		return moesifcollector.Event{}
+	}
+}
+
+func TestTrack_NoOp_OnPremOrNotConfigured(t *testing.T) {
 	tests := []struct {
-		name          string
-		onPrem        bool
-		applicationID string
+		name    string
+		onPrem  bool
+		baseURL string
+		token   string
 	}{
-		{"on-prem deployment, key configured", true, "app-id-should-be-ignored"},
-		{"SaaS deployment, no key configured", false, ""},
-		{"on-prem deployment, no key configured", true, ""},
+		{"on-prem deployment, fully configured", true, "http://localhost:18080/moesif-collector", "test-token"},
+		{"SaaS deployment, no base URL", false, "", "test-token"},
+		{"SaaS deployment, no token", false, "http://localhost:18080/moesif-collector", ""},
+		{"on-prem deployment, nothing configured", true, "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			withGrowthAnalyticsConfig(t, tt.onPrem, tt.applicationID)
-			resetSharedState(t)
+			withGrowthAnalyticsConfig(t, tt.onPrem, tt.baseURL, tt.token)
 
-			// A moesifWrap that fails the test if it's ever invoked — proves
-			// Track truly never touches the Moesif SDK in the disabled case.
-			moesifWrap = func(_ http.Handler, _ map[string]interface{}) http.Handler {
-				t.Fatal("moesifWrap must not be called when growth analytics is disabled")
+			orig := newSender
+			newSender = func(config.GrowthAnalyticsConfig) eventSender {
+				t.Fatal("newSender must not be called when growth analytics is disabled")
 				return nil
 			}
+			t.Cleanup(func() { newSender = orig })
 
 			ran := false
 			handler := func(w http.ResponseWriter, r *http.Request) {
@@ -107,30 +140,9 @@ func TestTrack_NoOp_OnPremOrNoApplicationID(t *testing.T) {
 	}
 }
 
-// fakeMoesifWrap simulates the parts of the real SDK this package depends
-// on: it calls the wrapped handler, then invokes Get_Metadata (which is
-// what Track's per-request dispatch and dimension resolution are actually
-// tested through) and records the metadata for the test to inspect.
-func fakeMoesifWrap(capturedMetadata *map[string]interface{}, capturedOptions *map[string]interface{}) func(http.Handler, map[string]interface{}) http.Handler {
-	return func(next http.Handler, options map[string]interface{}) http.Handler {
-		*capturedOptions = options
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r)
-			var resp moesifmiddleware.MoesifResponseRecorder
-			if getMeta, ok := options["Get_Metadata"].(func(*http.Request, moesifmiddleware.MoesifResponseRecorder) map[string]interface{}); ok {
-				*capturedMetadata = getMeta(r, resp)
-			}
-		})
-	}
-}
-
-func TestTrack_DispatchesToCorrectHandlerAndFeatureCode(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "test-application-id")
-	resetSharedState(t)
-
-	var metadata map[string]interface{}
-	var options map[string]interface{}
-	moesifWrap = fakeMoesifWrap(&metadata, &options)
+func TestTrack_ReportsCorrectFeatureCodeAndDimensionsPerRoute(t *testing.T) {
+	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector", "test-token")
+	fs := withFakeSender(t)
 
 	var createRan, updateRan bool
 	createHandler := func(w http.ResponseWriter, r *http.Request) { createRan = true; w.WriteHeader(http.StatusCreated) }
@@ -141,47 +153,40 @@ func TestTrack_DispatchesToCorrectHandlerAndFeatureCode(t *testing.T) {
 	trackedUpdate := Track("amp.agent-development.update-agent",
 		map[string]interface{}{"update_target": "basic-info"}, updateHandler)
 
-	// Two different features sharing the same singleton Moesif wrapper —
-	// this is the regression case for the bug where the SDK's own
-	// package-level option globals meant every route after the first kept
-	// reporting the first route's feature code.
 	trackedCreate(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
 	if !createRan {
 		t.Fatal("create handler did not run")
 	}
-	if got := metadata["growth_action"]; got != "amp.agent-development.create-agent" {
+	evt := waitForEvent(t, fs)
+	if got := evt.Metadata["growth_action"]; got != "amp.agent-development.create-agent" {
 		t.Errorf("growth_action = %v, want amp.agent-development.create-agent", got)
 	}
-	if got := metadata["creation_method"]; got != "platform-hosted" {
+	if got := evt.Metadata["creation_method"]; got != "platform-hosted" {
 		t.Errorf("creation_method = %v, want platform-hosted", got)
+	}
+	if evt.Response.Status != http.StatusCreated {
+		t.Errorf("response.status = %d, want %d", evt.Response.Status, http.StatusCreated)
+	}
+	if evt.Request.Verb != http.MethodPost {
+		t.Errorf("request.verb = %q, want POST", evt.Request.Verb)
 	}
 
 	trackedUpdate(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/agents/x", nil))
 	if !updateRan {
 		t.Fatal("update handler did not run")
 	}
-	if got := metadata["growth_action"]; got != "amp.agent-development.update-agent" {
-		t.Errorf("growth_action = %v, want amp.agent-development.update-agent (singleton reuse bug)", got)
+	evt = waitForEvent(t, fs)
+	if got := evt.Metadata["growth_action"]; got != "amp.agent-development.update-agent" {
+		t.Errorf("growth_action = %v, want amp.agent-development.update-agent", got)
 	}
-	if got := metadata["update_target"]; got != "basic-info" {
+	if got := evt.Metadata["update_target"]; got != "basic-info" {
 		t.Errorf("update_target = %v, want basic-info", got)
-	}
-
-	if appID, _ := options["Application_Id"].(string); appID != "test-application-id" {
-		t.Errorf("Application_Id = %v, want test-application-id", appID)
-	}
-	if logBody, ok := options["Log_Body"].(bool); !ok || logBody {
-		t.Errorf("Log_Body = %v, want false (request/response bodies must never be forwarded)", options["Log_Body"])
 	}
 }
 
 func TestTrack_SetDimension_ReportsValueDiscoveredInsideTheHandler(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "test-application-id")
-	resetSharedState(t)
-
-	var metadata map[string]interface{}
-	var options map[string]interface{}
-	moesifWrap = fakeMoesifWrap(&metadata, &options)
+	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector", "test-token")
+	fs := withFakeSender(t)
 
 	// Simulates create-agent: the route has no static creation_method dimension
 	// (nil), because it isn't known until the controller parses the request
@@ -194,21 +199,18 @@ func TestTrack_SetDimension_ReportsValueDiscoveredInsideTheHandler(t *testing.T)
 
 	tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
 
-	if got := metadata["creation_method"]; got != "external" {
+	evt := waitForEvent(t, fs)
+	if got := evt.Metadata["creation_method"]; got != "external" {
 		t.Errorf("creation_method = %v, want external", got)
 	}
-	if got := metadata["growth_action"]; got != "amp.agent-development.create-agent" {
+	if got := evt.Metadata["growth_action"]; got != "amp.agent-development.create-agent" {
 		t.Errorf("growth_action = %v, want amp.agent-development.create-agent", got)
 	}
 }
 
 func TestTrack_SetDimension_OverridesAStaticDimensionOfTheSameName(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "test-application-id")
-	resetSharedState(t)
-
-	var metadata map[string]interface{}
-	var options map[string]interface{}
-	moesifWrap = fakeMoesifWrap(&metadata, &options)
+	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector", "test-token")
+	fs := withFakeSender(t)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		SetDimension(r.Context(), "creation_method", "from-kind")
@@ -219,7 +221,8 @@ func TestTrack_SetDimension_OverridesAStaticDimensionOfTheSameName(t *testing.T)
 
 	tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
 
-	if got := metadata["creation_method"]; got != "from-kind" {
+	evt := waitForEvent(t, fs)
+	if got := evt.Metadata["creation_method"]; got != "from-kind" {
 		t.Errorf("creation_method = %v, want from-kind (SetDimension should override the static value)", got)
 	}
 }
@@ -248,12 +251,8 @@ func TestTrack_DynamicOutcome_ReflectsRealResponseStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			withGrowthAnalyticsConfig(t, false, "test-application-id")
-			resetSharedState(t)
-
-			var metadata map[string]interface{}
-			var options map[string]interface{}
-			moesifWrap = fakeMoesifWrap(&metadata, &options)
+			withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector", "test-token")
+			fs := withFakeSender(t)
 
 			handler := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.statusCode) }
 			tracked := Track("amp.agent-development.build-agent",
@@ -261,45 +260,81 @@ func TestTrack_DynamicOutcome_ReflectsRealResponseStatus(t *testing.T) {
 
 			tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents/x/builds", nil))
 
-			if got := metadata["outcome"]; got != tt.wantOutcome {
+			evt := waitForEvent(t, fs)
+			if got := evt.Metadata["outcome"]; got != tt.wantOutcome {
 				t.Errorf("outcome = %v, want %v", got, tt.wantOutcome)
+			}
+			if evt.Response.Status != tt.statusCode {
+				t.Errorf("response.status = %d, want %d", evt.Response.Status, tt.statusCode)
 			}
 		})
 	}
 }
 
-func TestTrack_PanicInHandlerDoesNotCrashTheProcess(t *testing.T) {
-	// Fire-and-forget requires that a panic anywhere in the tracking path
-	// (including inside the wrapped SDK call) surfaces as a recovered error,
-	// never a crashed request. This exercises Track's own recover(), not the
-	// business handler's — a panicking business handler is the router's
-	// concern, not growthanalytics's.
-	withGrowthAnalyticsConfig(t, false, "test-application-id")
-	resetSharedState(t)
+// TestTrack_HandlerPanicPropagatesNormally verifies that Track no longer
+// (unlike the old SDK-wrapped implementation) recovers a panic raised by
+// the wrapped business handler itself — that's the router's concern, not
+// growthanalytics's. Only the tracking code that runs after the handler
+// returns is guarded by a recover().
+func TestTrack_HandlerPanicPropagatesNormally(t *testing.T) {
+	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector", "test-token")
+	withFakeSender(t)
 
-	moesifWrap = func(_ http.Handler, _ map[string]interface{}) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			panic("simulated Moesif SDK failure")
-		})
-	}
+	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
+		panic("business handler failure")
+	})
+
+	defer func() {
+		if rec := recover(); rec == nil {
+			t.Fatal("expected the handler's panic to propagate out of Track, not be swallowed")
+		}
+	}()
+	tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
+}
+
+// panicSender simulates a broken collector client (e.g. a bug in
+// moesifcollector.Client) to prove a panic there can never crash the
+// process or affect the response already sent to the caller.
+type panicSender struct{ started chan struct{} }
+
+func (p panicSender) SendEvent(context.Context, moesifcollector.Event) error {
+	close(p.started)
+	panic("simulated collector client failure")
+}
+
+func TestTrack_PanicSendingEventDoesNotCrashTheProcessOrAffectTheResponse(t *testing.T) {
+	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector", "test-token")
+
+	ps := panicSender{started: make(chan struct{})}
+	orig := newSender
+	newSender = func(config.GrowthAnalyticsConfig) eventSender { return ps }
+	t.Cleanup(func() { newSender = orig })
 
 	handlerRan := false
 	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
 		handlerRan = true
+		w.WriteHeader(http.StatusCreated)
 	})
 
-	defer func() {
-		if rec := recover(); rec != nil {
-			t.Fatalf("Track leaked a panic instead of recovering it: %v", rec)
-		}
-	}()
-	tracked(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/agents", nil))
+	rec := httptest.NewRecorder()
+	tracked(rec, httptest.NewRequest(http.MethodPost, "/agents", nil))
 
-	// The fake SDK panics before ever calling next.ServeHTTP, mirroring an
-	// init-time or pre-dispatch SDK failure, so the business handler
-	// correctly does not run in this specific scenario — what matters is
-	// that the panic never escaped Track.
-	_ = handlerRan
+	if !handlerRan {
+		t.Fatal("handler did not run")
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d (must be unaffected by a failure sending the event)", rec.Code, http.StatusCreated)
+	}
+
+	select {
+	case <-ps.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the panicking sender to be invoked")
+	}
+	// Give the detached goroutine's recover() a moment to run. If it
+	// doesn't, the panic crashes the whole test binary — there's nothing
+	// else to assert on for that case.
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestBuildMetadata(t *testing.T) {
@@ -315,6 +350,7 @@ func TestBuildMetadata(t *testing.T) {
 			feature: "amp.agent-development.delete-agent",
 			version: "1.2.3",
 			want: map[string]interface{}{
+				"platform":         "Agent Manager",
 				"growth_action":    "amp.agent-development.delete-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
@@ -326,6 +362,7 @@ func TestBuildMetadata(t *testing.T) {
 			dimensions: map[string]interface{}{"update_target": "configurations"},
 			version:    "1.2.3",
 			want: map[string]interface{}{
+				"platform":         "Agent Manager",
 				"growth_action":    "amp.agent-development.update-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
@@ -394,5 +431,31 @@ func TestOutcomeFromStatus(t *testing.T) {
 		if got := outcomeFromStatus(tt.status); got != tt.want {
 			t.Errorf("outcomeFromStatus(%d) = %q, want %q", tt.status, got, tt.want)
 		}
+	}
+}
+
+func TestClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		forwardFor string
+		want       string
+	}{
+		{"no forwarded header uses remote addr host", "203.0.113.9:44321", "", "203.0.113.9"},
+		{"forwarded-for wins over remote addr", "203.0.113.9:44321", "198.51.100.4", "198.51.100.4"},
+		{"first entry of a comma-separated forwarded-for", "203.0.113.9:44321", "198.51.100.4, 10.0.0.1", "198.51.100.4"},
+		{"malformed remote addr falls back to raw value", "not-a-host-port", "", "not-a-host-port"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.RemoteAddr = tt.remoteAddr
+			if tt.forwardFor != "" {
+				r.Header.Set("X-Forwarded-For", tt.forwardFor)
+			}
+			if got := clientIP(r); got != tt.want {
+				t.Errorf("clientIP() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

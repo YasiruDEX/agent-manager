@@ -275,13 +275,31 @@ type ObserverConfig struct {
 	PublicURL string
 }
 
-// GrowthAnalyticsConfig configures feature-usage telemetry export to Moesif.
+// GrowthAnalyticsConfig configures feature-usage telemetry export via the
+// moesif-collector-api OpenChoreo proxy component, which authenticates
+// callers with a platform-idp JWT and forwards to Moesif, injecting the real
+// Moesif Application ID server-side (callers never see it).
 type GrowthAnalyticsConfig struct {
-	// MoesifApplicationID is the Moesif collector Application ID. Empty
+	// MoesifCollectorBaseURL is the proxy's base URL, e.g.
+	// "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
+	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev
+	// through a `kubectl port-forward` of the internal gateway. Empty
 	// disables telemetry export entirely — the middleware/growthanalytics
-	// package no-ops when this is unset, so the OSS/on-prem build (which
-	// never sets it) never emits telemetry.
-	MoesifApplicationID string `json:"-"`
+	// package no-ops when this or MoesifCollectorToken is unset, so the
+	// OSS/on-prem build (which never sets either) never emits telemetry.
+	MoesifCollectorBaseURL string
+	// MoesifCollectorToken is a bearer JWT issued by platform-idp, used to
+	// authenticate to the proxy. It expires hourly; there is currently no
+	// automated refresh, so this is set manually for dev/test and needs a
+	// real refresh strategy (e.g. this service acquiring its own
+	// service-to-service token from platform-idp) before production use.
+	MoesifCollectorToken string `json:"-"`
+	// MoesifCollectorHostHeader overrides the outgoing Host header sent to
+	// the proxy. Required only for local dev through a port-forward, where
+	// the gateway routes purely on Host and localhost doesn't match the
+	// real virtual-host name. Leave empty when MoesifCollectorBaseURL's own
+	// host is already the real vhost (i.e. reached directly in-cluster).
+	MoesifCollectorHostHeader string
 }
 
 type POSTGRESQL struct {

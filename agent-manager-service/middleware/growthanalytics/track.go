@@ -20,24 +20,38 @@
 // in the Feature Usage Tracking initiative docs). It currently instruments
 // the "Agent Development" feature category only.
 //
+// Events are posted directly to Moesif's Events API
+// (POST /v1/events) through moesif-collector-api, an authenticated
+// OpenChoreo reverse-proxy component that validates a platform-idp JWT and
+// injects the real Moesif Application ID server-side — this package never
+// handles that credential, only the JWT (see
+// clients/moesifcollector). Earlier this went through the Moesif SDK
+// directly; that's no longer available from this deployment, hence the
+// proxy.
+//
 // Tracking is always fire-and-forget: it must never change a request's
-// outcome or add observable latency to it. Two things make that true —
-//  1. the Moesif SDK itself queues events into an in-memory batch and
-//     flushes them on a background timer, never blocking the calling
-//     goroutine;
-//  2. every call into the SDK (client init and the per-request hook) runs
-//     under a recover(), so a bad Application ID, a client-library bug, or
-//     any other Moesif-side failure surfaces as a log line, never a 5xx.
+// outcome or add observable latency to it. The wrapped handler always runs
+// first, on the caller's own goroutine, completely outside any recover() —
+// a panic there is the router's concern, not this package's, and must
+// propagate exactly as it would for an untracked route. Only the
+// metadata-building and event-send that happens *after* the handler
+// returns — which can no longer affect the response already written — runs
+// under a recover() and is dispatched to its own goroutine, so a bad token,
+// an unreachable proxy, or any bug in this package surfaces as a log line,
+// never a hung or broken request.
 package growthanalytics
 
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
-	moesifmiddleware "github.com/moesif/moesifmiddleware-go"
-
+	"github.com/wso2/agent-manager/agent-manager-service/clients/moesifcollector"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/requests"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
@@ -46,20 +60,19 @@ import (
 
 type ctxKey int
 
-const (
-	featureCodeKey ctxKey = iota
-	dimensionsKey
-	targetHandlerKey
-	statusHolderKey
-	overridesKey
-)
+const overridesKey ctxKey = iota
+
+// eventSendTimeout bounds how long the detached goroutine that posts an
+// event to the collector proxy may run, so a hung/unreachable proxy can
+// never accumulate unbounded background goroutines.
+const eventSendTimeout = 10 * time.Second
 
 // dimensionOverrides carries dimension values a handler only learns after
 // looking at the request body (e.g. create-agent's creation_method, which
-// depends on the payload's provisioning type) from the handler back to
-// Get_Metadata. Track's static `dimensions` argument can't express these —
-// it's fixed at route-registration time — so a handler reports them at
-// request time instead, via SetDimension.
+// depends on the payload's provisioning type) from the handler back to the
+// point where the event is built. Track's static `dimensions` argument
+// can't express these — it's fixed at route-registration time — so a
+// handler reports them at request time instead, via SetDimension.
 type dimensionOverrides struct {
 	mu   sync.Mutex
 	vals map[string]interface{}
@@ -105,32 +118,9 @@ func SetDimension(ctx context.Context, key string, value interface{}) {
 // fixed value supplied up front.
 var DynamicOutcome = struct{ dynamicOutcome bool }{true}
 
-// moesifWrap is moesifmiddleware.MoesifMiddleware behind a package var so
-// tests can substitute a fake in place of the real SDK without ever making a
-// network call.
-var moesifWrap = moesifmiddleware.MoesifMiddleware
-
-// moesifmiddleware-go keeps its client and its entire options map (including
-// the Get_Metadata/Identify_User/Identify_Company callbacks) in package-level
-// globals inside the SDK: the first call to MoesifMiddleware wins, and every
-// later call is a no-op that silently keeps reusing the first call's
-// callbacks. Track is called once per route with a distinct feature code, so
-// wrapping each route in its own MoesifMiddleware call — the obvious
-// approach — would make every route report the first-registered route's
-// feature code. Instead, wrap the SDK exactly once (via initOnce) around a
-// dispatcher that reads the feature code, dimensions, and the real handler
-// out of the request context, which Track sets per-request before
-// delegating to the shared wrapped handler.
-var (
-	initOnce      sync.Once
-	sharedWrapped http.Handler
-)
-
-// statusHolder carries the wrapped handler's real response status from
-// dispatch (where it's observed) to Get_Metadata (where "outcome" is
-// resolved). Moesif's own MoesifResponseRecorder tracks status internally
-// but exposes no accessor, so dimensions that depend on the response
-// (currently just "outcome") have to be captured this way instead.
+// statusHolder carries the wrapped handler's real response status from the
+// request goroutine to the event-building step, since "outcome" is the only
+// dimension that depends on the response.
 type statusHolder struct{ code int }
 
 type statusRecordingWriter struct {
@@ -147,6 +137,24 @@ func (s *statusRecordingWriter) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// eventSender abstracts posting a built event to the collector proxy, so
+// tests can substitute a fake and never make a network call.
+type eventSender interface {
+	SendEvent(ctx context.Context, evt moesifcollector.Event) error
+}
+
+// sharedHTTPClient is reused across every Track-wrapped request so
+// connections to the collector proxy get pooled rather than dialed fresh
+// per event.
+var sharedHTTPClient = requests.NewRetryableHTTPClient(&http.Client{Timeout: eventSendTimeout})
+
+// newSender builds the eventSender used to deliver an event, from the
+// current GrowthAnalytics config. A package var so tests can substitute a
+// fake in place of the real client.
+var newSender = func(ga config.GrowthAnalyticsConfig) eventSender {
+	return moesifcollector.NewClient(sharedHTTPClient, ga.MoesifCollectorBaseURL, ga.MoesifCollectorToken, ga.MoesifCollectorHostHeader)
+}
+
 // Track wraps handler so calls to it are reported to Moesif as the given
 // feature-taxonomy event name (e.g. "amp.agent-development.create-agent"),
 // enriched with the given dimensions — the taxonomy's per-feature dimension
@@ -156,113 +164,159 @@ func (s *statusRecordingWriter) WriteHeader(code int) {
 // instead. Pass nil when a feature has no dimensions.
 //
 // Track is a no-op — returns handler unchanged — unless this is a SaaS
-// deployment with a Moesif Application ID configured (IsOnPremDeployment is
-// false and GrowthAnalytics.MoesifApplicationID is set), so the OSS/on-prem
-// build never emits telemetry.
+// deployment with the Moesif collector proxy configured (IsOnPremDeployment
+// is false and both GrowthAnalytics.MoesifCollectorBaseURL and
+// MoesifCollectorToken are set), so the OSS/on-prem build never emits
+// telemetry.
 //
 // Request and response bodies are never forwarded to Moesif: several of the
 // routes this wraps return generated secrets (API keys, tokens, identity
 // secrets) in the response body.
 func Track(featureCode string, dimensions map[string]interface{}, handler http.HandlerFunc) http.HandlerFunc {
 	cfg := config.GetConfig()
-	if cfg.IsOnPremDeployment || cfg.GrowthAnalytics.MoesifApplicationID == "" {
-		return handler
-	}
-
-	initOnce.Do(func() { initShared(cfg) })
-
-	if sharedWrapped == nil {
-		// initShared recovered from a panic (e.g. an invalid Application ID)
-		// and left nothing to dispatch through — fall back to the plain
-		// handler rather than fail the request.
+	ga := cfg.GrowthAnalytics
+	if cfg.IsOnPremDeployment || ga.MoesifCollectorBaseURL == "" || ga.MoesifCollectorToken == "" {
 		return handler
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				slog.Error("growthanalytics: recovered panic reporting event, request already served", "panic", rec, "feature", featureCode)
-			}
-		}()
+		overrides := &dimensionOverrides{}
+		ctx := context.WithValue(r.Context(), overridesKey, overrides)
+		holder := &statusHolder{code: http.StatusOK}
+		sw := &statusRecordingWriter{ResponseWriter: w, holder: holder}
 
-		ctx := context.WithValue(r.Context(), featureCodeKey, featureCode)
-		ctx = context.WithValue(ctx, dimensionsKey, dimensions)
-		ctx = context.WithValue(ctx, targetHandlerKey, handler)
-		ctx = context.WithValue(ctx, statusHolderKey, &statusHolder{code: http.StatusOK})
-		ctx = context.WithValue(ctx, overridesKey, &dimensionOverrides{})
-		sharedWrapped.ServeHTTP(w, r.WithContext(ctx))
+		reqSnapshot := snapshotRequest(r)
+		userID := identifyUser(ctx)
+		companyID := middleware.OUIDFromRequest(r)
+
+		// The business handler runs completely outside any recover() here —
+		// a panic in it must propagate exactly as it would for an untracked
+		// route, not get silently absorbed by this package.
+		handler(sw, r.WithContext(ctx))
+
+		reportEvent(r.Context(), ga, featureCode, dimensions, overrides, holder, reqSnapshot, userID, companyID)
 	}
 }
 
-func initShared(cfg *config.Config) {
+// reportEvent resolves the event's final metadata and fires off the send to
+// the collector proxy on a detached goroutine. The response has already
+// been fully written by the time this runs, so nothing here can affect the
+// request's outcome — a recover() guards the synchronous part (building the
+// event) and the goroutine guards itself the same way.
+func reportEvent(
+	requestCtx context.Context,
+	ga config.GrowthAnalyticsConfig,
+	featureCode string,
+	dimensions map[string]interface{},
+	overrides *dimensionOverrides,
+	holder *statusHolder,
+	reqSnapshot moesifcollector.EventRequest,
+	userID, companyID string,
+) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			slog.Error("growthanalytics: recovered panic initializing Moesif client, telemetry disabled for this process", "panic", rec)
-			sharedWrapped = nil
+			slog.Error("growthanalytics: recovered panic reporting event, request already served", "panic", rec, "feature", featureCode)
 		}
 	}()
 
-	options := map[string]interface{}{
-		"Application_Id": cfg.GrowthAnalytics.MoesifApplicationID,
-		"Log_Body":       false,
-		"Identify_User": func(req *http.Request, _ moesifmiddleware.MoesifResponseRecorder) string {
-			claims := jwtassertion.GetTokenClaims(req.Context())
-			if claims == nil {
-				return ""
-			}
-			return claims.Sub
-		},
-		"Identify_Company": func(req *http.Request, _ moesifmiddleware.MoesifResponseRecorder) string {
-			return middleware.OUIDFromRequest(req)
-		},
-		"Get_Metadata": func(req *http.Request, _ moesifmiddleware.MoesifResponseRecorder) map[string]interface{} {
-			fc, _ := req.Context().Value(featureCodeKey).(string)
-			dims, _ := req.Context().Value(dimensionsKey).(map[string]interface{})
-			holder, _ := req.Context().Value(statusHolderKey).(*statusHolder)
-			resolved := resolveDimensions(dims, holder)
-			if o, ok := req.Context().Value(overridesKey).(*dimensionOverrides); ok {
-				overrides := o.snapshot()
-				if len(overrides) > 0 && resolved == nil {
-					resolved = make(map[string]interface{}, len(overrides))
-				}
-				for k, v := range overrides {
-					resolved[k] = v
-				}
-			}
-			metadata := buildMetadata(fc, resolved, config.GetConfig().PackageVersion)
+	resolved := resolveDimensions(dimensions, holder)
+	for k, v := range overrides.snapshot() {
+		if resolved == nil {
+			resolved = make(map[string]interface{})
+		}
+		resolved[k] = v
+	}
+	metadata := buildMetadata(featureCode, resolved, config.GetConfig().PackageVersion)
 
-			// Fire-and-forget from the caller's perspective, but still logged:
-			// this is the last point we control before the event is handed off
-			// to the SDK's async queue, so it's the only place that can say
-			// "we tried to send this" rather than silently maybe-doing nothing.
-			logger.GetLogger(req.Context()).Info("growthanalytics: sending feature-usage event to Moesif",
-				"feature", fc,
-				"org_id", middleware.OUIDFromRequest(req),
-				"metadata", metadata,
-			)
-
-			return metadata
+	evt := moesifcollector.Event{
+		Request: reqSnapshot,
+		Response: moesifcollector.EventResponse{
+			Time:   time.Now().UTC().Format(time.RFC3339),
+			Status: holder.code,
 		},
+		UserID:    userID,
+		CompanyID: companyID,
+		Metadata:  metadata,
 	}
 
-	sharedWrapped = moesifWrap(http.HandlerFunc(dispatch), options)
+	// Logged here, before the async hand-off, since this is the last point
+	// this package controls before the send is fired off in the
+	// background — the only place that can say "we tried to send this"
+	// rather than silently maybe-doing nothing.
+	logger.GetLogger(requestCtx).Info("growthanalytics: sending feature-usage event to Moesif collector",
+		"feature", featureCode,
+		"org_id", companyID,
+		"metadata", metadata,
+	)
+
+	sender := newSender(ga)
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.Error("growthanalytics: recovered panic sending event", "panic", rec, "feature", featureCode)
+			}
+		}()
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), eventSendTimeout)
+		defer cancel()
+		if err := sender.SendEvent(ctx, evt); err != nil {
+			slog.Error("growthanalytics: failed to send event to Moesif collector", "error", err, "feature", featureCode)
+		}
+	}()
 }
 
-// dispatch is the single handler every route is funneled through once
-// wrapped by Moesif; it looks up which real handler to run for this request
-// from the context Track populated, and records that handler's real
-// response status for any dimension that depends on it.
-func dispatch(w http.ResponseWriter, r *http.Request) {
-	h, ok := r.Context().Value(targetHandlerKey).(http.HandlerFunc)
-	if !ok {
-		return
+// identifyUser resolves the event's user_id from the request's validated
+// JWT, mirroring the taxonomy's need to attribute usage to the acting user.
+func identifyUser(ctx context.Context) string {
+	claims := jwtassertion.GetTokenClaims(ctx)
+	if claims == nil {
+		return ""
 	}
-	holder, _ := r.Context().Value(statusHolderKey).(*statusHolder)
-	if holder == nil {
-		h(w, r)
-		return
+	return claims.Sub
+}
+
+// snapshotRequest captures the request-side fields reported to Moesif.
+// Deliberately excludes headers and body — see the package doc comment.
+func snapshotRequest(r *http.Request) moesifcollector.EventRequest {
+	return moesifcollector.EventRequest{
+		Time:      time.Now().UTC().Format(time.RFC3339),
+		URI:       requestURI(r),
+		Verb:      r.Method,
+		IPAddress: clientIP(r),
 	}
-	h(&statusRecordingWriter{ResponseWriter: w, holder: holder}, r)
+}
+
+// requestURI reconstructs the request's absolute URL on a best-effort basis:
+// this service normally sits behind a gateway/proxy, so the scheme is taken
+// from X-Forwarded-Proto when present rather than assumed from r.TLS.
+func requestURI(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+	host := r.Host
+	if host == "" {
+		host = "unknown"
+	}
+	return scheme + "://" + host + r.URL.RequestURI()
+}
+
+// clientIP extracts the caller's address, preferring a proxy-supplied
+// X-Forwarded-For over the immediate TCP peer.
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		if idx := strings.IndexByte(fwd, ','); idx >= 0 {
+			return strings.TrimSpace(fwd[:idx])
+		}
+		return strings.TrimSpace(fwd)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // resolveDimensions substitutes DynamicOutcome (if present) with the real
@@ -287,12 +341,13 @@ func resolveDimensions(dimensions map[string]interface{}, holder *statusHolder) 
 	return resolved
 }
 
-// buildMetadata assembles the event metadata Get_Metadata emits: the
-// feature code every event must carry, product/deployment context, and the
-// route's resolved taxonomy dimensions. Extracted as a pure function so the
-// metadata shape is unit-testable without touching the Moesif SDK.
+// buildMetadata assembles the event metadata: the feature code every event
+// must carry, product/deployment context, and the route's resolved
+// taxonomy dimensions. Extracted as a pure function so the metadata shape
+// is unit-testable without touching the network.
 func buildMetadata(featureCode string, dimensions map[string]interface{}, productVersion string) map[string]interface{} {
 	meta := map[string]interface{}{
+		"platform":         "Agent Manager",
 		"growth_action":    featureCode,
 		"product_version":  productVersion,
 		"deployment_model": "saas",
