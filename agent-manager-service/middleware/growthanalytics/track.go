@@ -148,6 +148,14 @@ func (s *statusRecordingWriter) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap exposes the underlying writer to http.ResponseController, so Flush,
+// Hijack and the rest keep working through this wrapper. No route Track wraps
+// streams today, but middleware.responseRecorder — the only other
+// ResponseWriter wrapper in this service — implements this for the same
+// reason, and a tracked route that starts streaming should not silently break
+// because tracking was added to it.
+func (s *statusRecordingWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
 // eventSender abstracts posting a built event to the collector proxy, so
 // tests can substitute a fake and never make a network call.
 type eventSender interface {
