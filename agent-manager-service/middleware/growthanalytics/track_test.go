@@ -51,11 +51,22 @@ func authedRequest(method, target string) *http.Request {
 // consult it — see TestTrack_ActivatesRegardlessOfIsOnPremDeployment.
 func withGrowthAnalyticsConfig(t *testing.T, baseURL string) {
 	t.Helper()
+	withGrowthAnalyticsConfigFull(t, config.GrowthAnalyticsConfig{
+		Enabled:                true,
+		MoesifCollectorBaseURL: baseURL,
+		DeploymentModel:        "saas",
+		Environment:            "development",
+	})
+}
+
+// withGrowthAnalyticsConfigFull is withGrowthAnalyticsConfig for the tests
+// that need to vary a field the common helper fixes — the kill switch and
+// the reported deployment model.
+func withGrowthAnalyticsConfigFull(t *testing.T, ga config.GrowthAnalyticsConfig) {
+	t.Helper()
 	cfg := config.GetConfig()
 	origGA := cfg.GrowthAnalytics
-	cfg.GrowthAnalytics = config.GrowthAnalyticsConfig{
-		MoesifCollectorBaseURL: baseURL,
-	}
+	cfg.GrowthAnalytics = ga
 	t.Cleanup(func() {
 		cfg.GrowthAnalytics = origGA
 	})
@@ -139,6 +150,88 @@ func TestTrack_NoOp_NoBaseURL(t *testing.T) {
 	}
 	if rec.Code != http.StatusCreated {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+// TestTrack_NoOp_WhenDisabled covers the kill switch: a fully configured
+// collector URL is not on its own permission to report. MOESIF_ENABLED=false
+// turns export off while leaving the rest of the configuration in place,
+// which is how an environment stops reporting without deleting config.
+func TestTrack_NoOp_WhenDisabled(t *testing.T) {
+	withGrowthAnalyticsConfigFull(t, config.GrowthAnalyticsConfig{
+		Enabled:                false,
+		MoesifCollectorBaseURL: "http://localhost:18080/moesif-collector",
+		DeploymentModel:        "saas",
+	})
+
+	orig := newSender
+	newSender = func(config.GrowthAnalyticsConfig, string) eventSender {
+		t.Fatal("newSender must not be called when growth analytics is switched off")
+		return nil
+	}
+	t.Cleanup(func() { newSender = orig })
+
+	ran := false
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+		w.WriteHeader(http.StatusCreated)
+	}
+
+	wrapped := Track("amp.agent-development.create-agent", nil, handler)
+
+	rec := httptest.NewRecorder()
+	wrapped(rec, authedRequest(http.MethodPost, "/agents"))
+
+	if !ran {
+		t.Error("expected the wrapped handler to run even when tracking is switched off")
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+// TestTrack_ReportsConfiguredDeploymentModel verifies the event's
+// deployment_model comes from config rather than a compiled-in "saas", so a
+// deployment that is not the cloud one labels its events honestly.
+func TestTrack_ReportsConfiguredDeploymentModel(t *testing.T) {
+	withGrowthAnalyticsConfigFull(t, config.GrowthAnalyticsConfig{
+		Enabled:                true,
+		MoesifCollectorBaseURL: "http://localhost:18080/moesif-collector",
+		DeploymentModel:        "vm",
+	})
+	fs, _ := withFakeSender(t)
+
+	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	tracked(httptest.NewRecorder(), authedRequest(http.MethodPost, "/agents"))
+
+	evt := waitForEvent(t, fs)
+	if got := evt.Metadata["deployment_model"]; got != "vm" {
+		t.Errorf("metadata[deployment_model] = %v, want %q", got, "vm")
+	}
+}
+
+// TestTrack_ReportsConfiguredEnvironment verifies each event carries the
+// environment it came from, which is what keeps dev/stage/prod usage
+// separable inside the single shared Moesif application.
+func TestTrack_ReportsConfiguredEnvironment(t *testing.T) {
+	withGrowthAnalyticsConfigFull(t, config.GrowthAnalyticsConfig{
+		Enabled:                true,
+		MoesifCollectorBaseURL: "http://localhost:18080/moesif-collector",
+		DeploymentModel:        "saas",
+		Environment:            "production",
+	})
+	fs, _ := withFakeSender(t)
+
+	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	tracked(httptest.NewRecorder(), authedRequest(http.MethodPost, "/agents"))
+
+	evt := waitForEvent(t, fs)
+	if got := evt.Metadata["environment"]; got != "production" {
+		t.Errorf("metadata[environment] = %v, want %q", got, "production")
 	}
 }
 
@@ -416,41 +509,79 @@ func TestTrack_PanicSendingEventDoesNotCrashTheProcessOrAffectTheResponse(t *tes
 
 func TestBuildMetadata(t *testing.T) {
 	tests := []struct {
-		name       string
-		feature    string
-		dimensions map[string]interface{}
-		version    string
-		want       map[string]interface{}
+		name        string
+		feature     string
+		dimensions  map[string]interface{}
+		version     string
+		deployment  string
+		environment string
+		want        map[string]interface{}
 	}{
 		{
-			name:    "no dimensions",
-			feature: "amp.agent-development.delete-agent",
-			version: "1.2.3",
+			name:        "no dimensions",
+			feature:     "amp.agent-development.delete-agent",
+			version:     "1.2.3",
+			deployment:  "saas",
+			environment: "development",
 			want: map[string]interface{}{
 				"platform":         "Agent Manager",
 				"growth_action":    "amp.agent-development.delete-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
+				"environment":      "development",
 			},
 		},
 		{
-			name:       "dimensions are merged in",
-			feature:    "amp.agent-development.update-agent",
-			dimensions: map[string]interface{}{"update_target": "configurations"},
-			version:    "1.2.3",
+			name:        "dimensions are merged in",
+			feature:     "amp.agent-development.update-agent",
+			dimensions:  map[string]interface{}{"update_target": "configurations"},
+			version:     "1.2.3",
+			deployment:  "saas",
+			environment: "development",
 			want: map[string]interface{}{
 				"platform":         "Agent Manager",
 				"growth_action":    "amp.agent-development.update-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
+				"environment":      "development",
 				"update_target":    "configurations",
+			},
+		},
+		{
+			name:        "deployment model is reported from config, not hardcoded",
+			feature:     "amp.agent-development.create-agent",
+			version:     "1.2.3",
+			deployment:  "vm",
+			environment: "development",
+			want: map[string]interface{}{
+				"platform":         "Agent Manager",
+				"growth_action":    "amp.agent-development.create-agent",
+				"product_version":  "1.2.3",
+				"deployment_model": "vm",
+				"environment":      "development",
+			},
+		},
+		{
+			// A blank environment must omit the field rather than report
+			// environment:"" — an empty bucket in Moesif is worse than no
+			// field at all, since it looks like a real environment.
+			name:        "empty environment omits the field entirely",
+			feature:     "amp.agent-development.create-agent",
+			version:     "1.2.3",
+			deployment:  "saas",
+			environment: "",
+			want: map[string]interface{}{
+				"platform":         "Agent Manager",
+				"growth_action":    "amp.agent-development.create-agent",
+				"product_version":  "1.2.3",
+				"deployment_model": "saas",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildMetadata(tt.feature, tt.dimensions, tt.version)
+			got := buildMetadata(tt.feature, tt.dimensions, tt.version, tt.deployment, tt.environment)
 			if len(got) != len(tt.want) {
 				t.Fatalf("buildMetadata() = %v, want %v", got, tt.want)
 			}
