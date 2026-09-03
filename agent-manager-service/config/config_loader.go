@@ -161,8 +161,11 @@ func loadEnvs() {
 	config.IsOnPremDeployment = r.readOptionalBool("IS_ON_PREM_DEPLOYMENT", true)
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
 	config.GrowthAnalytics = GrowthAnalyticsConfig{
+		Enabled:                   r.readOptionalBool("MOESIF_ENABLED", true),
 		MoesifCollectorBaseURL:    r.readOptionalString("MOESIF_COLLECTOR_BASE_URL", ""),
 		MoesifCollectorHostHeader: r.readOptionalString("MOESIF_COLLECTOR_HOST_HEADER", ""),
+		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "saas"),
+		Environment:               r.readOptionalString("AMP_ENVIRONMENT", ""),
 	}
 	config.ThunderHostBaseDomain = r.readOptionalString("THUNDER_HOST_BASE_DOMAIN", "amp.localhost")
 	config.ThunderAskSecret = r.readOptionalString("THUNDER_ASK_SECRET", "")

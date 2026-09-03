@@ -318,6 +318,13 @@ type ObserverConfig struct {
 // the proxy using the JWT already on the request being tracked (the same
 // token the caller authenticated to this service with), not a config value.
 type GrowthAnalyticsConfig struct {
+	// Enabled is the operational on/off switch for telemetry export, held
+	// separately from MoesifCollectorBaseURL so reporting can be turned off
+	// in an environment without deleting the rest of the configuration. The
+	// URL always resolves once deployed, so its presence cannot signal
+	// intent — this does. Both must be set for anything to be exported.
+	// Mirrors MOESIF_ENABLED on billing-service and platform-api-service.
+	Enabled bool
 	// MoesifCollectorBaseURL is the proxy's base URL, e.g.
 	// "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
 	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev
@@ -331,6 +338,21 @@ type GrowthAnalyticsConfig struct {
 	// real virtual-host name. Leave empty when MoesifCollectorBaseURL's own
 	// host is already the real vhost (i.e. reached directly in-cluster).
 	MoesifCollectorHostHeader string
+	// DeploymentModel is reported as every event's "deployment_model"
+	// metadata field. Defaults to "saas" because that is the only shape this
+	// is deployed in today, but it is read from config rather than compiled
+	// in so a non-cloud deployment that does enable export (this repo still
+	// ships docker-compose and VM paths) labels its events honestly instead
+	// of claiming to be SaaS.
+	DeploymentModel string
+	// Environment names the deployment environment (e.g. "development",
+	// "production") this instance runs in, reported as every event's
+	// "environment" metadata field. All environments report into one Moesif
+	// application, so without this their usage is only separable by
+	// string-parsing the host out of each event's request URI. Empty — the
+	// local-dev default — omits the field rather than reporting a blank
+	// environment, so local traffic does not create an empty bucket.
+	Environment string
 }
 
 type POSTGRESQL struct {

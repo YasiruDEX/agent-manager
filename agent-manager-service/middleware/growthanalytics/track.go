@@ -17,8 +17,11 @@
 // Package growthanalytics reports feature-usage telemetry for the SaaS
 // deployment of agent-manager-service to Moesif, per the Product Feature
 // Usage Tracking taxonomy (see samples/products/agent-manager/taxonomy.yaml
-// in the Feature Usage Tracking initiative docs). It currently instruments
-// the "Agent Development" feature category only.
+// in the Feature Usage Tracking initiative docs). It instruments the
+// "Agent Development", "Security & Access", "Discovery", "Deployment Ops"
+// and "Observability" feature categories — every route registered with
+// Track, all of which are mutating (POST/PUT/PATCH/DELETE); read paths are
+// deliberately not tracked.
 //
 // Events are posted directly to Moesif's Events API
 // (POST /v1/events) through moesif-collector-api, an authenticated
@@ -172,11 +175,15 @@ var newSender = func(ga config.GrowthAnalyticsConfig, token string) eventSender 
 // "outcome" key to have it computed from the handler's real response status
 // instead. Pass nil when a feature has no dimensions.
 //
-// Track is a no-op — returns handler unchanged — unless the Moesif collector
-// proxy is configured (GrowthAnalytics.MoesifCollectorBaseURL is set). This
-// codebase is only ever built and deployed for the SaaS/cloud environment,
-// so that's the only signal that matters — there's no separate on-prem
-// build of this codebase to guard against. Every route Track wraps requires
+// Track is a no-op — returns handler unchanged — unless telemetry export is
+// both configured (GrowthAnalytics.MoesifCollectorBaseURL is set) and
+// switched on (GrowthAnalytics.Enabled). The two are separate because the
+// collector URL always resolves once deployed, so its presence cannot
+// signal intent: MOESIF_ENABLED is what turns reporting off in an
+// environment without deleting the rest of the configuration.
+// IsOnPremDeployment is not consulted — this codebase is only ever built and
+// deployed for the SaaS/cloud environment, so there's no separate on-prem
+// build of it to guard against. Every route Track wraps requires
 // authentication (see the package doc comment on the token this uses), so a
 // missing caller JWT at send time is treated as a bug, not a normal case —
 // it's logged and the event is dropped rather than sent unauthenticated.
@@ -186,7 +193,7 @@ var newSender = func(ga config.GrowthAnalyticsConfig, token string) eventSender 
 // secrets) in the response body.
 func Track(featureCode string, dimensions map[string]interface{}, handler http.HandlerFunc) http.HandlerFunc {
 	ga := config.GetConfig().GrowthAnalytics
-	if ga.MoesifCollectorBaseURL == "" {
+	if !ga.Enabled || ga.MoesifCollectorBaseURL == "" {
 		return handler
 	}
 
@@ -248,7 +255,7 @@ func reportEvent(
 		}
 		resolved[k] = v
 	}
-	metadata := buildMetadata(featureCode, resolved, config.GetConfig().PackageVersion)
+	metadata := buildMetadata(featureCode, resolved, config.GetConfig().PackageVersion, ga.DeploymentModel, ga.Environment)
 
 	evt := moesifcollector.Event{
 		Request: reqSnapshot,
@@ -367,12 +374,26 @@ func resolveDimensions(dimensions map[string]interface{}, holder *statusHolder) 
 // must carry, product/deployment context, and the route's resolved
 // taxonomy dimensions. Extracted as a pure function so the metadata shape
 // is unit-testable without touching the network.
-func buildMetadata(featureCode string, dimensions map[string]interface{}, productVersion string) map[string]interface{} {
+//
+// deploymentModel comes from config rather than being compiled in, so a
+// deployment that is not the cloud one cannot silently label its events
+// "saas" — see GrowthAnalyticsConfig.DeploymentModel.
+//
+// environment is what makes dev/stage/prod usage separable in Moesif: every
+// environment reports into a single Moesif application, so without this
+// field the only way to tell them apart is parsing the host out of each
+// event's request URI. An empty value omits the field entirely rather than
+// reporting environment:"" — a blank bucket would be indistinguishable from
+// a real environment named "".
+func buildMetadata(featureCode string, dimensions map[string]interface{}, productVersion, deploymentModel, environment string) map[string]interface{} {
 	meta := map[string]interface{}{
 		"platform":         "Agent Manager",
 		"growth_action":    featureCode,
 		"product_version":  productVersion,
-		"deployment_model": "saas",
+		"deployment_model": deploymentModel,
+	}
+	if environment != "" {
+		meta["environment"] = environment
 	}
 	for k, v := range dimensions {
 		meta[k] = v
