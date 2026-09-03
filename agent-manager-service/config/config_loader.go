@@ -316,7 +316,7 @@ func loadEnvs() {
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
 	validateObserverURLs(config, r)
-	validateGrowthAnalyticsConfig(config, r)
+	validateGrowthAnalyticsConfig(config)
 	validateResourceLimitsConfig(config, r)
 	validatePostgresTLSConfig(config, r)
 	validateSecretManagerConfig(config, r)
@@ -495,23 +495,52 @@ func validateObserverURLs(cfg *Config, r *configReader) {
 	validate("AM_OBSERVER_PUBLIC_URL", cfg.Observer.PublicURL)
 }
 
-// validateGrowthAnalyticsConfig fails config load if MOESIF_COLLECTOR_BASE_URL
-// is set but not a valid http(s) URL. An empty value is fine — it's how
-// telemetry export stays disabled.
-func validateGrowthAnalyticsConfig(cfg *Config, r *configReader) {
+// validateGrowthAnalyticsConfig checks the feature-usage telemetry settings.
+//
+// Unlike every other validator here it never fails config load. Telemetry is
+// non-essential: a bad MOESIF_* value must not hold the whole API hostage, so
+// a misconfiguration disables only the tracking and the service starts
+// normally. Each problem is logged at WARN — loud enough to find, since the
+// alternative symptom is events silently never arriving — and the collector
+// URL is then cleared, which is what makes middleware/growthanalytics no-op.
+//
+// Clearing rather than merely warning matters for a malformed URL: leaving it
+// in place would let Track install its wrapper and fail per request, turning
+// one startup warning into an error line on every tracked call.
+//
+// Both values empty is the normal disabled state and says nothing.
+// MOESIF_COLLECTOR_HOST_HEADER only ever applies to a configured collector
+// URL, so setting it alone is a misconfiguration worth naming rather than
+// ignoring.
+func validateGrowthAnalyticsConfig(cfg *Config) {
+	disable := func(msg string, args ...any) {
+		slog.Warn("configReader: "+msg+"; feature-usage tracking is disabled, the service is unaffected", args...)
+		cfg.GrowthAnalytics.MoesifCollectorBaseURL = ""
+	}
+
 	if cfg.GrowthAnalytics.MoesifCollectorBaseURL == "" {
+		if cfg.GrowthAnalytics.MoesifCollectorHostHeader != "" {
+			disable("MOESIF_COLLECTOR_HOST_HEADER is set but MOESIF_COLLECTOR_BASE_URL is empty, "+
+				"and the host header only applies to a configured collector URL",
+				"hostHeader", cfg.GrowthAnalytics.MoesifCollectorHostHeader)
+		}
 		return
 	}
+
 	u, err := url.Parse(cfg.GrowthAnalytics.MoesifCollectorBaseURL)
 	if err != nil {
-		r.errors = append(r.errors, fmt.Errorf("MOESIF_COLLECTOR_BASE_URL %q is not a valid URL: %w", cfg.GrowthAnalytics.MoesifCollectorBaseURL, err))
+		disable("MOESIF_COLLECTOR_BASE_URL is not a valid URL",
+			"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL, "error", err)
 		return
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		r.errors = append(r.errors, fmt.Errorf("MOESIF_COLLECTOR_BASE_URL %q must use http or https scheme", cfg.GrowthAnalytics.MoesifCollectorBaseURL))
+		disable("MOESIF_COLLECTOR_BASE_URL must use the http or https scheme",
+			"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL, "scheme", u.Scheme)
+		return
 	}
 	if u.Host == "" {
-		r.errors = append(r.errors, fmt.Errorf("MOESIF_COLLECTOR_BASE_URL %q must have a non-empty host", cfg.GrowthAnalytics.MoesifCollectorBaseURL))
+		disable("MOESIF_COLLECTOR_BASE_URL must have a non-empty host",
+			"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL)
 	}
 }
 

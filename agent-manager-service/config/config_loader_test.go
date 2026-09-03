@@ -566,3 +566,100 @@ func TestValidateAuditConfig(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateGrowthAnalyticsConfig covers the deliberate asymmetry of this
+// validator: it never contributes a config-load error, because telemetry is
+// non-essential and must not stop the service from starting. A bad value
+// disables tracking (the collector URL is cleared, which is what makes Track
+// no-op) and the process carries on.
+func TestValidateGrowthAnalyticsConfig(t *testing.T) {
+	const vhost = "development-wso2cloud.gateway-internal.openchoreo-data-plane"
+
+	tests := []struct {
+		name        string
+		baseURL     string
+		hostHeader  string
+		wantBaseURL string // "" means tracking ends up disabled
+	}{
+		{
+			name:        "both empty is the normal disabled state",
+			wantBaseURL: "",
+		},
+		{
+			name:        "in-cluster URL is kept",
+			baseURL:     "http://" + vhost + ":8080/moesif-collector",
+			wantBaseURL: "http://" + vhost + ":8080/moesif-collector",
+		},
+		{
+			name:        "local-dev port-forward URL with host header is kept",
+			baseURL:     "http://localhost:18080/moesif-collector",
+			hostHeader:  vhost,
+			wantBaseURL: "http://localhost:18080/moesif-collector",
+		},
+		{
+			name:        "host header without a base URL disables tracking",
+			hostHeader:  vhost,
+			wantBaseURL: "",
+		},
+		{
+			name:        "non-http(s) scheme disables tracking",
+			baseURL:     "ftp://collector.example.com",
+			wantBaseURL: "",
+		},
+		{
+			name:        "missing host disables tracking",
+			baseURL:     "https://",
+			wantBaseURL: "",
+		},
+		{
+			name:        "unparseable URL disables tracking",
+			baseURL:     "http://[::1",
+			wantBaseURL: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{GrowthAnalytics: GrowthAnalyticsConfig{
+				MoesifCollectorBaseURL:    tc.baseURL,
+				MoesifCollectorHostHeader: tc.hostHeader,
+			}}
+
+			validateGrowthAnalyticsConfig(cfg)
+
+			if got := cfg.GrowthAnalytics.MoesifCollectorBaseURL; got != tc.wantBaseURL {
+				t.Errorf("MoesifCollectorBaseURL = %q, want %q", got, tc.wantBaseURL)
+			}
+		})
+	}
+}
+
+// TestValidateGrowthAnalyticsConfig_NeverFailsConfigLoad is the guarantee the
+// rest of the service depends on: no MOESIF_* value, however malformed, may
+// stop agent-manager-service from starting.
+func TestValidateGrowthAnalyticsConfig_NeverFailsConfigLoad(t *testing.T) {
+	for _, bad := range []struct{ baseURL, hostHeader string }{
+		{baseURL: "ftp://collector.example.com"},
+		{baseURL: "https://"},
+		{baseURL: "http://[::1"},
+		{baseURL: "not-a-url"},
+		{hostHeader: "some-vhost"},
+	} {
+		cfg := &Config{GrowthAnalytics: GrowthAnalyticsConfig{
+			MoesifCollectorBaseURL:    bad.baseURL,
+			MoesifCollectorHostHeader: bad.hostHeader,
+		}}
+		r := &configReader{}
+
+		validateGrowthAnalyticsConfig(cfg)
+
+		if len(r.errors) != 0 {
+			t.Errorf("baseURL=%q hostHeader=%q produced config errors %v, want none — "+
+				"telemetry misconfiguration must not stop the service", bad.baseURL, bad.hostHeader, r.errors)
+		}
+		if cfg.GrowthAnalytics.MoesifCollectorBaseURL != "" {
+			t.Errorf("baseURL=%q hostHeader=%q left the collector URL set, want tracking disabled",
+				bad.baseURL, bad.hostHeader)
+		}
+	}
+}
