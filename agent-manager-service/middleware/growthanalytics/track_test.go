@@ -43,22 +43,20 @@ func authedRequest(method, target string) *http.Request {
 	return req.WithContext(jwtassertion.ContextWithJWT(req.Context(), callerToken))
 }
 
-// withGrowthAnalyticsConfig sets the SaaS/on-prem and collector fields on
-// the process-wide config for the duration of the test, restoring the
-// originals on cleanup — same pattern used elsewhere in this repo (see
-// api/well_known_routes_test.go) since config.GetConfig() returns a pointer
-// to the single package-level Config.
-func withGrowthAnalyticsConfig(t *testing.T, onPrem bool, baseURL string) {
+// withGrowthAnalyticsConfig sets the collector fields on the process-wide
+// config for the duration of the test, restoring the originals on cleanup —
+// same pattern used elsewhere in this repo (see api/well_known_routes_test.go)
+// since config.GetConfig() returns a pointer to the single package-level
+// Config. IsOnPremDeployment is deliberately not touched here: Track doesn't
+// consult it — see TestTrack_ActivatesRegardlessOfIsOnPremDeployment.
+func withGrowthAnalyticsConfig(t *testing.T, baseURL string) {
 	t.Helper()
 	cfg := config.GetConfig()
-	origOnPrem := cfg.IsOnPremDeployment
 	origGA := cfg.GrowthAnalytics
-	cfg.IsOnPremDeployment = onPrem
 	cfg.GrowthAnalytics = config.GrowthAnalyticsConfig{
 		MoesifCollectorBaseURL: baseURL,
 	}
 	t.Cleanup(func() {
-		cfg.IsOnPremDeployment = origOnPrem
 		cfg.GrowthAnalytics = origGA
 	})
 }
@@ -115,47 +113,55 @@ func waitForEvent(t *testing.T, fs *fakeSender) moesifcollector.Event {
 	}
 }
 
-func TestTrack_NoOp_OnPremOrNoBaseURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		onPrem  bool
-		baseURL string
-	}{
-		{"on-prem deployment, base URL configured", true, "http://localhost:18080/moesif-collector"},
-		{"SaaS deployment, no base URL", false, ""},
-		{"on-prem deployment, no base URL", true, ""},
+func TestTrack_NoOp_NoBaseURL(t *testing.T) {
+	withGrowthAnalyticsConfig(t, "")
+
+	orig := newSender
+	newSender = func(config.GrowthAnalyticsConfig, string) eventSender {
+		t.Fatal("newSender must not be called when growth analytics is disabled")
+		return nil
+	}
+	t.Cleanup(func() { newSender = orig })
+
+	ran := false
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ran = true
+		w.WriteHeader(http.StatusCreated)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			withGrowthAnalyticsConfig(t, tt.onPrem, tt.baseURL)
+	wrapped := Track("amp.agent-development.create-agent", map[string]interface{}{"creation_method": "platform-hosted"}, handler)
 
-			orig := newSender
-			newSender = func(config.GrowthAnalyticsConfig, string) eventSender {
-				t.Fatal("newSender must not be called when growth analytics is disabled")
-				return nil
-			}
-			t.Cleanup(func() { newSender = orig })
+	rec := httptest.NewRecorder()
+	wrapped(rec, authedRequest(http.MethodPost, "/agents"))
 
-			ran := false
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				ran = true
-				w.WriteHeader(http.StatusCreated)
-			}
-
-			wrapped := Track("amp.agent-development.create-agent", map[string]interface{}{"creation_method": "platform-hosted"}, handler)
-
-			rec := httptest.NewRecorder()
-			wrapped(rec, authedRequest(http.MethodPost, "/agents"))
-
-			if !ran {
-				t.Error("expected the wrapped handler to run even when tracking is disabled")
-			}
-			if rec.Code != http.StatusCreated {
-				t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
-			}
-		})
+	if !ran {
+		t.Error("expected the wrapped handler to run even when tracking is disabled")
 	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+// TestTrack_ActivatesRegardlessOfIsOnPremDeployment locks in a deliberate
+// design choice: Track does not consult IsOnPremDeployment. This codebase is
+// only ever built and deployed for the SaaS/cloud environment — there's no
+// separate on-prem build of it to guard against — so MoesifCollectorBaseURL
+// being set is the only signal that matters.
+func TestTrack_ActivatesRegardlessOfIsOnPremDeployment(t *testing.T) {
+	cfg := config.GetConfig()
+	origOnPrem := cfg.IsOnPremDeployment
+	cfg.IsOnPremDeployment = true
+	t.Cleanup(func() { cfg.IsOnPremDeployment = origOnPrem })
+
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
+	fs, _ := withFakeSender(t)
+
+	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	tracked(httptest.NewRecorder(), authedRequest(http.MethodPost, "/agents"))
+
+	waitForEvent(t, fs)
 }
 
 // TestTrack_ForwardsCallerJWT_NotAConfigToken verifies the event is
@@ -163,7 +169,7 @@ func TestTrack_NoOp_OnPremOrNoBaseURL(t *testing.T) {
 // request being tracked — never a static credential from config, which no
 // longer even has one.
 func TestTrack_ForwardsCallerJWT_NotAConfigToken(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 	fs, tokens := withFakeSender(t)
 
 	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +191,7 @@ func TestTrack_ForwardsCallerJWT_NotAConfigToken(t *testing.T) {
 // would just get a 401 — and, critically, never affects the response
 // already written to the real caller.
 func TestTrack_NoCallerJWT_DropsEventWithoutSending(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 
 	orig := newSender
 	newSender = func(config.GrowthAnalyticsConfig, string) eventSender {
@@ -212,7 +218,7 @@ func TestTrack_NoCallerJWT_DropsEventWithoutSending(t *testing.T) {
 }
 
 func TestTrack_ReportsCorrectFeatureCodeAndDimensionsPerRoute(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 	fs, _ := withFakeSender(t)
 
 	var createRan, updateRan bool
@@ -256,7 +262,7 @@ func TestTrack_ReportsCorrectFeatureCodeAndDimensionsPerRoute(t *testing.T) {
 }
 
 func TestTrack_SetDimension_ReportsValueDiscoveredInsideTheHandler(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 	fs, _ := withFakeSender(t)
 
 	// Simulates create-agent: the route has no static creation_method dimension
@@ -280,7 +286,7 @@ func TestTrack_SetDimension_ReportsValueDiscoveredInsideTheHandler(t *testing.T)
 }
 
 func TestTrack_SetDimension_OverridesAStaticDimensionOfTheSameName(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 	fs, _ := withFakeSender(t)
 
 	handler := func(w http.ResponseWriter, r *http.Request) {
@@ -322,7 +328,7 @@ func TestTrack_DynamicOutcome_ReflectsRealResponseStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+			withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 			fs, _ := withFakeSender(t)
 
 			handler := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.statusCode) }
@@ -348,7 +354,7 @@ func TestTrack_DynamicOutcome_ReflectsRealResponseStatus(t *testing.T) {
 // growthanalytics's. Only the tracking code that runs after the handler
 // returns is guarded by a recover().
 func TestTrack_HandlerPanicPropagatesNormally(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 	withFakeSender(t)
 
 	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
@@ -374,7 +380,7 @@ func (p panicSender) SendEvent(context.Context, moesifcollector.Event) error {
 }
 
 func TestTrack_PanicSendingEventDoesNotCrashTheProcessOrAffectTheResponse(t *testing.T) {
-	withGrowthAnalyticsConfig(t, false, "http://localhost:18080/moesif-collector")
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
 
 	ps := panicSender{started: make(chan struct{})}
 	orig := newSender
