@@ -172,10 +172,11 @@ var newSender = func(ga config.GrowthAnalyticsConfig, token string) eventSender 
 // "outcome" key to have it computed from the handler's real response status
 // instead. Pass nil when a feature has no dimensions.
 //
-// Track is a no-op — returns handler unchanged — unless this is a SaaS
-// deployment with the Moesif collector proxy configured (IsOnPremDeployment
-// is false and GrowthAnalytics.MoesifCollectorBaseURL is set), so the
-// OSS/on-prem build never emits telemetry. Every route Track wraps requires
+// Track is a no-op — returns handler unchanged — unless the Moesif collector
+// proxy is configured (GrowthAnalytics.MoesifCollectorBaseURL is set). This
+// codebase is only ever built and deployed for the SaaS/cloud environment,
+// so that's the only signal that matters — there's no separate on-prem
+// build of this codebase to guard against. Every route Track wraps requires
 // authentication (see the package doc comment on the token this uses), so a
 // missing caller JWT at send time is treated as a bug, not a normal case —
 // it's logged and the event is dropped rather than sent unauthenticated.
@@ -184,9 +185,8 @@ var newSender = func(ga config.GrowthAnalyticsConfig, token string) eventSender 
 // routes this wraps return generated secrets (API keys, tokens, identity
 // secrets) in the response body.
 func Track(featureCode string, dimensions map[string]interface{}, handler http.HandlerFunc) http.HandlerFunc {
-	cfg := config.GetConfig()
-	ga := cfg.GrowthAnalytics
-	if cfg.IsOnPremDeployment || ga.MoesifCollectorBaseURL == "" {
+	ga := config.GetConfig().GrowthAnalytics
+	if ga.MoesifCollectorBaseURL == "" {
 		return handler
 	}
 

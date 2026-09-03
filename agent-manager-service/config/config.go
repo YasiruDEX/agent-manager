@@ -60,8 +60,9 @@ type Config struct {
 	IsOnPremDeployment       bool
 	ServerPublicURL          string
 
-	// GrowthAnalytics configures feature-usage telemetry export for the SaaS
-	// deployment. Always a no-op when IsOnPremDeployment is true.
+	// GrowthAnalytics configures feature-usage telemetry export. A no-op
+	// unless MoesifCollectorBaseURL is set — this codebase has no separate
+	// on-prem build to guard against, so IsOnPremDeployment isn't consulted.
 	GrowthAnalytics GrowthAnalyticsConfig
 
 	// ThunderHostBaseDomain is the domain suffix env-Thunder's developer-facing
@@ -322,8 +323,7 @@ type GrowthAnalyticsConfig struct {
 	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev
 	// through a `kubectl port-forward` of the internal gateway. Empty
 	// disables telemetry export entirely — the middleware/growthanalytics
-	// package no-ops when this is unset, so the OSS/on-prem build (which
-	// never sets it) never emits telemetry.
+	// package no-ops when this is unset.
 	MoesifCollectorBaseURL string
 	// MoesifCollectorHostHeader overrides the outgoing Host header sent to
 	// the proxy. Required only for local dev through a port-forward, where
