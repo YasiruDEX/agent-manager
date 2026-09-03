@@ -17,6 +17,8 @@
 package config
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -661,5 +663,68 @@ func TestValidateGrowthAnalyticsConfig_NeverFailsConfigLoad(t *testing.T) {
 			t.Errorf("baseURL=%q hostHeader=%q left the collector URL set, want tracking disabled",
 				bad.baseURL, bad.hostHeader)
 		}
+	}
+}
+
+// TestLogGrowthAnalyticsState covers the startup line that makes the on/off
+// state visible. Tracking being off produces no events and no logs at
+// runtime, so this is the only thing that distinguishes "disabled" from
+// "broken" without reading the pod's environment.
+func TestLogGrowthAnalyticsState(t *testing.T) {
+	tests := []struct {
+		name          string
+		ga            GrowthAnalyticsConfig
+		alreadyWarned bool
+		wantLevel     slog.Level
+		wantContains  string
+	}{
+		{
+			name:         "enabled reports the collector and environment",
+			ga:           GrowthAnalyticsConfig{Enabled: true, MoesifCollectorBaseURL: "http://collector:8080/moesif-collector", Environment: "development", DeploymentModel: "saas"},
+			wantLevel:    slog.LevelInfo,
+			wantContains: "tracking enabled",
+		},
+		{
+			name:         "no collector URL names that reason",
+			ga:           GrowthAnalyticsConfig{Enabled: true},
+			wantLevel:    slog.LevelInfo,
+			wantContains: "MOESIF_COLLECTOR_BASE_URL is unset",
+		},
+		{
+			name:         "kill switch names that reason instead",
+			ga:           GrowthAnalyticsConfig{Enabled: false, MoesifCollectorBaseURL: "http://collector:8080/moesif-collector"},
+			wantLevel:    slog.LevelInfo,
+			wantContains: "MOESIF_ENABLED is false",
+		},
+		{
+			name:          "stays quiet when a WARN already explained why",
+			ga:            GrowthAnalyticsConfig{Enabled: true},
+			alreadyWarned: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			orig := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(orig) })
+
+			logGrowthAnalyticsState(tc.ga, tc.alreadyWarned)
+
+			got := buf.String()
+			if tc.wantContains == "" {
+				if got != "" {
+					t.Errorf("expected no log output, got %q", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tc.wantContains) {
+				t.Errorf("log %q does not contain %q", got, tc.wantContains)
+			}
+			if !strings.Contains(got, tc.wantLevel.String()) {
+				t.Errorf("log %q is not at level %s", got, tc.wantLevel)
+			}
+		})
 	}
 }
