@@ -60,6 +60,10 @@ type Config struct {
 	IsOnPremDeployment       bool
 	ServerPublicURL          string
 
+	// GrowthAnalytics configures feature-usage telemetry export for the SaaS
+	// deployment. Always a no-op when IsOnPremDeployment is true.
+	GrowthAnalytics GrowthAnalyticsConfig
+
 	// ThunderHostBaseDomain is the domain suffix env-Thunder's developer-facing
 	// hostnames are built from: "<handle>.<ThunderHostBaseDomain>".
 	// Default "amp.localhost" matches local dev (k3d + the *.amp.localhost wildcard
@@ -303,6 +307,30 @@ type ObserverConfig struct {
 	// It has NO fallback to URL: empty means "observer not configured" and
 	// clients surface that loudly.
 	PublicURL string
+}
+
+// GrowthAnalyticsConfig configures feature-usage telemetry export via the
+// moesif-collector-api OpenChoreo proxy component, which authenticates
+// callers with a platform-idp JWT and forwards to Moesif, injecting the real
+// Moesif Application ID server-side (callers never see it). There is no
+// credential here: middleware/growthanalytics authenticates each event to
+// the proxy using the JWT already on the request being tracked (the same
+// token the caller authenticated to this service with), not a config value.
+type GrowthAnalyticsConfig struct {
+	// MoesifCollectorBaseURL is the proxy's base URL, e.g.
+	// "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
+	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev
+	// through a `kubectl port-forward` of the internal gateway. Empty
+	// disables telemetry export entirely — the middleware/growthanalytics
+	// package no-ops when this is unset, so the OSS/on-prem build (which
+	// never sets it) never emits telemetry.
+	MoesifCollectorBaseURL string
+	// MoesifCollectorHostHeader overrides the outgoing Host header sent to
+	// the proxy. Required only for local dev through a port-forward, where
+	// the gateway routes purely on Host and localhost doesn't match the
+	// real virtual-host name. Leave empty when MoesifCollectorBaseURL's own
+	// host is already the real vhost (i.e. reached directly in-cluster).
+	MoesifCollectorHostHeader string
 }
 
 type POSTGRESQL struct {

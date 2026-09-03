@@ -160,6 +160,10 @@ func loadEnvs() {
 	}
 	config.IsOnPremDeployment = r.readOptionalBool("IS_ON_PREM_DEPLOYMENT", true)
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
+	config.GrowthAnalytics = GrowthAnalyticsConfig{
+		MoesifCollectorBaseURL:    r.readOptionalString("MOESIF_COLLECTOR_BASE_URL", ""),
+		MoesifCollectorHostHeader: r.readOptionalString("MOESIF_COLLECTOR_HOST_HEADER", ""),
+	}
 	config.ThunderHostBaseDomain = r.readOptionalString("THUNDER_HOST_BASE_DOMAIN", "amp.localhost")
 	config.ThunderAskSecret = r.readOptionalString("THUNDER_ASK_SECRET", "")
 	config.OAuthAuthorizationServers = r.readOptionalStringList("OAUTH_AUTHORIZATION_SERVERS", "")
@@ -309,6 +313,7 @@ func loadEnvs() {
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
 	validateObserverURLs(config, r)
+	validateGrowthAnalyticsConfig(config, r)
 	validateResourceLimitsConfig(config, r)
 	validatePostgresTLSConfig(config, r)
 	validateSecretManagerConfig(config, r)
@@ -485,6 +490,26 @@ func validateObserverURLs(cfg *Config, r *configReader) {
 	}
 	validate("AM_OBSERVER_URL", cfg.Observer.URL)
 	validate("AM_OBSERVER_PUBLIC_URL", cfg.Observer.PublicURL)
+}
+
+// validateGrowthAnalyticsConfig fails config load if MOESIF_COLLECTOR_BASE_URL
+// is set but not a valid http(s) URL. An empty value is fine — it's how
+// telemetry export stays disabled.
+func validateGrowthAnalyticsConfig(cfg *Config, r *configReader) {
+	if cfg.GrowthAnalytics.MoesifCollectorBaseURL == "" {
+		return
+	}
+	u, err := url.Parse(cfg.GrowthAnalytics.MoesifCollectorBaseURL)
+	if err != nil {
+		r.errors = append(r.errors, fmt.Errorf("MOESIF_COLLECTOR_BASE_URL %q is not a valid URL: %w", cfg.GrowthAnalytics.MoesifCollectorBaseURL, err))
+		return
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		r.errors = append(r.errors, fmt.Errorf("MOESIF_COLLECTOR_BASE_URL %q must use http or https scheme", cfg.GrowthAnalytics.MoesifCollectorBaseURL))
+	}
+	if u.Host == "" {
+		r.errors = append(r.errors, fmt.Errorf("MOESIF_COLLECTOR_BASE_URL %q must have a non-empty host", cfg.GrowthAnalytics.MoesifCollectorBaseURL))
+	}
 }
 
 func validateInternalServerConfigs(cfg *Config, r *configReader) {
