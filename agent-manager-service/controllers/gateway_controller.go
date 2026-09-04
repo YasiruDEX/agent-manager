@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/wso2/agent-manager/agent-manager-service/audit"
@@ -70,18 +71,21 @@ type GatewayController interface {
 }
 
 type gatewayController struct {
-	gatewayService *services.PlatformGatewayService
-	ocClient       occlient.OpenChoreoClient
+	gatewayService     *services.PlatformGatewayService
+	ocClient           occlient.OpenChoreoClient
+	agentConfigService services.AgentConfigurationService
 }
 
 // NewGatewayController creates a new gateway controller
 func NewGatewayController(
 	gatewayService *services.PlatformGatewayService,
 	ocClient occlient.OpenChoreoClient,
+	agentConfigService services.AgentConfigurationService,
 ) GatewayController {
 	return &gatewayController{
-		gatewayService: gatewayService,
-		ocClient:       ocClient,
+		gatewayService:     gatewayService,
+		ocClient:           ocClient,
+		agentConfigService: agentConfigService,
 	}
 }
 
@@ -439,6 +443,26 @@ func (c *gatewayController) AssignGatewayToEnvironment(w http.ResponseWriter, r 
 		log.Error("AssignGatewayToEnvironment: failed to assign", "error", err)
 		handleGatewayErrors(w, err, "Failed to assign gateway to environment")
 		return
+	}
+
+	// An environment with no egress gateway can host no MCP proxy artifact, so every agent
+	// whose MCP connection points into it was left with its URL and API-key variables
+	// injected but empty — a binding nothing could write. Mapping a gateway here is what
+	// makes those environments bindable, and it is the only signal that says so: the proxy
+	// itself did not change, so no proxy update will follow to trigger the reconcile.
+	//
+	// Best-effort and inline: it performs no remote calls until an environment is genuinely
+	// bindable, and running it before the response means the caller can immediately read
+	// back a bound agent. A failure leaves the assignment intact — promotion self-heals the
+	// same state per agent, so a missed reconcile costs a retry, not a stuck agent.
+	if c.agentConfigService != nil {
+		if envUUID, parseErr := uuid.Parse(resolvedEnvID); parseErr != nil {
+			log.Warn("AssignGatewayToEnvironment: skipping MCP binding reconcile; unparseable environment id",
+				"envID", resolvedEnvID, "error", parseErr)
+		} else if err := c.agentConfigService.ReconcileMCPBindingsForEnvironment(ctx, ouID, envUUID); err != nil {
+			log.Warn("AssignGatewayToEnvironment: failed to reconcile agent MCP bindings",
+				"ouID", ouID, "envID", resolvedEnvID, "error", err)
+		}
 	}
 
 	utils.WriteSuccessResponse(w, http.StatusCreated, map[string]string{"message": "Gateway assigned successfully"})
