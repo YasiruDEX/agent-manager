@@ -89,31 +89,54 @@ func samePtrUUID(a, b *uuid.UUID) bool {
 // mcpEnvsNeedingActivation returns the environments where proxy could back a binding for
 // this connection but no EnvAgentMCPMapping row exists yet.
 //
-// Candidates come from the PROXY's endpoint→environment rows rather than from the
-// connection's env var rows. Those rows only exist for environments the connection was
-// configured for at the time, so deriving candidates from them made every environment
-// created afterwards invisible to the backfill: the connection could never be bound there,
-// and promotion into it was refused for the lifetime of the agent.
+// An environment qualifies only if it satisfies BOTH halves:
 //
-// Both inputs are already in hand — mappings are preloaded on the configuration, endpoint
-// environments on the proxy — so a steady-state reconcile, where every endpoint
-// environment is already mapped, answers this with no queries and no remote calls at all.
+//   - The PROXY serves it (an endpoint→environment row). Nothing can be bound in an
+//     environment the proxy has no endpoint in.
+//   - The CONNECTION is offered there (env var rows exist). Those rows are the
+//     connection's own record of its environment scope: configuring it writes them for
+//     every requested environment, blank when the proxy is not deployable there yet, and
+//     removeMCPMappingEnvironment deletes them when an environment is taken out of scope.
+//
+// The second half is what keeps this reconcile from overriding an explicit removal.
+// `amctl agent mcp unset --env prod` drops prod from the request, which deletes prod's
+// mapping AND its var rows — leaving a state indistinguishable from "never configured"
+// except by those rows. Without this check the next proxy update would silently re-bind
+// prod, re-mint its API key and re-inject its variables.
+//
+// The cost of the check is that an environment created after the connection was last
+// saved has no var rows and so is not auto-bound; re-saving the connection provisions it.
+// That case is not a regression: promotion into such an environment is refused by the
+// system-managed-keys guard before MCP bindings are ever consulted, since none of the
+// agent's configurations have rows there.
+//
+// Every input is already in hand — mappings and env var rows are preloaded on the
+// configuration, endpoint environments on the proxy — so a steady-state reconcile answers
+// this with no queries and no remote calls at all.
 func mcpEnvsNeedingActivation(
 	mappings []models.EnvAgentMCPMapping,
+	vars []models.AgentEnvConfigVariable,
 	proxy *models.MCPProxy,
 ) []uuid.UUID {
 	mapped := make(map[uuid.UUID]struct{}, len(mappings))
 	for i := range mappings {
 		mapped[mappings[i].EnvironmentUUID] = struct{}{}
 	}
+	inScope := make(map[uuid.UUID]struct{}, len(vars))
+	for i := range vars {
+		inScope[vars[i].EnvironmentUUID] = struct{}{}
+	}
 
-	unmapped := make([]uuid.UUID, 0, len(mapped))
-	seen := make(map[uuid.UUID]struct{}, len(mapped))
+	unmapped := make([]uuid.UUID, 0, len(inScope))
+	seen := make(map[uuid.UUID]struct{}, len(inScope))
 	for i := range proxy.Endpoints {
 		for j := range proxy.Endpoints[i].Environments {
 			envUUID := proxy.Endpoints[i].Environments[j].EnvironmentUUID
 			if _, alreadyMapped := mapped[envUUID]; alreadyMapped {
 				continue
+			}
+			if _, offered := inScope[envUUID]; !offered {
+				continue // out of the connection's scope, or removed from it on purpose
 			}
 			if _, dup := seen[envUUID]; dup {
 				continue
@@ -495,7 +518,7 @@ func (s *agentConfigurationService) reconcileConfigMCPBindings(
 		return nil
 	}
 
-	candidates := mcpEnvsNeedingActivation(config.EnvMCPMappings, proxy)
+	candidates := mcpEnvsNeedingActivation(config.EnvMCPMappings, config.EnvVariables, proxy)
 	if only != nil {
 		candidates = retainEnvs(candidates, only)
 	}
