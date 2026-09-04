@@ -62,6 +62,11 @@ type Config struct {
 	IsOnPremDeployment       bool
 	ServerPublicURL          string
 
+	// GrowthAnalytics configures feature-usage telemetry export. A no-op
+	// unless MoesifCollectorBaseURL is set — this codebase has no separate
+	// on-prem build to guard against, so IsOnPremDeployment isn't consulted.
+	GrowthAnalytics GrowthAnalyticsConfig
+
 	// ThunderHostBaseDomain is the domain suffix env-Thunder's developer-facing
 	// hostnames are built from: "<handle>.<ThunderHostBaseDomain>".
 	// Default "amp.localhost" matches local dev (k3d + the *.amp.localhost wildcard
@@ -305,6 +310,51 @@ type ObserverConfig struct {
 	// It has NO fallback to URL: empty means "observer not configured" and
 	// clients surface that loudly.
 	PublicURL string
+}
+
+// GrowthAnalyticsConfig configures feature-usage telemetry export via the
+// moesif-collector-api OpenChoreo proxy component, which authenticates
+// callers with a platform-idp JWT and forwards to Moesif, injecting the real
+// Moesif Application ID server-side (callers never see it). There is no
+// credential here: middleware/growthanalytics authenticates each event to
+// the proxy using the JWT already on the request being tracked (the same
+// token the caller authenticated to this service with), not a config value.
+type GrowthAnalyticsConfig struct {
+	// Enabled is the operational on/off switch for telemetry export, held
+	// separately from MoesifCollectorBaseURL so reporting can be turned off
+	// in an environment without deleting the rest of the configuration. The
+	// URL always resolves once deployed, so its presence cannot signal
+	// intent — this does. Both must be set for anything to be exported.
+	// Mirrors MOESIF_ENABLED on billing-service and platform-api-service.
+	Enabled bool
+	// MoesifCollectorBaseURL is the proxy's base URL, e.g.
+	// "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
+	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev
+	// through a `kubectl port-forward` of the internal gateway. Empty
+	// disables telemetry export entirely — the middleware/growthanalytics
+	// package no-ops when this is unset.
+	MoesifCollectorBaseURL string
+	// MoesifCollectorHostHeader overrides the outgoing Host header sent to
+	// the proxy. Required only for local dev through a port-forward, where
+	// the gateway routes purely on Host and localhost doesn't match the
+	// real virtual-host name. Leave empty when MoesifCollectorBaseURL's own
+	// host is already the real vhost (i.e. reached directly in-cluster).
+	MoesifCollectorHostHeader string
+	// DeploymentModel is reported as every event's "deployment_model"
+	// metadata field. Defaults to "saas" because that is the only shape this
+	// is deployed in today, but it is read from config rather than compiled
+	// in so a non-cloud deployment that does enable export (this repo still
+	// ships docker-compose and VM paths) labels its events honestly instead
+	// of claiming to be SaaS.
+	DeploymentModel string
+	// Environment names the deployment environment (e.g. "development",
+	// "production") this instance runs in, reported as every event's
+	// "environment" metadata field. All environments report into one Moesif
+	// application, so without this their usage is only separable by
+	// string-parsing the host out of each event's request URI. Empty — the
+	// local-dev default — omits the field rather than reporting a blank
+	// environment, so local traffic does not create an empty bucket.
+	Environment string
 }
 
 type POSTGRESQL struct {
