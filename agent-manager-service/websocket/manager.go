@@ -262,8 +262,11 @@ func (m *Manager) Unregister(gatewayID, connectionID string) {
 
 	// Close the connection outside the lock — Close involves I/O and must not
 	// block other Register/Unregister callers.
+	// Warn, not Debug: a close that returns an error is not routine, and the
+	// shipped default log level is INFO — at Debug this signal would never
+	// reach production logs.
 	if err := removed.Close(1000, "normal closure"); err != nil {
-		slog.Debug("Connection close returned error",
+		slog.Warn("Connection close returned error",
 			"gatewayID", gatewayID, "connectionID", connectionID, "error", err)
 	}
 
@@ -354,7 +357,7 @@ func (m *Manager) Shutdown() {
 		conns := value.([]*Connection)
 		for _, conn := range conns {
 			if err := conn.Close(1000, "server shutdown"); err != nil {
-				slog.Debug("Connection close returned error during shutdown",
+				slog.Warn("Connection close returned error during shutdown",
 					"gatewayID", gatewayID, "connectionID", conn.ConnectionID, "error", err)
 			}
 		}
