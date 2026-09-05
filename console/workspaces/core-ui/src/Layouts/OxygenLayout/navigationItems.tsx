@@ -221,8 +221,8 @@ export function useNavigationItems(): Array<
             ),
             href: generatePath(agentsChildren.agentId?.path ?? "", {
               orgId,
-              projectId,
-              agentId,
+              projectId: projectId ?? "",
+              agentId: agentId ?? "",
             }),
           },
         ]
@@ -241,7 +241,7 @@ export function useNavigationItems(): Array<
             href: generatePath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.security.path,
-              { orgId, projectId, agentId, envId: defaultEnv },
+              { orgId, projectId: projectId ?? "", agentId: agentId ?? "", envId: defaultEnv },
             ),
           },
         ]
@@ -401,6 +401,7 @@ export function useNavigationItems(): Array<
   }
 
   if (orgId && projectId && agentId && defaultEnv && agent?.kindName) {
+    
     return [
       {
         label: "Overview",
@@ -559,6 +560,7 @@ export function useNavigationItems(): Array<
     ];
   }
   if (orgId && projectId && agentId && defaultEnv && !agent?.kindName) {
+
     return [
       {
         label: "Overview",
