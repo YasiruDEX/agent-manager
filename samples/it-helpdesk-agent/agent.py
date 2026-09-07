@@ -1,69 +1,173 @@
-"""LangGraph IT helpdesk agent construction.
+"""Dummy IT helpdesk agent.
 
-Builds a ReAct-style agent bound to the instance config. When
-``LLM_PROVIDER=agent-manager``, requests are routed through the AM LLM
-provider (which applies guardrails). Otherwise calls OpenAI directly.
+No LLM, no network calls, no environment variables. Incoming messages are
+matched against a handful of keywords and answered from the static sample
+data in ``data/`` via the mocked clients in ``clients/``. The point is to
+exercise the Agent Manager chat contract and produce traces, not to be
+intelligent.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
-
+from clients import employees as employees_client
+from clients import policies as policies_client
+from clients import system_status as status_client
+from clients import tickets as tickets_client
 from config import Config
-from tools import build_tools
 
-MODEL = "gpt-4o-mini"
-
-SYSTEM_PROMPT_TEMPLATE = (
-    "You are an IT helpdesk agent for {company_name}. "
-    "You provide L1 technical support to employees.\n\n"
-    "CAPABILITIES:\n"
-    "- Look up employees and verify their identity\n"
-    "- Check and create IT support tickets\n"
-    "- Reset passwords (non-admin accounts only, after identity verification)\n"
-    "- Request software access based on department eligibility\n"
-    "- Check system status for outages and maintenance\n"
-    "- Search IT policies\n"
-    "- Escalate complex issues to L2 support\n\n"
-    "RULES YOU MUST FOLLOW:\n"
-    "1. IDENTITY FIRST: Before any write action (password reset, software access, "
-    "ticket creation), verify the employee's identity using verify_identity. "
-    "They must provide both their email and employee ID.\n"
-    "2. CHECK BEFORE CREATE: Before creating a ticket, check system_status for "
-    "known outages and get_open_tickets for duplicates.\n"
-    "3. ADMIN ACCOUNTS: Never reset passwords for admin accounts (is_admin=true). "
-    "Always escalate these to L2.\n"
-    "4. POLICY CITATION: Search and cite the relevant IT policy before denying a "
-    "request or performing a sensitive action.\n"
-    "5. PRIVACY: Never disclose another employee's tickets, access, or personal info. "
-    "Only show data belonging to the verified requester.\n"
-    "6. ESCALATE WHEN UNSURE: If you cannot resolve an issue safely, escalate to L2 "
-    "rather than guessing.\n\n"
-    "Tone: {tone}. {additional_guidance}"
-)
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+_EMPLOYEE_ID_RE = re.compile(r"\bE-\d{4}\b", re.IGNORECASE)
 
 
-def build_agent(cfg: Config) -> Any:
-    if cfg.use_llm_provider:
-        llm = ChatOpenAI(
-            model=MODEL,
-            temperature=0,
-            base_url=cfg.llm_provider_url,
-            api_key="not-used",
-            default_headers={
-                "API-Key": cfg.llm_provider_key,
-                "Authorization": "",
-            },
+def _match(message: str, *keywords: str) -> bool:
+    return any(k in message for k in keywords)
+
+
+class DummyAgent:
+    """Keyword-routed responder over the bundled sample data."""
+
+    def __init__(self, cfg: Config) -> None:
+        self.cfg = cfg
+
+    def invoke(self, message: str) -> str:
+        text = (message or "").strip()
+        if not text:
+            return self._greeting()
+
+        lowered = text.lower()
+        email = _EMAIL_RE.search(text)
+        emp_id = _EMPLOYEE_ID_RE.search(text)
+        employee = self._resolve_employee(
+            email.group(0) if email else None,
+            emp_id.group(0).upper() if emp_id else None,
         )
-    else:
-        llm = ChatOpenAI(model=MODEL, temperature=0)
-    tools = build_tools(cfg)
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        company_name=cfg.company_name,
-        tone=cfg.tone,
-        additional_guidance=cfg.additional_guidance,
-    )
-    return create_react_agent(model=llm, tools=tools, prompt=system_prompt)
+
+        if _match(lowered, "policy", "policies", "rule", "allowed"):
+            return self._policy(lowered)
+        if _match(lowered, "password", "reset", "locked out"):
+            return self._password(employee)
+        if _match(lowered, "outage", "status", "down", "not working", "not syncing"):
+            return self._status(lowered)
+        if _match(lowered, "ticket", "case", "request id"):
+            return self._tickets(employee)
+        if _match(lowered, "access", "install", "license", "software"):
+            return self._software(employee, text)
+        if _match(lowered, "escalate", "l2", "urgent", "manager"):
+            return self._escalate(employee)
+        if _match(lowered, "hi", "hello", "hey", "help"):
+            return self._greeting()
+        return self._fallback()
+
+    # -- helpers ---------------------------------------------------------
+
+    def _resolve_employee(
+        self, email: str | None, employee_id: str | None
+    ) -> dict[str, Any] | None:
+        try:
+            if email:
+                return employees_client.lookup_by_email(email)
+            if employee_id:
+                return employees_client.get(employee_id)
+        except employees_client.EmployeeNotFound:
+            return None
+        return None
+
+    def _who(self, employee: dict[str, Any] | None) -> str:
+        return employee["name"] if employee else "there"
+
+    # -- canned responses ------------------------------------------------
+
+    def _greeting(self) -> str:
+        return (
+            f"Hi, I'm the {self.cfg.company_name} IT helpdesk agent (demo mode). "
+            "I can answer questions about password resets, ticket status, "
+            "software access, system outages, and IT policies. "
+            "This is a sample agent, so every answer is canned."
+        )
+
+    def _password(self, employee: dict[str, Any] | None) -> str:
+        if employee and employee.get("is_admin"):
+            return (
+                f"Thanks, {self._who(employee)}. Your account is flagged as an "
+                "administrator, so I can't reset it from L1. I've noted an "
+                "escalation to L2 Security (demo only — nothing was actually "
+                "changed). They typically respond within one business hour."
+            )
+        return (
+            f"Thanks, {self._who(employee)}. Identity check passed (demo). "
+            "A temporary password has been 'sent' to your registered email and "
+            "expires in 24 hours. You'll be asked to set a new one at next "
+            "sign-in. Nothing was really reset — this is a sample agent."
+        )
+
+    def _status(self, lowered: str) -> str:
+        degraded = status_client.get_degraded()
+        if not degraded:
+            return "All monitored systems are reporting operational (sample data)."
+        lines = [
+            f"- {s['service']}: {s['status']} — {s['message']}" for s in degraded
+        ]
+        return (
+            "Here's the current system status from the sample data:\n"
+            + "\n".join(lines)
+            + "\n\nSince this matches a known issue, no ticket is needed."
+        )
+
+    def _tickets(self, employee: dict[str, Any] | None) -> str:
+        if not employee:
+            return (
+                "I can look up tickets once I know who you are. Share your work "
+                "email and employee ID (for example, alice.chen@acmecorp.com / "
+                "E-1001) and I'll pull the sample records."
+            )
+        rows = tickets_client.get_by_employee(employee["id"])[
+            : self.cfg.max_tickets_per_query
+        ]
+        if not rows:
+            return f"No tickets on file for {employee['name']} in the sample data."
+        lines = [
+            f"- {t['id']} [{t['status']}/{t['priority']}] {t['subject']}" for t in rows
+        ]
+        return f"Tickets for {employee['name']} (sample data):\n" + "\n".join(lines)
+
+    def _software(self, employee: dict[str, Any] | None, text: str) -> str:
+        who = self._who(employee)
+        dept = employee["department"] if employee else "your department"
+        return (
+            f"Thanks, {who}. I've logged a software access request against "
+            f"{dept} (demo only — no access was granted). Requests that need "
+            "manager approval are routed automatically; you'll get an email "
+            "when it's decided."
+        )
+
+    def _policy(self, lowered: str) -> str:
+        docs = policies_client.search(query=lowered, limit=2)
+        if not docs:
+            return "I couldn't find a matching policy in the sample knowledge base."
+        return "Relevant policies (sample data):\n" + "\n".join(
+            f"- {d['title']}: {d['body']}" for d in docs
+        )
+
+    def _escalate(self, employee: dict[str, Any] | None) -> str:
+        return (
+            f"Understood, {self._who(employee)}. I've raised a demo escalation to "
+            "L2 support with a summary of this conversation. Nothing was actually "
+            "filed — this is a sample agent."
+        )
+
+    def _fallback(self) -> str:
+        return (
+            "I'm a demo IT helpdesk agent with a fixed set of canned answers. "
+            "Try asking about a password reset, ticket status, software access, "
+            "system outages, or an IT policy."
+        )
+
+
+def build_agent(cfg: Config) -> DummyAgent:
+    return DummyAgent(cfg)
+
+
+__all__ = ["DummyAgent", "build_agent"]
