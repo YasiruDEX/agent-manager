@@ -652,10 +652,14 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID 
 	// that is the state a proxy deployable in no environment leaves behind, and the state
 	// the binding reconcile exists to complete once one becomes available.
 	//
-	// The mapping check above cannot see it. Deleting here would null the column through
-	// its ON DELETE SET NULL foreign key and strand the connection for good: its variables
-	// stay injected but empty, no reconcile can claim it without a proxy to claim it for,
-	// and promotion refuses it with nothing left to self-heal from.
+	// The mapping check above cannot see it, and deleting would strand the connection for
+	// good: its variables stay injected but empty, no reconcile can claim it without a
+	// proxy to claim it for, and promotion refuses it with nothing left to self-heal from.
+	//
+	// This read sits outside the delete transaction, so it is a fast path that returns a
+	// clean error rather than the invariant itself: fk_agent_config_mcp_proxy is ON DELETE
+	// RESTRICT, and MCPProxyRepo.Delete maps its 23503 violation onto the same error, which
+	// is what actually closes the window against a reference committed after this read.
 	if s.agentConfigRepo != nil {
 		configs, cfgErr := s.agentConfigRepo.ListMCPConfigsByProxy(ctx, orgUUID, proxy.UUID)
 		if cfgErr != nil {

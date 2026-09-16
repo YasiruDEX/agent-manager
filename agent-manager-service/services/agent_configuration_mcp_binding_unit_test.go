@@ -155,17 +155,33 @@ func TestMCPConfigTargetsProxy_MatchesRecordedProxyWithNoMappings(t *testing.T) 
 	require.True(t, mcpConfigTargetsProxy(config, proxyUUID))
 }
 
-func TestMCPConfigTargetsProxy_RejectsDifferentRecordedProxy(t *testing.T) {
+func TestMCPConfigTargetsProxy_RejectsDifferentRecordedProxyWithNoMappings(t *testing.T) {
 	proxyUUID, otherProxyUUID := uuid.New(), uuid.New()
+	config := &models.AgentConfiguration{UUID: uuid.New(), MCPProxyUUID: &otherProxyUUID}
+
+	require.False(t, mcpConfigTargetsProxy(config, proxyUUID),
+		"with no mapping rows the column is the only record of intent, and it names another proxy")
+}
+
+// Unanimous mapping rows outrank the column, because they are the actual resource state
+// while the column only caches an intent. This is the shape updateMCPConfig leaves when it
+// re-points every environment and then fails to persist the reference: letting the stale
+// column win made the configuration unreachable from both proxies' reconciles at once.
+func TestMCPConfigTargetsProxy_UnanimousMappingsOutrankStaleColumn(t *testing.T) {
+	newProxyUUID, staleColumnUUID := uuid.New(), uuid.New()
 	config := &models.AgentConfiguration{
 		UUID:         uuid.New(),
-		MCPProxyUUID: &otherProxyUUID,
-		// Mappings naming the queried proxy must not override the recorded intent: the
-		// column is the newer, authoritative answer.
-		EnvMCPMappings: []models.EnvAgentMCPMapping{{MCPProxyUUID: proxyUUID}},
+		MCPProxyUUID: &staleColumnUUID,
+		EnvMCPMappings: []models.EnvAgentMCPMapping{
+			{EnvironmentUUID: uuid.New(), MCPProxyUUID: newProxyUUID},
+			{EnvironmentUUID: uuid.New(), MCPProxyUUID: newProxyUUID},
+		},
 	}
 
-	require.False(t, mcpConfigTargetsProxy(config, proxyUUID))
+	require.True(t, mcpConfigTargetsProxy(config, newProxyUUID),
+		"the proxy its environments actually point at must own the configuration")
+	require.False(t, mcpConfigTargetsProxy(config, staleColumnUUID),
+		"the proxy only the stale column names must not also claim it")
 }
 
 // A row migration044 left NULL — its environments named different proxies — falls back to

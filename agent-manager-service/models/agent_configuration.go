@@ -71,6 +71,9 @@ type AgentConfiguration struct {
 	// Nil for non-MCP configurations, and for an MCP configuration whose environments
 	// name different proxies: there is no single environment-agnostic answer then, so
 	// readers fall back to the per-environment mapping rows.
+	//
+	// The foreign key is ON DELETE RESTRICT, so a proxy cannot be deleted while a
+	// configuration still points at it — see migration044 for why SET NULL was unsafe.
 	MCPProxyUUID *uuid.UUID `gorm:"column:mcp_proxy_uuid;type:uuid" json:"mcpProxyUuid,omitempty"`
 
 	// Relations (eager loaded)

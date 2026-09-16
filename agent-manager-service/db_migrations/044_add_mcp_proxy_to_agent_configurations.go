@@ -37,9 +37,16 @@ import (
 //
 // Nullable on purpose. A configuration whose environments name DIFFERENT proxies records
 // no single environment-agnostic intent, so it is left NULL and keeps resolving through
-// its mapping rows exactly as before. ON DELETE SET NULL matches that fallback: deleting
-// a proxy cascades its mapping rows away, and the column must not keep a dangling
-// reference alive after them.
+// its mapping rows exactly as before.
+//
+// ON DELETE RESTRICT, not SET NULL. MCPProxyService.Delete refuses a proxy still
+// referenced here, but it reads the references outside the delete transaction, so a
+// configuration committed between that read and the delete would slip through. SET NULL
+// would then clear the committed reference and strand the connection with neither a
+// mapping row nor a proxy to reconcile against — the exact state this column exists to
+// make repairable. RESTRICT makes the invariant the database's to keep rather than the
+// service's to race, and MCPProxyRepo.Delete already maps the resulting 23503 violation
+// onto ErrMCPProxyHasMappings, so the caller-facing error is unchanged.
 var migration044 = migration{
 	ID: 44,
 	Migrate: func(db *gorm.DB) error {
@@ -49,7 +56,7 @@ var migration044 = migration{
 				`ALTER TABLE agent_configurations ADD COLUMN IF NOT EXISTS mcp_proxy_uuid UUID`,
 				`ALTER TABLE agent_configurations DROP CONSTRAINT IF EXISTS fk_agent_config_mcp_proxy`,
 				`ALTER TABLE agent_configurations ADD CONSTRAINT fk_agent_config_mcp_proxy
-					FOREIGN KEY (mcp_proxy_uuid) REFERENCES mcp_proxies(uuid) ON DELETE SET NULL`,
+					FOREIGN KEY (mcp_proxy_uuid) REFERENCES mcp_proxies(uuid) ON DELETE RESTRICT`,
 				`CREATE INDEX IF NOT EXISTS idx_agent_configurations_mcp_proxy_uuid
 					ON agent_configurations (mcp_proxy_uuid) WHERE mcp_proxy_uuid IS NOT NULL`,
 			); err != nil {

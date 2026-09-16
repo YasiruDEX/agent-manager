@@ -156,19 +156,25 @@ func mcpEnvsNeedingActivation(
 // named different proxies, so there is no single intent — falls back to the mapping rows
 // and is claimed only when they unanimously name this proxy. Guessing for a genuinely
 // divergent connection would bind the wrong proxy.
+// Unanimous mapping rows outrank the column. They are the connection's actual resource
+// state, whereas the column caches an intent that is only authoritative when there are no
+// rows to speak for themselves. The two disagree when updateMCPConfig re-points every
+// environment and then fails to persist the column: mappings all name the new proxy while
+// the column still names the old one. Letting the column win there left the configuration
+// unreachable from either side — the new proxy's reconcile disowned it on the column, and
+// the old proxy's found none of its own environments unmapped — with nothing but a manual
+// re-save to break the tie.
 func mcpConfigTargetsProxy(config *models.AgentConfiguration, proxyUUID uuid.UUID) bool {
+	if mapped, unanimous := soleMappingProxyUUID(config.EnvMCPMappings); unanimous {
+		return mapped == proxyUUID
+	}
+	// Either no mappings at all — the connection a proxy deployable nowhere leaves behind,
+	// which only the column can describe — or environments naming different proxies, where
+	// the column is the sole record of a single intent and NULL correctly means "none".
 	if config.MCPProxyUUID != nil {
 		return *config.MCPProxyUUID == proxyUUID
 	}
-	if len(config.EnvMCPMappings) == 0 {
-		return false
-	}
-	for i := range config.EnvMCPMappings {
-		if config.EnvMCPMappings[i].MCPProxyUUID != proxyUUID {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
 // mcpEnvIndex is the organization's environment name↔UUID index. Both directions are
@@ -229,10 +235,15 @@ func (r *mcpReconcileScope) pipelineEnvironments(ctx context.Context, projectNam
 		r.pipelines[projectName] = unrestricted
 		return unrestricted, nil
 	}
+	// A pipeline that exists and covers no environment is a definite answer — "nothing to
+	// deploy into" — not the absence of one, so it restricts to the empty set rather than
+	// waiving the filter. Treating it as unrestricted would let the scan bind, key and
+	// inject environments the project cannot deploy to at all.
 	names := client.PipelineEnvironments(pipeline.PromotionPaths)
 	if len(names) == 0 {
-		r.pipelines[projectName] = unrestricted
-		return unrestricted, nil
+		empty := mcpPipelineEnvs{envs: map[uuid.UUID]struct{}{}, restrict: true}
+		r.pipelines[projectName] = empty
+		return empty, nil
 	}
 
 	index, err := r.envs()
@@ -516,6 +527,22 @@ func (s *agentConfigurationService) reconcileConfigMCPBindings(
 	}
 	if config.TypeID != models.AgentConfigTypeIDMCP || !mcpConfigTargetsProxy(config, proxy.UUID) {
 		return nil
+	}
+
+	// Converge a column that its own mapping rows have overtaken — the residue of an
+	// updateMCPConfig that re-pointed every environment and then failed to persist the
+	// reference. Reaching here means the rows unanimously name this proxy, so the column
+	// is simply stale; leaving it would keep every later reader deciding on out-of-date
+	// intent. A no-op when they already agree, and best-effort: failing to tidy the cache
+	// must not stop the bindings this reconcile came to write.
+	if config.MCPProxyUUID == nil || *config.MCPProxyUUID != proxy.UUID {
+		if _, unanimous := soleMappingProxyUUID(config.EnvMCPMappings); unanimous {
+			proxyUUID := proxy.UUID
+			if err := s.setConfigMCPProxy(ctx, config, &proxyUUID); err != nil {
+				s.logger.Warn("Failed to converge stale MCP proxy reference on configuration",
+					"configUUID", config.UUID, "mcpProxyUUID", proxy.UUID, "error", err)
+			}
+		}
 	}
 
 	candidates := mcpEnvsNeedingActivation(config.EnvMCPMappings, config.EnvVariables, proxy)

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -43,6 +44,12 @@ const (
 
 	// Default offset for pagination
 	defaultOffset = 0
+
+	// mcpBindingReconcileTimeout bounds the post-assignment MCP binding reconcile, which
+	// runs detached from the request context (see AssignGatewayToEnvironment). Detaching
+	// removes the caller's cancellation as a stop condition, so the work needs one of its
+	// own or a wedged gateway or database call would hold the handler open indefinitely.
+	mcpBindingReconcileTimeout = 2 * time.Minute
 )
 
 // GatewayController defines interface for gateway HTTP handlers
@@ -455,13 +462,24 @@ func (c *gatewayController) AssignGatewayToEnvironment(w http.ResponseWriter, r 
 	// bindable, and running it before the response means the caller can immediately read
 	// back a bound agent. A failure leaves the assignment intact — promotion self-heals the
 	// same state per agent, so a missed reconcile costs a retry, not a stuck agent.
+	// Runs on a context detached from the request. The assignment is already committed by
+	// this point, and the reconcile writes real resources — mapping rows, API keys,
+	// injected variables. A client disconnect must not tear that off halfway and leave
+	// some environments bound and others not, which cancelling the request context would
+	// do. The work is finite (one bounded proxy scan) and idempotent, so it is bounded by
+	// a timeout rather than by the caller.
 	if c.agentConfigService != nil {
 		if envUUID, parseErr := uuid.Parse(resolvedEnvID); parseErr != nil {
 			log.Warn("AssignGatewayToEnvironment: skipping MCP binding reconcile; unparseable environment id",
 				"envID", resolvedEnvID, "error", parseErr)
-		} else if err := c.agentConfigService.ReconcileMCPBindingsForEnvironment(ctx, ouID, envUUID); err != nil {
-			log.Warn("AssignGatewayToEnvironment: failed to reconcile agent MCP bindings",
-				"ouID", ouID, "envID", resolvedEnvID, "error", err)
+		} else {
+			reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), mcpBindingReconcileTimeout)
+			err := c.agentConfigService.ReconcileMCPBindingsForEnvironment(reconcileCtx, ouID, envUUID)
+			cancel()
+			if err != nil {
+				log.Warn("AssignGatewayToEnvironment: failed to reconcile agent MCP bindings",
+					"ouID", ouID, "envID", resolvedEnvID, "error", err)
+			}
 		}
 	}
 
