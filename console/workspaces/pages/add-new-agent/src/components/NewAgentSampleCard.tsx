@@ -16,40 +16,29 @@
  * under the License.
  */
 
-import {
-  Box,
-  Typography,
-  Form,
-} from "@wso2/oxygen-ui";
+import { Box, Typography, Form } from "@wso2/oxygen-ui";
+import { Sparkles } from "@wso2/oxygen-ui-icons-react";
 
-interface NewAgentTypeCardProps {
-  type: string;
-  title: string;
-  subheader: string;
-  icon: React.ReactNode;
-  onClick: (type: string) => void;
+interface NewAgentSampleCardProps {
+  onClick: () => void;
 }
 
-export const NewAgentTypeCard = (props: NewAgentTypeCardProps) => {
-  const { type, title, subheader, icon, onClick } = props;
-  const handleClick = () => {
-    onClick(type);
-  };
-
+export const NewAgentSampleCard = ({ onClick }: NewAgentSampleCardProps) => {
   return (
     <Form.CardButton
-      onClick={handleClick}
+      onClick={onClick}
+      selected
       sx={{
         width: "100%",
-        minHeight: 152,
-        px: 3,
-        py: 2,
+        height: "100%",
+        px: 4,
+        py: 4,
         display: "flex",
-        flexDirection: "row",
+        flexDirection: "column",
         alignItems: "center",
-        justifyContent: "flex-start",
-        gap: 3,
-        textAlign: "left",
+        justifyContent: "center",
+        gap: 2,
+        textAlign: "center",
       }}
     >
       <Box
@@ -58,19 +47,16 @@ export const NewAgentTypeCard = (props: NewAgentTypeCardProps) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          flexShrink: 0,
         }}
       >
-        {icon}
+        <Sparkles size={64} strokeWidth={1.5} />
       </Box>
-      <Box display="flex" flexDirection="column" gap={1} alignItems="flex-start">
-        <Typography variant="h3" textAlign="left">
-          {title}
-        </Typography>
-        <Typography variant="body1" textAlign="left">
-          {subheader}
-        </Typography>
-      </Box>
+      <Typography variant="h3" textAlign="center">
+        Start quickly with a Sample
+      </Typography>
+      <Typography variant="body1" textAlign="center" sx={{ maxWidth: 320 }}>
+        Launch a ready-made agent from the catalog and customize it from there.
+      </Typography>
     </Form.CardButton>
   );
 };

@@ -37,9 +37,13 @@ export const AddNewAgent: React.FC = () => {
   const CREATE_PATTERN = NEW_AGENT_ROUTES.children.create.path;
   const CONNECT_PATTERN = NEW_AGENT_ROUTES.children.connect.path;
 
-  const handleSelect = useCallback((option: 'new' | 'existing') => {
-    const target = option === 'new' ? CREATE_PATTERN : CONNECT_PATTERN;
-    navigate(generatePath(target, {
+  const handleSelect = useCallback((option: 'new' | 'existing' | 'catalog') => {
+    const targetMap: Record<'new' | 'existing' | 'catalog', string> = {
+      new: CREATE_PATTERN,
+      existing: CONNECT_PATTERN,
+      catalog: `${CREATE_PATTERN}/catalog`,
+    };
+    navigate(generatePath(targetMap[option], {
       orgId: orgId ?? '',
       projectId: projectId ?? 'default',
     }));
