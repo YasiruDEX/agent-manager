@@ -37,13 +37,9 @@ export const AddNewAgent: React.FC = () => {
   const CREATE_PATTERN = NEW_AGENT_ROUTES.children.create.path;
   const CONNECT_PATTERN = NEW_AGENT_ROUTES.children.connect.path;
 
-  const handleSelect = useCallback((option: 'new' | 'existing' | 'catalog') => {
-    const targetMap: Record<'new' | 'existing' | 'catalog', string> = {
-      new: CREATE_PATTERN,
-      existing: CONNECT_PATTERN,
-      catalog: `${CREATE_PATTERN}/catalog`,
-    };
-    navigate(generatePath(targetMap[option], {
+  const handleSelect = useCallback((option: 'new' | 'existing') => {
+    const target = option === 'new' ? CREATE_PATTERN : CONNECT_PATTERN;
+    navigate(generatePath(target, {
       orgId: orgId ?? '',
       projectId: projectId ?? 'default',
     }));
@@ -56,9 +52,19 @@ export const AddNewAgent: React.FC = () => {
     }));
   }, [navigate, orgId, projectId, CREATE_PATTERN]);
 
+  // A sample seeds the Platform-Hosted Agent form directly (no separate
+  // listing screen) — its repo/env fields arrive via the `sample` query param.
+  const handleSampleSelect = useCallback((sampleId: string) => {
+    const sourcePath = generatePath(`${CREATE_PATTERN}/source`, {
+      orgId: orgId ?? '',
+      projectId: projectId ?? 'default',
+    });
+    navigate(`${sourcePath}?sample=${encodeURIComponent(sampleId)}`);
+  }, [navigate, orgId, projectId, CREATE_PATTERN]);
+
   return (
     <Routes>
-      <Route index element={<NewAgentOptions onSelect={handleSelect} />} />
+      <Route index element={<NewAgentOptions onSelect={handleSelect} onSelectSample={handleSampleSelect} />} />
         <Route
           path={
             relativeRouteMap.children.org.children.projects.children.newAgent
