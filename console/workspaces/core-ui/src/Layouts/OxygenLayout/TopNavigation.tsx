@@ -5,20 +5,21 @@ import {
 } from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
-  ButtonBase,
   ComplexSelect,
   Header,
   MenuItem,
   Stack,
-  Tooltip,
   Typography,
   useTheme,
 } from "@wso2/oxygen-ui";
-import { Building2, Plus } from "@wso2/oxygen-ui-icons-react";
+import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { useMemo, useState } from "react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
-import { asLink, hoverBorderSx, LevelSwitcherCard } from "./LevelSwitcherCard";
+import { asLink, LevelSwitcherCard } from "./LevelSwitcherCard";
 import { useActiveAgentPage, useActiveOrgPage, useActiveProjectPage } from "./path-map";
+
+const orgLabel = (org?: { name: string; displayName: string }) =>
+  org?.displayName ?? org?.name;
 
 export function TopNavigation() {
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ export function TopNavigation() {
       <Header.Switchers showDivider={false}>
         {organizations?.organizations && (
           <>
-            {selectedOrganization && organizations.total > 1 && (
+            {selectedOrganization && (
               <ComplexSelect
                 value={orgId}
                 size="small"
@@ -78,7 +79,7 @@ export function TopNavigation() {
                 label="Organizations"
                 renderValue={() => (
                   <ComplexSelect.MenuItem.Text
-                    primary={selectedOrganization?.displayName}
+                    primary={orgLabel(selectedOrganization)}
                   />
                 )}
               >
@@ -93,34 +94,12 @@ export function TopNavigation() {
                     )}
                   >
                     <ComplexSelect.MenuItem.Text
-                      primary={organization.displayName ?? organization.name}
+                      primary={orgLabel(organization)}
                     />
                   </ComplexSelect.MenuItem>
                 ))}
               </ComplexSelect>
             )}
-            {selectedOrganization && organizations.total == 1 && (
-              <>
-                <Tooltip title="Go to organization">
-                  <ButtonBase
-                   aria-label="Go to organization"
-                   {...asLink(
-                        generatePath(absoluteRouteMap.children.org.path, {
-                          orgId: selectedOrganization.name,
-                        }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
-                      )}
-
-                  sx={{
-                    color: theme.vars?.palette.text.primary,
-                    p: theme.spacing(1.75, 1.75),
-                    ...hoverBorderSx(theme),
-                  }}>
-                    <Building2 size={22} />
-                  </ButtonBase>
-                </Tooltip>
-              </>
-            )}
-
           </>
         )}
 
