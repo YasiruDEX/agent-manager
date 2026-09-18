@@ -76,7 +76,8 @@ func wiringService(envs map[string]bool) (*agentManagerService, *string) {
 	return &agentManagerService{
 		ocClient: &clientmocks.OpenChoreoClientMock{
 			GetComponentReconcileBlockFunc: func(context.Context, string, string) (*client.ComponentReconcileBlock, error) {
-				return nil, nil //nolint:nilnil // a nil block means the component can reconcile
+				// A nil block is the "not blocked" signal this API defines.
+				return nil, nil
 			},
 			IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) {
 				return false, nil

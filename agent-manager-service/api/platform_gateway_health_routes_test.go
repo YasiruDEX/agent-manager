@@ -73,7 +73,8 @@ func platformHealthMux(t *testing.T, total, failed, abandoned int64) *http.Serve
 
 	mux := http.NewServeMux()
 	RegisterPlatformGatewayHealthRoutes(
-		middleware.NewRouteRegistrar(mux, nil, audit.NewNoopRecorder()), ctrl)
+		middleware.NewRouteRegistrar(mux, nil, audit.NewNoopRecorder()), ctrl,
+	)
 	return mux
 }
 
@@ -204,7 +205,8 @@ func TestPlatformAdminRegistrarRejectsOrgScopedPattern(t *testing.T) {
 	rr := middleware.NewRouteRegistrar(http.NewServeMux(), nil, audit.NewNoopRecorder())
 	rr.HandleFuncWithValidationAndPlatformAdminAuthz(
 		"GET /orgs/{orgName}/gateways/failure-summary", "gateway:read",
-		func(http.ResponseWriter, *http.Request) {})
+		func(http.ResponseWriter, *http.Request) {},
+	)
 }
 
 // TestPlatformGatewayHealthRoute_UnhealthyFleetAnswers503 is the status-carries-
