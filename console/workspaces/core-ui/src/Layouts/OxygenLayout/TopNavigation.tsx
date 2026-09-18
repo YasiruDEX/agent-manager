@@ -18,6 +18,9 @@ import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { asLink, LevelSwitcherCard } from "./LevelSwitcherCard";
 import { useActiveAgentPage, useActiveOrgPage, useActiveProjectPage } from "./path-map";
 
+const orgLabel = (org?: { name: string; displayName: string }) =>
+  org?.displayName ?? org?.name;
+
 export function TopNavigation() {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -76,7 +79,7 @@ export function TopNavigation() {
                 label="Organizations"
                 renderValue={() => (
                   <ComplexSelect.MenuItem.Text
-                    primary={selectedOrganization?.displayName ?? selectedOrganization?.name}
+                    primary={orgLabel(selectedOrganization)}
                   />
                 )}
               >
@@ -91,7 +94,7 @@ export function TopNavigation() {
                     )}
                   >
                     <ComplexSelect.MenuItem.Text
-                      primary={organization.displayName ?? organization.name}
+                      primary={orgLabel(organization)}
                     />
                   </ComplexSelect.MenuItem>
                 ))}
