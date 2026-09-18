@@ -47,6 +47,7 @@ export function TopNavigation() {
       (organization) => organization.name === orgId,
     );
   }, [organizations, orgId]);
+  const hasOtherOrgs = (organizations?.total ?? 0) > 1;
 
   // Get all projects for the organization
   const { data: projects } = useListProjects({
@@ -72,8 +73,9 @@ export function TopNavigation() {
       <Header.Switchers showDivider={false}>
         {organizations?.organizations && selectedOrganization && (
           <LevelSwitcherCard
-            label="Organizations"
+            label={hasOtherOrgs ? "Organizations" : "Organization"}
             chevronLabel="Switch organization"
+            canSwitch={hasOtherOrgs}
             anchorEl={orgAnchorEl}
             onOpenMenu={(e) => setOrgAnchorEl(e.currentTarget)}
             onCloseMenu={() => setOrgAnchorEl(null)}
@@ -90,20 +92,21 @@ export function TopNavigation() {
               ),
             }}
           >
-            {organizations.organizations.map((organization) => (
-              <MenuItem
-                key={organization.name}
-                selected={organization.name === orgId}
-                onClick={() => setOrgAnchorEl(null)}
-                {...asLink(
-                  generatePath(absoluteRouteMap.children.org.path, {
-                    orgId: organization.name,
-                  }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
-                )}
-              >
-                {orgLabel(organization)}
-              </MenuItem>
-            ))}
+            {hasOtherOrgs &&
+              organizations.organizations.map((organization) => (
+                <MenuItem
+                  key={organization.name}
+                  selected={organization.name === orgId}
+                  onClick={() => setOrgAnchorEl(null)}
+                  {...asLink(
+                    generatePath(absoluteRouteMap.children.org.path, {
+                      orgId: organization.name,
+                    }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
+                  )}
+                >
+                  {orgLabel(organization)}
+                </MenuItem>
+              ))}
           </LevelSwitcherCard>
         )}
 
