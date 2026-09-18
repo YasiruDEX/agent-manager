@@ -19,7 +19,7 @@ import { asLink, LevelSwitcherCard } from "./LevelSwitcherCard";
 import { useActiveAgentPage, useActiveOrgPage, useActiveProjectPage } from "./path-map";
 
 const orgLabel = (org?: { name: string; displayName: string }) =>
-  org?.displayName ?? org?.name;
+  org?.displayName && org.displayName !== "" ? org?.displayName : org?.name;
 
 export function TopNavigation() {
   const navigate = useNavigate();
