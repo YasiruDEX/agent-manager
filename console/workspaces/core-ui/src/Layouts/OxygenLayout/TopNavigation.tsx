@@ -5,7 +5,6 @@ import {
 } from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
-  ComplexSelect,
   Header,
   MenuItem,
   Stack,
@@ -33,6 +32,8 @@ export function TopNavigation() {
   const commonOrgPages = useActiveOrgPage();
   const commonProjectPages = useActiveProjectPage();
   const commonAgentPages = useActiveAgentPage();
+  const [orgAnchorEl, setOrgAnchorEl] = useState<null | HTMLElement>(null);
+
   const [projectAnchorEl, setProjectAnchorEl] = useState<null | HTMLElement>(
     null,
   );
@@ -69,38 +70,41 @@ export function TopNavigation() {
   return (
     <>
       <Header.Switchers showDivider={false}>
-        {organizations?.organizations && (
-          <>
-            {selectedOrganization && (
-              <ComplexSelect
-                value={orgId}
-                size="small"
-                sx={{ minWidth: 180 }}
-                label="Organizations"
-                renderValue={() => (
-                  <ComplexSelect.MenuItem.Text
-                    primary={orgLabel(selectedOrganization)}
-                  />
+        {organizations?.organizations && selectedOrganization && (
+          <LevelSwitcherCard
+            label="Organizations"
+            chevronLabel="Switch organization"
+            anchorEl={orgAnchorEl}
+            onOpenMenu={(e) => setOrgAnchorEl(e.currentTarget)}
+            onCloseMenu={() => setOrgAnchorEl(null)}
+            selected={{
+              to:
+                generatePath(absoluteRouteMap.children.org.path, {
+                  orgId: selectedOrganization.name,
+                }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
+              goToLabel: `Go to ${orgLabel(selectedOrganization)}`,
+              content: (
+                <Typography variant="body1" noWrap sx={{ maxWidth: "100%" }}>
+                  {orgLabel(selectedOrganization)}
+                </Typography>
+              ),
+            }}
+          >
+            {organizations.organizations.map((organization) => (
+              <MenuItem
+                key={organization.name}
+                selected={organization.name === orgId}
+                onClick={() => setOrgAnchorEl(null)}
+                {...asLink(
+                  generatePath(absoluteRouteMap.children.org.path, {
+                    orgId: organization.name,
+                  }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
                 )}
               >
-                {organizations.organizations.map((organization) => (
-                  <ComplexSelect.MenuItem
-                    key={organization.name}
-                    value={organization.name}
-                    {...asLink(
-                      generatePath(absoluteRouteMap.children.org.path, {
-                        orgId: organization.name,
-                      }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
-                    )}
-                  >
-                    <ComplexSelect.MenuItem.Text
-                      primary={orgLabel(organization)}
-                    />
-                  </ComplexSelect.MenuItem>
-                ))}
-              </ComplexSelect>
-            )}
-          </>
+                {orgLabel(organization)}
+              </MenuItem>
+            ))}
+          </LevelSwitcherCard>
         )}
 
         {projects?.projects && (
