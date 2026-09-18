@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +40,7 @@ func serviceForRollback(
 ) (*LLMProviderService, *LLMProviderDeploymentService) {
 	providerRepo := &repomocks.LLMProviderRepositoryMock{
 		GetByUUIDFunc:            func(_, _ string) (*models.LLMProvider, error) { return created, nil },
-		DeleteFunc:               func(_, _ string) error { return deleteErr },
+		DeleteCtxFunc:            func(_ context.Context, _, _ string) error { return deleteErr },
 		HasAssociatedProxiesFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return false, nil },
 		MarkDeletingFunc:         func(_ uuid.UUID) (bool, error) { return true, nil },
 		ClearDeletingFunc:        func(_ uuid.UUID) error { return nil },
@@ -48,7 +49,7 @@ func serviceForRollback(
 		GetDeployedGatewaysByProviderFunc: func(_ uuid.UUID, _ string) ([]string, error) {
 			return []string{}, nil
 		},
-		GetTrackedGatewaysByProviderFunc: func(_ uuid.UUID, _ string) ([]string, error) {
+		GetTrackedGatewaysByProviderCtxFunc: func(_ context.Context, _ uuid.UUID, _ string) ([]string, error) {
 			return []string{}, nil
 		},
 	}
@@ -72,7 +73,7 @@ func TestDelete_AlreadyUndeployedProviderBroadcastsCanonicalUUID(t *testing.T) {
 		},
 		MarkDeletingFunc:         func(_ uuid.UUID) (bool, error) { return true, nil },
 		HasAssociatedProxiesFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return false, nil },
-		DeleteFunc: func(providerID, ouID string) error {
+		DeleteCtxFunc: func(_ context.Context, providerID, ouID string) error {
 			assert.Equal(t, created.UUID.String(), providerID)
 			assert.Equal(t, "ou-acme", ouID)
 			return nil
@@ -82,7 +83,7 @@ func TestDelete_AlreadyUndeployedProviderBroadcastsCanonicalUUID(t *testing.T) {
 		GetDeployedGatewaysByProviderFunc: func(_ uuid.UUID, _ string) ([]string, error) {
 			return nil, nil
 		},
-		GetTrackedGatewaysByProviderFunc: func(providerUUID uuid.UUID, ouID string) ([]string, error) {
+		GetTrackedGatewaysByProviderCtxFunc: func(_ context.Context, providerUUID uuid.UUID, ouID string) ([]string, error) {
 			assert.Equal(t, created.UUID, providerUUID)
 			assert.Equal(t, "ou-acme", ouID)
 			return []string{trackedGatewayID}, nil
@@ -216,6 +217,7 @@ func TestDelete_ClearsDeletingFlagWhenUndeployFails(t *testing.T) {
 		ClearDeletingFunc:        func(_ uuid.UUID) error { clearCalled = true; return nil },
 	}
 	deploymentRepo := &repomocks.DeploymentRepositoryMock{
+		GetTrackedGatewaysByProviderCtxFunc: func(context.Context, uuid.UUID, string) ([]string, error) { return []string{"gw-1"}, nil },
 		GetDeployedGatewaysByProviderFunc: func(_ uuid.UUID, _ string) ([]string, error) {
 			return []string{"gw-1"}, nil
 		},
@@ -234,4 +236,63 @@ func TestDelete_ClearsDeletingFlagWhenUndeployFails(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, utils.ErrLLMProviderUndeployFailed)
 	assert.True(t, clearCalled, "Delete must clear the deleting flag when it bails out without deleting the provider")
+}
+
+func TestDelete_CompletesAfterCancellationFollowingSuccessfulUndeploy(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	deployed := models.DeploymentStatusDeployed
+	created := createdProvider()
+	gatewayID := uuid.New()
+	deploymentID := uuid.New()
+	deleteCalled := false
+
+	providerRepo := &repomocks.LLMProviderRepositoryMock{
+		GetByUUIDFunc:            func(_, _ string) (*models.LLMProvider, error) { return created, nil },
+		MarkDeletingFunc:         func(_ uuid.UUID) (bool, error) { return true, nil },
+		HasAssociatedProxiesFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return false, nil },
+		ClearDeletingFunc:        func(_ uuid.UUID) error { return nil },
+		DeleteCtxFunc: func(got context.Context, _, _ string) error {
+			deleteCalled = true
+			require.NoError(t, got.Err())
+			_, hasDeadline := got.Deadline()
+			assert.True(t, hasDeadline)
+			return nil
+		},
+	}
+	deployment := &models.Deployment{
+		DeploymentID: deploymentID,
+		ArtifactUUID: created.UUID,
+		GatewayUUID:  gatewayID,
+		Status:       &deployed,
+	}
+	deploymentRepo := &repomocks.DeploymentRepositoryMock{
+		GetTrackedGatewaysByProviderCtxFunc: func(context.Context, uuid.UUID, string) ([]string, error) {
+			return []string{gatewayID.String()}, nil
+		},
+		GetDeployedGatewaysByProviderFunc: func(uuid.UUID, string) ([]string, error) {
+			return []string{gatewayID.String()}, nil
+		},
+		GetDeploymentsWithStateFunc: func(string, string, *string, *string, int) ([]*models.Deployment, error) {
+			return []*models.Deployment{deployment}, nil
+		},
+		GetWithStateFunc: func(string, string, string) (*models.Deployment, error) {
+			return deployment, nil
+		},
+		SetCurrentFunc: func(string, string, string, string, models.DeploymentStatus) (time.Time, error) {
+			cancel()
+			return time.Now(), nil
+		},
+	}
+	deploymentSvc := &LLMProviderDeploymentService{
+		providerRepo:         providerRepo,
+		deploymentRepo:       deploymentRepo,
+		gatewayEventsService: NewGatewayEventsService(&stubEventHub{}),
+	}
+	svc := &LLMProviderService{providerRepo: providerRepo}
+
+	err := svc.Delete(ctx, created.UUID.String(), "ou-acme", deploymentSvc)
+
+	require.NoError(t, err)
+	assert.True(t, deleteCalled)
+	assert.Empty(t, providerRepo.ClearDeletingCalls())
 }

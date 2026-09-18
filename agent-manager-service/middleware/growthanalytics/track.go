@@ -280,7 +280,8 @@ func reportEvent(
 	// this package controls before the send is fired off in the
 	// background — the only place that can say "we tried to send this"
 	// rather than silently maybe-doing nothing.
-	logger.GetLogger(requestCtx).Info("growthanalytics: sending feature-usage event to Moesif collector",
+	logger.GetLogger(requestCtx).Info(
+		"growthanalytics: sending feature-usage event to Moesif collector",
 		"feature", featureCode,
 		"org_id", companyID,
 		"metadata", metadata,

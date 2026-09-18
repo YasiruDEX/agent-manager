@@ -168,7 +168,7 @@ func loadEnvs() {
 		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "saas"),
 		Environment:               r.readOptionalString("AMP_ENVIRONMENT", ""),
 	}
-	config.ThunderHostBaseDomain = r.readOptionalString("THUNDER_HOST_BASE_DOMAIN", "amp.localhost")
+	config.ThunderHostBaseDomain = r.readOptionalString("IDP_HOST_BASE_DOMAIN", "amp.localhost")
 	config.ThunderAskSecret = r.readOptionalString("THUNDER_ASK_SECRET", "")
 	config.OAuthAuthorizationServers = r.readOptionalStringList("OAUTH_AUTHORIZATION_SERVERS", "")
 	config.OAuthScopesSupported = r.readOptionalStringList("OAUTH_SCOPES_SUPPORTED", "")
@@ -284,7 +284,6 @@ func loadEnvs() {
 		EnableTLS: r.readOptionalBool("TLS_ENABLED", false),
 	}
 
-	config.RBACEnabled = r.readOptionalBool("RBAC_ENABLED", false)
 	config.RootOUHandle = r.readOptionalString("ROOT_OU_HANDLE", "admin")
 
 	// Cross-organization platform routes. Deliberately no default: an unset
@@ -299,7 +298,8 @@ func loadEnvs() {
 	config.GatewayFailureThresholdSeconds = int(r.readOptionalInt64("GATEWAY_FAILURE_THRESHOLD_SECONDS", 300))
 	if config.GatewayFailureThresholdSeconds <= 0 {
 		r.errors = append(r.errors, fmt.Errorf(
-			"GATEWAY_FAILURE_THRESHOLD_SECONDS must be greater than 0, got %d", config.GatewayFailureThresholdSeconds))
+			"GATEWAY_FAILURE_THRESHOLD_SECONDS must be greater than 0, got %d", config.GatewayFailureThresholdSeconds,
+		))
 	}
 	// 604800 = 7 days. Checked against the staleness threshold rather than only
 	// on its own: co-dependent values are validated together, and an upper bound
@@ -310,7 +310,8 @@ func loadEnvs() {
 		r.errors = append(r.errors, fmt.Errorf(
 			"GATEWAY_FAILURE_MAX_AGE_SECONDS (%d) must be greater than GATEWAY_FAILURE_THRESHOLD_SECONDS (%d), "+
 				"or no gateway can ever be reported as failed",
-			config.GatewayFailureMaxAgeSeconds, config.GatewayFailureThresholdSeconds))
+			config.GatewayFailureMaxAgeSeconds, config.GatewayFailureThresholdSeconds,
+		))
 	}
 	// Both ends are rejected rather than clamped, because either would make the
 	// health verdict a constant: at 0 an empty fleet already reports unhealthy,
@@ -328,7 +329,8 @@ func loadEnvs() {
 		config.GatewayFailurePercentageThreshold > 100 {
 		r.errors = append(r.errors, fmt.Errorf(
 			"GATEWAY_FAILURE_PERCENTAGE_THRESHOLD must be greater than 0 and at most 100, got %v",
-			config.GatewayFailurePercentageThreshold))
+			config.GatewayFailurePercentageThreshold,
+		))
 	}
 
 	// Audit defaults to on. A deployment that wants no audit trail has to say
@@ -608,8 +610,8 @@ func validateGrowthAnalyticsConfig(cfg *Config) {
 		warned = true
 	}
 
-	switch {
-	case cfg.GrowthAnalytics.MoesifCollectorBaseURL == "":
+	switch cfg.GrowthAnalytics.MoesifCollectorBaseURL {
+	case "":
 		if cfg.GrowthAnalytics.MoesifCollectorHostHeader != "" {
 			disable("MOESIF_COLLECTOR_HOST_HEADER is set but MOESIF_COLLECTOR_BASE_URL is empty, "+
 				"and the host header only applies to a configured collector URL",

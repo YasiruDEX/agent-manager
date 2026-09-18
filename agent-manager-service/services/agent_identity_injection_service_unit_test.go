@@ -158,7 +158,8 @@ func TestAgentIdentityInjection_EnvVarsForEnvironment_UsesExistingReferenceForLe
 		if envVar.Key == client.EnvVarAgentIDClientSecret {
 			require.NotNil(t, envVar.ValueFrom)
 			require.NotNil(t, envVar.ValueFrom.SecretKeyRef)
-			assert.Equal(t,
+			assert.Equal(
+				t,
 				agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv).SecretRefName(),
 				envVar.ValueFrom.SecretKeyRef.Name,
 			)

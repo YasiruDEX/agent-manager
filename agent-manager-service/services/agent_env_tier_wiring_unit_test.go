@@ -76,7 +76,8 @@ func wiringService(envs map[string]bool) (*agentManagerService, *string) {
 	return &agentManagerService{
 		ocClient: &clientmocks.OpenChoreoClientMock{
 			GetComponentReconcileBlockFunc: func(context.Context, string, string) (*client.ComponentReconcileBlock, error) {
-				return nil, nil //nolint:nilnil // a nil block means the component can reconcile
+				// A nil block is the "not blocked" signal this API defines.
+				return nil, nil
 			},
 			IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) {
 				return false, nil
@@ -114,7 +115,6 @@ func wiringService(envs map[string]bool) (*agentManagerService, *string) {
 // agent:deploy-production was dead code: the target is derived, never supplied,
 // so it is the pipeline's lowest environment that decides the tier.
 func TestDeployAgent_TiersAgainstThePipelineLowestEnvironment(t *testing.T) {
-	setRBACEnabledForTier(t, true)
 	svc, checked := wiringService(map[string]bool{"dev": true})
 	ctx := tierCtx(t, rbac.AgentEnvNonProduction)
 
@@ -128,7 +128,6 @@ func TestDeployAgent_TiersAgainstThePipelineLowestEnvironment(t *testing.T) {
 // agent:promote scope conflated: promotion into staging and promotion into
 // production were one permission.
 func TestPromoteAgent_TiersAgainstTheTargetEnvironment(t *testing.T) {
-	setRBACEnabledForTier(t, true)
 	svc, checked := wiringService(map[string]bool{tierProdEnv: true})
 	ctx := tierCtx(t, rbac.AgentEnvNonProduction)
 
@@ -143,7 +142,6 @@ func TestPromoteAgent_TiersAgainstTheTargetEnvironment(t *testing.T) {
 // TestPromoteAgent_AllowedIntoNonProductionTarget is the grant this change hands
 // Developer and AI Lead, who could not promote at all before.
 func TestPromoteAgent_AllowedIntoNonProductionTarget(t *testing.T) {
-	setRBACEnabledForTier(t, true)
 	svc, checked := wiringService(map[string]bool{"staging": false})
 	ctx := tierCtx(t, rbac.AgentEnvNonProduction)
 
@@ -162,7 +160,6 @@ func TestPromoteAgent_AllowedIntoNonProductionTarget(t *testing.T) {
 // third gate. Suspend needs the capability AND the tier, so the floor alone must
 // not admit a production environment.
 func TestUpdateAgentDeploymentState_TiersAgainstTheRequestedEnvironment(t *testing.T) {
-	setRBACEnabledForTier(t, true)
 	svc, checked := wiringService(map[string]bool{tierProdEnv: true})
 	ctx := tierCtx(t, rbac.AgentSuspend, rbac.AgentEnvNonProduction)
 

@@ -38,5 +38,6 @@ import (
 // actually guards this. See middleware.RequirePlatformAdminOU.
 func RegisterPlatformGatewayHealthRoutes(rr *middleware.RouteRegistrar, ctrl controllers.GatewayController) {
 	rr.HandleFuncWithValidationAndPlatformAdminAuthz(
-		"GET /platform/gateways/failure-summary", rbac.GatewayRead, ctrl.GetPlatformGatewayFailureSummary)
+		"GET /platform/gateways/failure-summary", rbac.GatewayRead, ctrl.GetPlatformGatewayFailureSummary,
+	)
 }

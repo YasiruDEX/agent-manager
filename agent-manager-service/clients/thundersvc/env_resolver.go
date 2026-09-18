@@ -77,10 +77,10 @@ type (
 	// EnvThunderURL.ThunderURL) from AMS's own Postgres, keyed by (ouID, envName).
 	// A missing row means this environment was never provisioned — it returns
 	// ("", false, nil), never a value computed from (ouID, envName).
-	// callerSupplied reports whether the row came from the SaaS/control-plane
-	// path (no handle) rather than the on-prem (handle) one — needed so the
-	// candidate cascade below can tell an attacker-influenced value from one
-	// AMS computed itself under its own trusted domain.
+	// callerSupplied reports whether the row's URL was supplied directly by the
+	// caller (no handle) rather than computed by AMS itself from a handle —
+	// needed so the candidate cascade below can tell an attacker-influenced
+	// value from one AMS computed itself under its own trusted domain.
 	ReadThunderURLFunc func(ctx context.Context, ouID, envName string) (thunderURL string, callerSupplied bool, err error)
 
 	// resolveBaseURLFunc picks a reachable base URL for an env-Thunder instance —
