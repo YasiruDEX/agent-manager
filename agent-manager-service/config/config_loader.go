@@ -168,7 +168,7 @@ func loadEnvs() {
 		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "saas"),
 		Environment:               r.readOptionalString("AMP_ENVIRONMENT", ""),
 	}
-	config.ThunderHostBaseDomain = r.readOptionalString("THUNDER_HOST_BASE_DOMAIN", "amp.localhost")
+	config.ThunderHostBaseDomain = r.readOptionalString("IDP_HOST_BASE_DOMAIN", "amp.localhost")
 	config.ThunderAskSecret = r.readOptionalString("THUNDER_ASK_SECRET", "")
 	config.OAuthAuthorizationServers = r.readOptionalStringList("OAUTH_AUTHORIZATION_SERVERS", "")
 	config.OAuthScopesSupported = r.readOptionalStringList("OAUTH_SCOPES_SUPPORTED", "")
@@ -284,7 +284,6 @@ func loadEnvs() {
 		EnableTLS: r.readOptionalBool("TLS_ENABLED", false),
 	}
 
-	config.RBACEnabled = r.readOptionalBool("RBAC_ENABLED", false)
 	config.RootOUHandle = r.readOptionalString("ROOT_OU_HANDLE", "admin")
 
 	// Cross-organization platform routes. Deliberately no default: an unset

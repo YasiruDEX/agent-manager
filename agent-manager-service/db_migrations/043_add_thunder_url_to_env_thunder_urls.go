@@ -28,17 +28,17 @@ import (
 // (scheme://host[:port]), so a row is self-describing instead of every reader
 // reconstructing it from thunder_handle plus one global base-domain config —
 // which only works when every environment shares one domain. thunder_handle
-// becomes nullable: a SaaS/control-plane caller can now supply thunder_url
-// directly with no handle at all (see EnvironmentService.SetThunderURL).
+// becomes nullable: a caller can now supply thunder_url directly with no
+// handle at all (see EnvironmentService.SetThunderURL).
 //
 // Existing handle-based rows are preserved. Their URL is backfilled through
 // the same configuration-aware helper used by the live write path, so an
-// upgrade respects TLS_ENABLED and THUNDER_HOST_BASE_DOMAIN instead of
+// upgrade respects TLS_ENABLED and IDP_HOST_BASE_DOMAIN instead of
 // assuming the local-development origin.
 //
 // uq_env_thunder_urls_url is the new primary invariant. uq_env_thunder_urls_handle
 // stays, scoped to non-null handles — Postgres never treats multiple NULLs as
-// conflicting, so handle-less SaaS rows don't participate in it.
+// conflicting, so handle-less rows don't participate in it.
 var migration043 = migration{
 	ID: 43,
 	Migrate: func(db *gorm.DB) error {

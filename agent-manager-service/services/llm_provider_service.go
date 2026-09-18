@@ -595,7 +595,7 @@ func (s *LLMProviderService) Update(ctx context.Context, providerID, ouID string
 
 	// Update provider
 	slog.Info("LLMProviderService.Update: updating provider in database", "ouID", ouID, "providerID", providerID)
-	if err := s.providerRepo.Update(updates, providerID, ouID); err != nil {
+	if err := s.providerRepo.Update(ctx, updates, providerID, ouID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			slog.Warn("LLMProviderService.Update: provider not found", "ouID", ouID, "providerID", providerID)
 			return nil, utils.ErrLLMProviderNotFound
@@ -708,6 +708,12 @@ func (s *LLMProviderService) Delete(ctx context.Context, providerID, ouID string
 		return utils.ErrLLMProviderHasProxies
 	}
 
+	// Resolve all cleanup targets before any irreversible gateway or database changes.
+	deletionGatewayIDs, err := deploymentService.GatewayIDsForProviderDeletion(ctx, providerUUID, ouID)
+	if err != nil {
+		return fmt.Errorf("resolve provider deletion gateways: %w", err)
+	}
+
 	deployedGatewayIDs, err := deploymentService.deploymentRepo.GetDeployedGatewaysByProvider(providerUUID, ouID)
 	if err != nil {
 		slog.Error("LLMProviderService.Delete: failed to get deployed gateways", "ouID", ouID, "providerID", providerID, "error", err)
@@ -716,10 +722,13 @@ func (s *LLMProviderService) Delete(ctx context.Context, providerID, ouID string
 
 	slog.Info("LLMProviderService.Delete: found deployed gateways", "ouID", ouID, "providerID", providerID, "gatewayCount", len(deployedGatewayIDs))
 
-	// Undeploy from all gateways before deleting
+	// Undeploy from all gateways before deleting. Once any undeployment succeeds,
+	// the workflow must finish with a context independent of request cancellation;
+	// otherwise the provider can remain in the database after its gateway state has
+	// already changed.
+	successfulUndeployments := 0
 	if len(deployedGatewayIDs) > 0 {
 		undeploymentErrors := []string{}
-		successfulUndeployments := 0
 
 		for _, gatewayID := range deployedGatewayIDs {
 			slog.Info("LLMProviderService.Delete: undeploying from gateway", "ouID", ouID, "providerID", providerID, "gatewayID", gatewayID)
@@ -769,16 +778,16 @@ func (s *LLMProviderService) Delete(ctx context.Context, providerID, ouID string
 		}
 	}
 
-	// Resolve hard-deletion targets separately from the deployed set. Undeployed
-	// configs deliberately remain in the gateway store, so every historically
-	// tracked gateway and every active gateway in the organization must receive the
-	// deletion event. Capture the list before deleting the provider because the DB
-	// delete may cascade its deployment-status rows.
-	deletionGatewayIDs := deploymentService.GatewayIDsForProviderDeletion(providerUUID, ouID)
+	deleteCtx := ctx
+	deleteCancel := func() {}
+	if successfulUndeployments > 0 {
+		deleteCtx, deleteCancel = context.WithTimeout(context.WithoutCancel(ctx), gatewayDeletionTimeout)
+	}
+	defer deleteCancel()
 
 	// Now delete the provider from database (cascade deletes mappings)
 	slog.Info("LLMProviderService.Delete: deleting provider from database", "ouID", ouID, "providerID", providerID)
-	if err := s.providerRepo.Delete(provider.UUID.String(), ouID); err != nil {
+	if err := s.providerRepo.DeleteCtx(deleteCtx, provider.UUID.String(), ouID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			slog.Warn("LLMProviderService.Delete: provider not found", "ouID", ouID, "providerID", providerID)
 			return utils.ErrLLMProviderNotFound
@@ -796,7 +805,13 @@ func (s *LLMProviderService) Delete(ctx context.Context, providerID, ouID string
 	// its policy chains in the gateway's xDS snapshot forever. Sent only after the
 	// delete is committed, and best-effort: a committed delete must not be failed
 	// because a gateway is unreachable.
-	deploymentService.BroadcastLLMProviderDeletion(provider.UUID.String(), ouID, deletionGatewayIDs)
+	cleanupCtx := deleteCtx
+	cleanupCancel := func() {}
+	if successfulUndeployments == 0 {
+		cleanupCtx, cleanupCancel = context.WithTimeout(context.WithoutCancel(ctx), gatewayDeletionTimeout)
+	}
+	defer cleanupCancel()
+	deploymentService.BroadcastLLMProviderDeletion(cleanupCtx, provider.UUID.String(), ouID, deletionGatewayIDs)
 
 	slog.Info("LLMProviderService.Delete: completed successfully", "ouID", ouID, "providerID", providerID)
 	return nil

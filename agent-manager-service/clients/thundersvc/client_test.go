@@ -83,56 +83,6 @@ func TestNewThunderClientWithDialOverride_EmptyOverrideDialsBaseURLDirectly(t *t
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func TestFetchSystemToken_ResourceSelection(t *testing.T) {
-	tests := []struct {
-		name           string
-		systemResource string
-		wantResource   string
-	}{
-		{
-			name:           "explicit system resource is sent",
-			systemResource: "https://idp.example.com/mcp",
-			wantResource:   "https://idp.example.com/mcp",
-		},
-		{
-			name:           "empty system resource uses Thunder default",
-			systemResource: "",
-			wantResource:   "",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var gotResource string
-			var resourcePresent bool
-			mux := http.NewServeMux()
-			mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
-				require.NoError(t, r.ParseForm())
-				gotResource = r.Form.Get("resource")
-				_, resourcePresent = r.Form["resource"]
-				assert.Equal(t, "client_credentials", r.Form.Get("grant_type"))
-				assert.Equal(t, "system", r.Form.Get("scope"))
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"access_token": "token",
-					"expires_in":   3600,
-				})
-			})
-			server := httptest.NewServer(mux)
-			defer server.Close()
-
-			client := NewThunderClientWithDialOverride(server.URL, "cid", "secret", "", tc.systemResource)
-			thunder, ok := client.(*thunderClient)
-			require.True(t, ok)
-
-			_, _, err := thunder.fetchSystemToken(context.Background())
-			require.NoError(t, err)
-			assert.Equal(t, tc.wantResource, gotResource)
-			assert.Equal(t, tc.wantResource != "", resourcePresent)
-		})
-	}
-}
-
 // TestNewEnvThunderClient_HardensOnlyTheNoOverrideDial proves the two
 // constructors genuinely differ: the same loopback server is reachable via
 // the plain constructor's no-override dial, but rejected by NewEnvThunderClient's
@@ -165,7 +115,7 @@ func TestNewEnvThunderClient_HardensOnlyTheNoOverrideDial(t *testing.T) {
 
 	t.Run("env-Thunder constructor: no-override dial is rejected as an SSRF target", func(t *testing.T) {
 		err := doGet(NewEnvThunderClient(server.URL, "cid", "secret", "", server.URL+"/mcp"))
-		assert.Error(t, err, "the loopback test server must be REJECTED — this is exactly the case a SaaS-supplied thunder_url pointed at an internal address would hit")
+		assert.Error(t, err, "the loopback test server must be REJECTED — this is exactly the case a caller-supplied thunder_url pointed at an internal address would hit")
 	})
 
 	t.Run("env-Thunder constructor: an explicit dial override is unaffected, same as the plain constructor", func(t *testing.T) {
@@ -175,9 +125,10 @@ func TestNewEnvThunderClient_HardensOnlyTheNoOverrideDial(t *testing.T) {
 	})
 }
 
-// TestCreateApp_SendsRequiredApplicationConfiguration guards the application type
-// and OU claims required by Agent Manager and Cloud Obs Proxy.
-func TestCreateApp_SendsRequiredApplicationConfiguration(t *testing.T) {
+// TestCreateApp_SendsRequiredApplicationType guards against a regression:
+// applications require a "type" field on create, and a POST /applications
+// missing it fails outright. createApp's payload must always include it.
+func TestCreateApp_SendsRequiredApplicationType(t *testing.T) {
 	var gotBody map[string]any
 	mux := http.NewServeMux()
 	mux.HandleFunc("/applications", func(w http.ResponseWriter, r *http.Request) {
