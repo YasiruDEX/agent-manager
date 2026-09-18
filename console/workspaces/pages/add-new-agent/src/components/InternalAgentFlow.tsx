@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Form } from "@wso2/oxygen-ui";
+import { Alert, Form, Link } from "@wso2/oxygen-ui";
 import { PageLayout, useFormValidation } from "@agent-management-platform/views";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
@@ -38,9 +38,9 @@ import {
   hasUnresolvedMCPSecurity,
   mcpEntryVarNames,
 } from "../utils/mcpEnvVarNames";
-import { getSampleAgentById } from "../data/sampleAgents";
+import { getSampleAgentById, getSampleReadmeUrl, type SampleAgentDefinition } from "../data/sampleAgents";
 
-const buildInitialFormValues = (sampleId: string | null): CreateAgentFormValues => {
+const buildInitialFormValues = (sample: SampleAgentDefinition | undefined): CreateAgentFormValues => {
   const defaults: CreateAgentFormValues = {
     deploymentType: "new" as const,
     enableAutoInstrumentation: true,
@@ -65,7 +65,6 @@ const buildInitialFormValues = (sampleId: string | null): CreateAgentFormValues 
     files: [],
   };
 
-  const sample = getSampleAgentById(sampleId);
   return sample ? { ...defaults, ...deriveSampleAgentSeed(sample) } : defaults;
 };
 
@@ -76,12 +75,16 @@ export const InternalAgentFlow: React.FC = () => {
     projectId?: string;
   }>();
 
-  // Seeded once on mount from the sample picked on the previous screen, if
+  // Resolved once on mount from the sample picked on the previous screen, if
   // any — read directly off the URL rather than via useSearchParams, since
   // this form has no reason to re-render on later search-param changes.
+  const [selectedSample] = useState(() =>
+    getSampleAgentById(new URLSearchParams(window.location.search).get("sample"))
+  );
+
   // The values below remain plain, editable form fields from this point on.
   const [formData, setFormData] = useState<CreateAgentFormValues>(() =>
-    buildInitialFormValues(new URLSearchParams(window.location.search).get("sample"))
+    buildInitialFormValues(selectedSample)
   );
 
   const { errors, validateForm, setFieldError, validateField } =
@@ -194,6 +197,15 @@ export const InternalAgentFlow: React.FC = () => {
       backLabel="Back to Source Type Selection"
     >
       <Form.Stack spacing={3}>
+        {selectedSample && (
+          <Alert severity="info">
+            Fields are pre-filled from the <strong>{selectedSample.title}</strong> sample. See the{" "}
+            <Link href={getSampleReadmeUrl(selectedSample)} target="_blank" rel="noopener noreferrer">
+              README
+            </Link>{" "}
+            for setup and testing details.
+          </Alert>
+        )}
         <InternalAgentForm
           formData={formData}
           setFormData={setFormData}
