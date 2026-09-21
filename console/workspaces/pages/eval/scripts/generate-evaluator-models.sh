@@ -304,6 +304,18 @@ guide_path = os.path.join(public_prompts_dir, "writing-evaluators.md")
 with open(guide_path, "w") as f:
     f.write(schema["ai_copilot_guide"])
 print(f"Wrote AI copilot guide to {guide_path}", file=sys.stderr)
+
+# The control plane serves the same guide as the system prompt for
+# POST /orgs/{org}/llm-providers/{id}/generate-evaluator, so it needs its own
+# embedded copy. Emitted from here so the two cannot drift.
+repo_root = os.path.normpath(os.path.join(output_dir, "..", "..", "..", "..", "..", ".."))
+service_prompts_dir = os.path.join(repo_root, "agent-manager-service", "resources", "prompts")
+if os.path.isdir(os.path.dirname(service_prompts_dir)):
+    os.makedirs(service_prompts_dir, exist_ok=True)
+    service_guide_path = os.path.join(service_prompts_dir, "writing-evaluators.md")
+    with open(service_guide_path, "w") as f:
+        f.write(schema["ai_copilot_guide"])
+    print(f"Wrote AI copilot guide to {service_guide_path}", file=sys.stderr)
 PYTHON_SCRIPT
 
 # Append supported packages list (read from evaluation-job/requirements.txt)
