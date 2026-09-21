@@ -39,7 +39,7 @@
   "license": "Apache-2.0",
   "description": "Agent Kind pages for organization and agent levels",
   "dependencies": {
-    "react-dom": "19.1.1",
+    "react-dom": "19.2.3",
     "react-router-dom": "6.28.0",
     "@mui/material": "7.0.0",
     "@mui/icons-material": "7.0.0",
@@ -70,6 +70,6 @@
     "@eslint/eslintrc": "3.3.1"
   },
   "peerDependencies": {
-    "react": "19.1.1"
+    "react": "19.2.3"
   }
 }

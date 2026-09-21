@@ -13,8 +13,8 @@
   "dependencies": {
     "@agent-management-platform/am-core-ui": "workspace:*",
     "@fontsource/roboto": "5.2.5",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-router-dom": "6.28.0",
     "@mui/material": "7.0.0",
     "@mui/icons-material": "7.0.0",
