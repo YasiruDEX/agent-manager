@@ -382,6 +382,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideAgentThunderClientRepository,
 	ProvideEnvThunderSystemClientRepository,
 	ProvideEnvThunderURLRepository,
+	ProvideCancelledBuildRepository,
 	repositories.NewMCPProxyScopeRepository,
 )
 
@@ -529,6 +530,12 @@ func ProvideAgentThunderClientRepository(db *gorm.DB) repositories.AgentThunderC
 // per-environment env-Thunder system-client credentials.
 func ProvideEnvThunderSystemClientRepository(db *gorm.DB) repositories.EnvThunderSystemClientRepository {
 	return repositories.NewEnvThunderSystemClientRepo(db)
+}
+
+// ProvideCancelledBuildRepository provides the repository recording builds that
+// were cancelled before they finished.
+func ProvideCancelledBuildRepository(db *gorm.DB) repositories.CancelledBuildRepository {
+	return repositories.NewCancelledBuildRepo(db)
 }
 
 // ProvideEnvThunderURLRepository provides the repository for per-environment
