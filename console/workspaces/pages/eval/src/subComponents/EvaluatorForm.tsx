@@ -543,6 +543,72 @@ export function extractCodeBody(source: string): string {
   return source;
 }
 
+/**
+ * Extract anything the user (or a generated evaluator) put *above* the evaluator
+ * signature — extra imports, module constants, helper functions.
+ *
+ * The header is regenerated from the level and config params whenever either
+ * changes, and rebuilding it as `header + body` would silently delete this code,
+ * because the body starts after `) -> EvalResult:`. Lines the regenerated header
+ * already emits are dropped so its imports are not duplicated.
+ */
+export function extractCodePreamble(source: string, header: string): string {
+  const lines = source.split("\n");
+
+  // Find the signature terminator, then walk back to the `def` that opened it.
+  let defIndex = -1;
+  const sigEnd = lines.findIndex((l) =>
+    /^\)\s*->\s*EvalResult\s*:/.test(l.trimStart()),
+  );
+  if (sigEnd !== -1) {
+    for (let i = sigEnd; i >= 0; i--) {
+      if (/^\s*def\s+\w+\s*\(/.test(lines[i])) {
+        defIndex = i;
+        break;
+      }
+    }
+  } else {
+    // Single-line def fallback, mirroring extractCodeBody.
+    defIndex = lines.findIndex((l) =>
+      /def\s+\w+\(.*\)\s*->\s*EvalResult\s*:/.test(l),
+    );
+  }
+  if (defIndex <= 0) return "";
+
+  const headerLines = new Set(
+    header
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
+  );
+  // Blank lines are kept so a multi-line helper keeps its internal spacing.
+  const kept = lines
+    .slice(0, defIndex)
+    .filter((l) => l.trim() === "" || !headerLines.has(l.trim()));
+
+  while (kept.length && kept[0].trim() === "") kept.shift();
+  while (kept.length && kept[kept.length - 1].trim() === "") kept.pop();
+  return kept.join("\n");
+}
+
+/**
+ * Splice preserved preamble code between the header's imports and its `def`.
+ */
+function withPreamble(header: string, preamble: string): string {
+  if (!preamble) return header;
+  const marker = "\n\n\ndef my_evaluator(";
+  const index = header.indexOf(marker);
+  // Header shape changed unexpectedly — leave it alone rather than corrupt it.
+  if (index === -1) return header;
+  return (
+    header.slice(0, index) +
+    "\n\n\n" +
+    preamble +
+    "\n\n\n" +
+    header.slice(index + 3)
+  );
+}
+
 /** Default function bodies per level (no config param references). */
 const DEFAULT_CODE_BODY: Record<EvaluatorLevel, string> = {
   trace: [
@@ -818,14 +884,16 @@ export function EvaluatorForm({
 
     // Determine the body to keep
     let body: string;
+    let preamble = "";
     if (levelChanged && !initialValues) {
       // New evaluator with level change → use fresh body template
       body = DEFAULT_CODE_BODY[values.level];
     } else {
       body = extractCodeBody(sourceRef.current);
+      preamble = extractCodePreamble(sourceRef.current, expectedHeader);
     }
 
-    const newSource = expectedHeader + "\n" + body;
+    const newSource = withPreamble(expectedHeader, preamble) + "\n" + body;
     if (newSource === sourceRef.current) return;
 
     setValues((prev) => ({ ...prev, source: newSource }));

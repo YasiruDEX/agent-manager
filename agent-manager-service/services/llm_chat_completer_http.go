@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -47,7 +48,20 @@ type httpChatCompleter struct {
 // NewHTTPChatCompleter creates an LLMChatCompleter backed by a plain HTTP client.
 func NewHTTPChatCompleter() LLMChatCompleter {
 	return &httpChatCompleter{
-		client: &http.Client{Timeout: chatCompletionTimeout},
+		client: &http.Client{
+			Timeout: chatCompletionTimeout,
+			// Go replays the Authorization/api-key header on a same-host redirect, so
+			// an upstream that redirects https -> http would hand the provider's
+			// credential to the network in cleartext. Refuse that downgrade; ordinary
+			// redirects still follow.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) > 0 && via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+					return fmt.Errorf("%w: refusing redirect from https to %s",
+						utils.ErrLLMUpstreamFailed, req.URL.Scheme)
+				}
+				return nil
+			},
+		},
 	}
 }
 
@@ -102,7 +116,11 @@ const anthropicAPIVersion = "2023-06-01"
 func buildChatPayload(req ChatCompletionRequest) (string, any, error) {
 	switch req.Dialect {
 	case DialectOpenAI:
-		return req.BaseURL + "/chat/completions", map[string]any{
+		endpoint, err := joinUpstreamPath(req.BaseURL, "chat", "completions")
+		if err != nil {
+			return "", nil, err
+		}
+		return endpoint, map[string]any{
 			"model": req.Model,
 			"messages": []map[string]string{
 				{"role": "system", "content": req.SystemPrompt},
@@ -111,7 +129,11 @@ func buildChatPayload(req ChatCompletionRequest) (string, any, error) {
 			"max_tokens": req.MaxTokens,
 		}, nil
 	case DialectAnthropic:
-		return req.BaseURL + "/v1/messages", map[string]any{
+		endpoint, err := joinUpstreamPath(req.BaseURL, "v1", "messages")
+		if err != nil {
+			return "", nil, err
+		}
+		return endpoint, map[string]any{
 			"model":  req.Model,
 			"system": req.SystemPrompt,
 			"messages": []map[string]string{
@@ -123,6 +145,20 @@ func buildChatPayload(req ChatCompletionRequest) (string, any, error) {
 		return "", nil, fmt.Errorf("%w: unsupported dialect %q",
 			utils.ErrLLMProviderNotGenerationCapable, req.Dialect)
 	}
+}
+
+// joinUpstreamPath appends path segments to the provider's base URL.
+//
+// Parsed rather than concatenated: a base URL carrying a query string would
+// otherwise produce ".../v1?foo=bar/chat/completions", putting the path inside the
+// query. JoinPath also collapses duplicate separators.
+func joinUpstreamPath(base string, segments ...string) (string, error) {
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("%w: provider upstream URL is malformed",
+			utils.ErrLLMProviderNotGenerationCapable)
+	}
+	return parsed.JoinPath(segments...).String(), nil
 }
 
 // openAIChatResponse is the subset of an OpenAI chat completion this client reads.

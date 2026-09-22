@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -150,6 +151,109 @@ func TestGenerateEvaluatorSourceRejectsInvalidInput(t *testing.T) {
 			assert.ErrorIs(t, err, utils.ErrInvalidInput)
 			// Validation must gate the call: a rejected request never spends quota.
 			assert.False(t, completer.called, "upstream must not be called for invalid input")
+		})
+	}
+}
+
+func TestGenerateEvaluatorSourceEnforcesFieldLimits(t *testing.T) {
+	cases := map[string]GenerateEvaluatorInput{
+		"model too long": func() GenerateEvaluatorInput {
+			in := validInput()
+			in.Model = strings.Repeat("m", maxModelLen+1)
+			return in
+		}(),
+		"instructions too long": func() GenerateEvaluatorInput {
+			in := validInput()
+			in.Instructions = strings.Repeat("i", maxInstructionsLen+1)
+			return in
+		}(),
+		"displayName too long": func() GenerateEvaluatorInput {
+			in := validInput()
+			in.DisplayName = strings.Repeat("d", maxDisplayNameLen+1)
+			return in
+		}(),
+		"description too long": func() GenerateEvaluatorInput {
+			in := validInput()
+			in.Description = strings.Repeat("d", maxDescriptionLen+1)
+			return in
+		}(),
+	}
+
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			completer := &fakeChatCompleter{}
+			svc := newCodegenService(validProvider(t), completer)
+
+			_, err := svc.GenerateEvaluatorSource(context.Background(), codegenTestOU, codegenTestProvider, in)
+
+			assert.ErrorIs(t, err, utils.ErrInvalidInput)
+			assert.False(t, completer.called, "oversized input must not reach the upstream")
+		})
+	}
+}
+
+func TestGenerateEvaluatorSourceCountsLimitsInRunes(t *testing.T) {
+	// A multi-byte string at exactly the rune cap must pass: counting bytes would
+	// reject legitimate non-ASCII instructions well before the documented limit.
+	completer := &fakeChatCompleter{response: "def my_evaluator(): ..."}
+	svc := newCodegenService(validProvider(t), completer)
+
+	in := validInput()
+	in.Instructions = strings.Repeat("é", maxInstructionsLen)
+
+	_, err := svc.GenerateEvaluatorSource(context.Background(), codegenTestOU, codegenTestProvider, in)
+
+	require.NoError(t, err)
+}
+
+func TestGenerateEvaluatorSourceRequiresSecureUpstream(t *testing.T) {
+	cases := map[string]struct {
+		url       string
+		wantError bool
+	}{
+		"https is allowed":            {url: "https://api.openai.com/v1", wantError: false},
+		"plain http is rejected":      {url: "http://api.openai.com/v1", wantError: true},
+		"loopback http is allowed":    {url: "http://localhost:11434/v1", wantError: false},
+		"loopback ip http is allowed": {url: "http://127.0.0.1:11434/v1", wantError: false},
+		"non-http scheme is rejected": {url: "ftp://api.openai.com/v1", wantError: true},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			provider := validProvider(t)
+			provider.Configuration.Upstream.Main.URL = tc.url
+			completer := &fakeChatCompleter{response: "def my_evaluator(): ..."}
+			svc := newCodegenService(provider, completer)
+
+			_, err := svc.GenerateEvaluatorSource(
+				context.Background(), codegenTestOU, codegenTestProvider, validInput())
+
+			if tc.wantError {
+				assert.ErrorIs(t, err, utils.ErrLLMProviderNotGenerationCapable)
+				// The credential must not be sent over a cleartext channel.
+				assert.False(t, completer.called, "insecure upstream must not receive the credential")
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestGenerateEvaluatorSourceRejectsAzureTemplates(t *testing.T) {
+	// Azure needs a deployment-scoped path and an api-version query that this
+	// endpoint has no contract for, so it must refuse rather than guess.
+	for _, handle := range []string{"azure-openai", "azureai-foundry"} {
+		t.Run(handle, func(t *testing.T) {
+			provider := validProvider(t)
+			provider.TemplateHandle = handle
+			completer := &fakeChatCompleter{}
+			svc := newCodegenService(provider, completer)
+
+			_, err := svc.GenerateEvaluatorSource(
+				context.Background(), codegenTestOU, codegenTestProvider, validInput())
+
+			assert.ErrorIs(t, err, utils.ErrLLMProviderNotGenerationCapable)
+			assert.False(t, completer.called)
 		})
 	}
 }

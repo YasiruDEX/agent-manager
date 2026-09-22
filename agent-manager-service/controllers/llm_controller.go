@@ -1170,6 +1170,8 @@ func (c *llmController) GenerateEvaluatorCode(w http.ResponseWriter, r *http.Req
 	ouID := middleware.OUIDFromRequest(r)
 	providerID := r.PathValue(utils.PathParamProviderId)
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+
 	var req spec.GenerateEvaluatorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error("GenerateEvaluatorCode: failed to decode request", "error", err)

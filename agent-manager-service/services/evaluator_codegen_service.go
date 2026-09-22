@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -55,14 +56,20 @@ const (
 
 // dialectsByTemplate maps a provider template handle to the wire format its upstream
 // speaks. A handle that is absent cannot be used for generation — better a clear 422
-// than a malformed call that burns the org's quota. Gemini and Bedrock are omitted
-// deliberately: neither accepts either body shape unmodified.
+// than a malformed authenticated call that burns the org's quota.
+//
+// Omitted deliberately:
+//   - gemini, awsbedrock: neither accepts either body shape unmodified.
+//   - azure-openai, azureai-foundry: Azure does not serve {base}/chat/completions. It
+//     requires a deployment-scoped path and an api-version query
+//     ({base}/openai/deployments/{deployment}/chat/completions?api-version=…), and its
+//     templates carry no endpoint URL, so the deployment name and API version would
+//     both have to be guessed. Supporting them needs a real Azure contract in the
+//     provider config, not an assumption made here.
 var dialectsByTemplate = map[string]ChatDialect{
-	"openai":          DialectOpenAI,
-	"azure-openai":    DialectOpenAI,
-	"azureai-foundry": DialectOpenAI,
-	"mistralai":       DialectOpenAI,
-	"anthropic":       DialectAnthropic,
+	"openai":    DialectOpenAI,
+	"mistralai": DialectOpenAI,
+	"anthropic": DialectAnthropic,
 }
 
 // ChatCompletionRequest is one upstream completion call, fully resolved: the caller
@@ -187,6 +194,13 @@ func (s *EvaluatorCodegenService) resolveUpstreamCall(provider *models.LLMProvid
 			"%w: provider has no upstream endpoint configured", utils.ErrLLMProviderNotGenerationCapable)
 	}
 
+	// Validated before the credential is decrypted: this call puts the provider's
+	// secret in a request header, so it must not leave the process in cleartext.
+	baseURL, err := validateUpstreamURL(upstream.Main.URL)
+	if err != nil {
+		return ChatCompletionRequest{}, err
+	}
+
 	auth := upstream.Main.Auth
 	if auth == nil || auth.SecretRef == nil || *auth.SecretRef == "" {
 		return ChatCompletionRequest{}, fmt.Errorf(
@@ -204,11 +218,52 @@ func (s *EvaluatorCodegenService) resolveUpstreamCall(provider *models.LLMProvid
 	}
 
 	return ChatCompletionRequest{
-		BaseURL:    strings.TrimRight(upstream.Main.URL, "/"),
+		BaseURL:    baseURL,
 		AuthHeader: header,
 		AuthValue:  value,
 		Dialect:    dialect,
 	}, nil
+}
+
+// validateUpstreamURL parses the provider's stored endpoint and returns it with any
+// trailing slash removed.
+//
+// HTTPS is required because the request carries the provider's decrypted credential
+// in a header. Plain HTTP is allowed only for a loopback host, which is how a local
+// mock or a developer's own model server is reached and never leaves the machine.
+func validateUpstreamURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", fmt.Errorf("%w: provider upstream URL is malformed",
+			utils.ErrLLMProviderNotGenerationCapable)
+	}
+	switch parsed.Scheme {
+	case "https":
+	case "http":
+		if !isLoopbackHost(parsed.Hostname()) {
+			return "", fmt.Errorf(
+				"%w: provider upstream URL must use https, so the provider credential is not sent in cleartext",
+				utils.ErrLLMProviderNotGenerationCapable)
+		}
+	default:
+		return "", fmt.Errorf("%w: provider upstream URL must use https, got scheme %q",
+			utils.ErrLLMProviderNotGenerationCapable, parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("%w: provider upstream URL has no host",
+			utils.ErrLLMProviderNotGenerationCapable)
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+// isLoopbackHost reports whether the host never leaves the local machine.
+func isLoopbackHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 // decryptUpstreamSecret reverses the base64(AES-256-GCM) encoding applied when the
@@ -225,9 +280,32 @@ func (s *EvaluatorCodegenService) decryptUpstreamSecret(secretRef string) (strin
 	return string(plaintext), nil
 }
 
+// Field limits mirroring the maxLength values the OpenAPI contract declares. The
+// generated spec types carry no validation of their own, so without these an
+// authorized caller could push arbitrarily large strings through prompt
+// construction and into the upstream request body.
+const (
+	maxModelLen        = 200
+	maxInstructionsLen = 4000
+	maxDisplayNameLen  = 200
+	maxDescriptionLen  = 2000
+)
+
+// checkLen enforces one field's length cap in runes rather than bytes, so the limit
+// matches the character count the spec documents and the user typed.
+func checkLen(field, value string, maxLen int) error {
+	if len([]rune(value)) > maxLen {
+		return fmt.Errorf("%w: %s must be at most %d characters", utils.ErrInvalidInput, field, maxLen)
+	}
+	return nil
+}
+
 func validateGenerateInput(in GenerateEvaluatorInput) error {
 	if strings.TrimSpace(in.Model) == "" {
 		return fmt.Errorf("%w: model is required", utils.ErrInvalidInput)
+	}
+	if err := checkLen("model", in.Model, maxModelLen); err != nil {
+		return err
 	}
 	switch in.EvaluatorType {
 	case EvaluatorTypeCode, EvaluatorTypeLLMJudge:
@@ -244,7 +322,13 @@ func validateGenerateInput(in GenerateEvaluatorInput) error {
 	if strings.TrimSpace(in.Instructions) == "" {
 		return fmt.Errorf("%w: instructions are required", utils.ErrInvalidInput)
 	}
-	return nil
+	if err := checkLen("instructions", in.Instructions, maxInstructionsLen); err != nil {
+		return err
+	}
+	if err := checkLen("displayName", in.DisplayName, maxDisplayNameLen); err != nil {
+		return err
+	}
+	return checkLen("description", in.Description, maxDescriptionLen)
 }
 
 // buildSystemPrompt gives the model the full authoring contract plus the one rule the
