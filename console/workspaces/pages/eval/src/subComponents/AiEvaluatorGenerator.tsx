@@ -37,6 +37,7 @@ import {
   Copy,
   X as CloseIcon,
 } from "@wso2/oxygen-ui-icons-react";
+import { TextInput } from "@agent-management-platform/views";
 import { DiffEditor } from "@monaco-editor/react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -274,19 +275,20 @@ export function AiEvaluatorGenerator({
               onProviderChange={setProviderId}
             />
           </Box>
-          <TextField
-            size="small"
-            fullWidth
-            label="Model"
-            placeholder="e.g. gpt-4o"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            helperText="Typed as the provider names it"
-            sx={{ flex: 1 }}
-          />
+          <Box sx={{ flex: 1 }}>
+            <TextInput
+              size="small"
+              fullWidth
+              label="Model"
+              placeholder="e.g. gpt-4o"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              helperText="Typed as the provider names it"
+            />
+          </Box>
         </Stack>
 
-        <TextField
+        <TextInput
           multiline
           rows={3}
           fullWidth
