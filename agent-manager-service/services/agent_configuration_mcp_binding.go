@@ -61,22 +61,51 @@ func soleMCPProxyUUID(proxiesByEnv map[string]*models.MCPProxy) *uuid.UUID {
 	return sole
 }
 
-// setConfigMCPProxy persists a change to the config's environment-agnostic proxy reference,
-// and is a no-op when it already holds that value — the steady-state update path must not
-// write a row just to store what is already there.
+// setConfigMCPProxy persists a change to the config's environment-agnostic proxy
+// reference, and is a no-op when it already holds that value — the steady-state update path
+// must not write a row just to store what is already there.
+//
+// A nil proxyUUID clears the reference: the configuration's environments no longer agree on
+// one proxy, so there is no environment-agnostic answer to record and readers fall back to
+// the mapping rows.
 func (s *agentConfigurationService) setConfigMCPProxy(
 	ctx context.Context, config *models.AgentConfiguration, proxyUUID *uuid.UUID,
 ) error {
-	if samePtrUUID(config.MCPProxyUUID, proxyUUID) {
+	if samePtrUUID(configMCPProxyRef(config), proxyUUID) {
 		return nil
 	}
-	config.MCPProxyUUID = proxyUUID
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		return s.agentConfigRepo.Update(ctx, tx, config)
+		if proxyUUID == nil {
+			return s.agentConfigRepo.ClearMCPProxyRef(ctx, tx, config.UUID)
+		}
+		return s.agentConfigRepo.SetMCPProxyRef(ctx, tx, config.UUID, *proxyUUID)
 	}); err != nil {
-		return fmt.Errorf("failed to record MCP proxy reference on configuration %s: %w", config.UUID, err)
+		return fmt.Errorf("failed to record MCP proxy reference for configuration %s: %w", config.UUID, err)
+	}
+
+	// Keep the in-memory graph consistent with what was just written, so a caller that
+	// re-reads the reference in the same request does not see the pre-write value.
+	if proxyUUID == nil {
+		config.MCPProxyRef = nil
+	} else {
+		config.MCPProxyRef = &models.AgentMCPConfigProxy{
+			ConfigUUID:   config.UUID,
+			TypeID:       models.AgentConfigTypeIDMCP,
+			MCPProxyUUID: *proxyUUID,
+		}
 	}
 	return nil
+}
+
+// configMCPProxyRef returns the proxy a configuration references, or nil when it records
+// none — either because it is not an MCP configuration or because its environments name
+// different proxies.
+func configMCPProxyRef(config *models.AgentConfiguration) *uuid.UUID {
+	if config == nil || config.MCPProxyRef == nil {
+		return nil
+	}
+	proxyUUID := config.MCPProxyRef.MCPProxyUUID
+	return &proxyUUID
 }
 
 func samePtrUUID(a, b *uuid.UUID) bool {
@@ -151,28 +180,24 @@ func mcpEnvsNeedingActivation(
 // mcpConfigTargetsProxy reports whether this connection's environment-agnostic intent is
 // proxy, which is what authorises binding it in an environment it has no mapping row for.
 //
-// MCPProxyUUID answers that directly and is the only thing that can answer it for a
-// connection with no mapping anywhere. A row left NULL by migration044 — its environments
-// named different proxies, so there is no single intent — falls back to the mapping rows
-// and is claimed only when they unanimously name this proxy. Guessing for a genuinely
-// divergent connection would bind the wrong proxy.
-// Unanimous mapping rows outrank the column. They are the connection's actual resource
-// state, whereas the column caches an intent that is only authoritative when there are no
-// rows to speak for themselves. The two disagree when updateMCPConfig re-points every
-// environment and then fails to persist the column: mappings all name the new proxy while
-// the column still names the old one. Letting the column win there left the configuration
-// unreachable from either side — the new proxy's reconcile disowned it on the column, and
-// the old proxy's found none of its own environments unmapped — with nothing but a manual
-// re-save to break the tie.
+// Unanimous mapping rows outrank the recorded reference. They are the connection's actual
+// resource state, whereas the reference records an intent that is only authoritative when
+// there are no rows to speak for themselves. The two disagree when updateMCPConfig
+// re-points every environment and then fails to persist the reference: mappings all name
+// the new proxy while the reference still names the old one. Letting the reference win
+// there left the configuration unreachable from either side — the new proxy's reconcile
+// disowned it on the reference, and the old proxy's found none of its own environments
+// unmapped — with nothing but a manual re-save to break the tie.
 func mcpConfigTargetsProxy(config *models.AgentConfiguration, proxyUUID uuid.UUID) bool {
 	if mapped, unanimous := soleMappingProxyUUID(config.EnvMCPMappings); unanimous {
 		return mapped == proxyUUID
 	}
 	// Either no mappings at all — the connection a proxy deployable nowhere leaves behind,
-	// which only the column can describe — or environments naming different proxies, where
-	// the column is the sole record of a single intent and NULL correctly means "none".
-	if config.MCPProxyUUID != nil {
-		return *config.MCPProxyUUID == proxyUUID
+	// which only the reference can describe — or environments naming different proxies,
+	// where the reference is the sole record of a single intent and its absence correctly
+	// means "none".
+	if ref := configMCPProxyRef(config); ref != nil {
+		return *ref == proxyUUID
 	}
 	return false
 }
@@ -379,11 +404,12 @@ func (s *agentConfigurationService) resolveConfigMCPProxy(
 }
 
 // configMCPProxyUUID returns the proxy this connection references and whether it records
-// one at all: its own environment-agnostic column first, falling back to the mapping rows
-// when they unanimously agree (see mcpConfigTargetsProxy for why unanimity is required).
+// one at all: its own environment-agnostic reference first, falling back to the mapping
+// rows when they unanimously agree (see mcpConfigTargetsProxy for why unanimity is
+// required).
 func configMCPProxyUUID(config *models.AgentConfiguration) (uuid.UUID, bool) {
-	if config.MCPProxyUUID != nil {
-		return *config.MCPProxyUUID, true
+	if ref := configMCPProxyRef(config); ref != nil {
+		return *ref, true
 	}
 	return soleMappingProxyUUID(config.EnvMCPMappings)
 }
@@ -529,13 +555,13 @@ func (s *agentConfigurationService) reconcileConfigMCPBindings(
 		return nil
 	}
 
-	// Converge a column that its own mapping rows have overtaken — the residue of an
+	// Converge a reference that its own mapping rows have overtaken — the residue of an
 	// updateMCPConfig that re-pointed every environment and then failed to persist the
-	// reference. Reaching here means the rows unanimously name this proxy, so the column
-	// is simply stale; leaving it would keep every later reader deciding on out-of-date
-	// intent. A no-op when they already agree, and best-effort: failing to tidy the cache
-	// must not stop the bindings this reconcile came to write.
-	if config.MCPProxyUUID == nil || *config.MCPProxyUUID != proxy.UUID {
+	// reference. Reaching here means the rows unanimously name this proxy, so the recorded
+	// reference is simply stale; leaving it would keep every later reader deciding on
+	// out-of-date intent. A no-op when they already agree, and best-effort: failing to tidy
+	// it must not stop the bindings this reconcile came to write.
+	if ref := configMCPProxyRef(config); ref == nil || *ref != proxy.UUID {
 		if _, unanimous := soleMappingProxyUUID(config.EnvMCPMappings); unanimous {
 			proxyUUID := proxy.UUID
 			if err := s.setConfigMCPProxy(ctx, config, &proxyUUID); err != nil {

@@ -18,6 +18,9 @@ import (
 //
 //		// make and configure a mocked repositories.AgentConfigurationRepository
 //		mockedAgentConfigurationRepository := &AgentConfigurationRepositoryMock{
+//			ClearMCPProxyRefFunc: func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID) error {
+//				panic("mock out the ClearMCPProxyRef method")
+//			},
 //			CountFunc: func(ctx context.Context, ouID string) (int64, error) {
 //				panic("mock out the Count method")
 //			},
@@ -57,6 +60,9 @@ import (
 //			ListMCPConfigsByProxyFunc: func(ctx context.Context, ouID string, proxyUUID uuid.UUID) ([]models.AgentConfiguration, error) {
 //				panic("mock out the ListMCPConfigsByProxy method")
 //			},
+//			SetMCPProxyRefFunc: func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, proxyUUID uuid.UUID) error {
+//				panic("mock out the SetMCPProxyRef method")
+//			},
 //			UpdateFunc: func(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error {
 //				panic("mock out the Update method")
 //			},
@@ -67,6 +73,9 @@ import (
 //
 //	}
 type AgentConfigurationRepositoryMock struct {
+	// ClearMCPProxyRefFunc mocks the ClearMCPProxyRef method.
+	ClearMCPProxyRefFunc func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID) error
+
 	// CountFunc mocks the Count method.
 	CountFunc func(ctx context.Context, ouID string) (int64, error)
 
@@ -106,11 +115,23 @@ type AgentConfigurationRepositoryMock struct {
 	// ListMCPConfigsByProxyFunc mocks the ListMCPConfigsByProxy method.
 	ListMCPConfigsByProxyFunc func(ctx context.Context, ouID string, proxyUUID uuid.UUID) ([]models.AgentConfiguration, error)
 
+	// SetMCPProxyRefFunc mocks the SetMCPProxyRef method.
+	SetMCPProxyRefFunc func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, proxyUUID uuid.UUID) error
+
 	// UpdateFunc mocks the Update method.
 	UpdateFunc func(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// ClearMCPProxyRef holds details about calls to the ClearMCPProxyRef method.
+		ClearMCPProxyRef []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *gorm.DB
+			// ConfigUUID is the configUUID argument value.
+			ConfigUUID uuid.UUID
+		}
 		// Count holds details about calls to the Count method.
 		Count []struct {
 			// Ctx is the ctx argument value.
@@ -252,6 +273,17 @@ type AgentConfigurationRepositoryMock struct {
 			// ProxyUUID is the proxyUUID argument value.
 			ProxyUUID uuid.UUID
 		}
+		// SetMCPProxyRef holds details about calls to the SetMCPProxyRef method.
+		SetMCPProxyRef []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *gorm.DB
+			// ConfigUUID is the configUUID argument value.
+			ConfigUUID uuid.UUID
+			// ProxyUUID is the proxyUUID argument value.
+			ProxyUUID uuid.UUID
+		}
 		// Update holds details about calls to the Update method.
 		Update []struct {
 			// Ctx is the ctx argument value.
@@ -262,6 +294,7 @@ type AgentConfigurationRepositoryMock struct {
 			Config *models.AgentConfiguration
 		}
 	}
+	lockClearMCPProxyRef      sync.RWMutex
 	lockCount                 sync.RWMutex
 	lockCountByAgent          sync.RWMutex
 	lockCountByAgentAndType   sync.RWMutex
@@ -275,7 +308,48 @@ type AgentConfigurationRepositoryMock struct {
 	lockListByAgentAndType    sync.RWMutex
 	lockListMCPConfigsByAgent sync.RWMutex
 	lockListMCPConfigsByProxy sync.RWMutex
+	lockSetMCPProxyRef        sync.RWMutex
 	lockUpdate                sync.RWMutex
+}
+
+// ClearMCPProxyRef calls ClearMCPProxyRefFunc.
+func (mock *AgentConfigurationRepositoryMock) ClearMCPProxyRef(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID) error {
+	if mock.ClearMCPProxyRefFunc == nil {
+		panic("AgentConfigurationRepositoryMock.ClearMCPProxyRefFunc: method is nil but AgentConfigurationRepository.ClearMCPProxyRef was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Tx         *gorm.DB
+		ConfigUUID uuid.UUID
+	}{
+		Ctx:        ctx,
+		Tx:         tx,
+		ConfigUUID: configUUID,
+	}
+	mock.lockClearMCPProxyRef.Lock()
+	mock.calls.ClearMCPProxyRef = append(mock.calls.ClearMCPProxyRef, callInfo)
+	mock.lockClearMCPProxyRef.Unlock()
+	return mock.ClearMCPProxyRefFunc(ctx, tx, configUUID)
+}
+
+// ClearMCPProxyRefCalls gets all the calls that were made to ClearMCPProxyRef.
+// Check the length with:
+//
+//	len(mockedAgentConfigurationRepository.ClearMCPProxyRefCalls())
+func (mock *AgentConfigurationRepositoryMock) ClearMCPProxyRefCalls() []struct {
+	Ctx        context.Context
+	Tx         *gorm.DB
+	ConfigUUID uuid.UUID
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Tx         *gorm.DB
+		ConfigUUID uuid.UUID
+	}
+	mock.lockClearMCPProxyRef.RLock()
+	calls = mock.calls.ClearMCPProxyRef
+	mock.lockClearMCPProxyRef.RUnlock()
+	return calls
 }
 
 // Count calls CountFunc.
@@ -843,6 +917,50 @@ func (mock *AgentConfigurationRepositoryMock) ListMCPConfigsByProxyCalls() []str
 	mock.lockListMCPConfigsByProxy.RLock()
 	calls = mock.calls.ListMCPConfigsByProxy
 	mock.lockListMCPConfigsByProxy.RUnlock()
+	return calls
+}
+
+// SetMCPProxyRef calls SetMCPProxyRefFunc.
+func (mock *AgentConfigurationRepositoryMock) SetMCPProxyRef(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, proxyUUID uuid.UUID) error {
+	if mock.SetMCPProxyRefFunc == nil {
+		panic("AgentConfigurationRepositoryMock.SetMCPProxyRefFunc: method is nil but AgentConfigurationRepository.SetMCPProxyRef was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Tx         *gorm.DB
+		ConfigUUID uuid.UUID
+		ProxyUUID  uuid.UUID
+	}{
+		Ctx:        ctx,
+		Tx:         tx,
+		ConfigUUID: configUUID,
+		ProxyUUID:  proxyUUID,
+	}
+	mock.lockSetMCPProxyRef.Lock()
+	mock.calls.SetMCPProxyRef = append(mock.calls.SetMCPProxyRef, callInfo)
+	mock.lockSetMCPProxyRef.Unlock()
+	return mock.SetMCPProxyRefFunc(ctx, tx, configUUID, proxyUUID)
+}
+
+// SetMCPProxyRefCalls gets all the calls that were made to SetMCPProxyRef.
+// Check the length with:
+//
+//	len(mockedAgentConfigurationRepository.SetMCPProxyRefCalls())
+func (mock *AgentConfigurationRepositoryMock) SetMCPProxyRefCalls() []struct {
+	Ctx        context.Context
+	Tx         *gorm.DB
+	ConfigUUID uuid.UUID
+	ProxyUUID  uuid.UUID
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Tx         *gorm.DB
+		ConfigUUID uuid.UUID
+		ProxyUUID  uuid.UUID
+	}
+	mock.lockSetMCPProxyRef.RLock()
+	calls = mock.calls.SetMCPProxyRef
+	mock.lockSetMCPProxyRef.RUnlock()
 	return calls
 }
 

@@ -20,53 +20,80 @@ import (
 	"gorm.io/gorm"
 )
 
-// migration044 records the MCP proxy an agent's MCP connection references on the
-// configuration row itself.
+// migration044 records the MCP proxy an agent's MCP connection references, in a side table
+// keyed by the configuration.
 //
-// Until now the only link from an agent configuration to an org-level MCP proxy was
-// the per-environment env_agent_mcp_mapping row. That made the link environment-scoped
-// even though the connection is environment-agnostic by construction (every environment
-// maps to the same proxy), so a configuration with no mapping in a given environment —
-// the state left behind when the proxy has no endpoint there yet — was unreachable from
-// the proxy side. Nothing could backfill a binding it could not find, and the connection
-// stayed dead until someone detached and re-attached it.
+// Until now the only link from an agent configuration to an org-level MCP proxy was the
+// per-environment env_agent_mcp_mapping row. That made the link environment-scoped even
+// though the connection is environment-agnostic by construction (every environment maps to
+// the same proxy), so a configuration with no mapping in a given environment — the state
+// left behind when the proxy has no endpoint there yet — was unreachable from the proxy
+// side. Nothing could backfill a binding it could not find, and the connection stayed dead
+// until someone detached and re-attached it.
 //
-// mcp_proxy_uuid makes the reference environment-independent, so the binding reconcile
-// can start from "which configurations reference this proxy" instead of "which
-// configurations already have a mapping row for it".
+// The reference lives in its own table rather than as a column on agent_configurations,
+// because that table is polymorphic: type_id already distinguishes LLM (1), MCP (2) and
+// agent (3) configurations. An MCP-only column there would be NULL for two thirds of the
+// rows, and nothing would stop an LLM configuration from carrying one. A side table keyed
+// by the configuration keeps agent_configurations generic and leaves room for the same
+// shape per type (an agent_llm_config_provider, say) without widening the shared row.
 //
-// Nullable on purpose. A configuration whose environments name DIFFERENT proxies records
-// no single environment-agnostic intent, so it is left NULL and keeps resolving through
-// its mapping rows exactly as before.
+// Two constraints carry invariants a column could only document:
 //
-// ON DELETE RESTRICT, not SET NULL. MCPProxyService.Delete refuses a proxy still
-// referenced here, but it reads the references outside the delete transaction, so a
-// configuration committed between that read and the delete would slip through. SET NULL
-// would then clear the committed reference and strand the connection with neither a
-// mapping row nor a proxy to reconcile against — the exact state this column exists to
-// make repairable. RESTRICT makes the invariant the database's to keep rather than the
-// service's to race, and MCPProxyRepo.Delete already maps the resulting 23503 violation
-// onto ErrMCPProxyHasMappings, so the caller-facing error is unchanged.
+//   - CHECK (type_id = 2), with the composite foreign key onto (uuid, type_id), makes
+//     "only an MCP configuration may reference an MCP proxy" the database's rule rather
+//     than a convention readers have to trust. The redundant type_id column is what the
+//     composite key needs in order to express it, and uq_agent_config_uuid_type is what
+//     lets it be referenced at all — Postgres requires a unique constraint over exactly
+//     the referenced columns, and the bare primary key on uuid does not qualify.
+//   - mcp_proxy_uuid is NOT NULL with ON DELETE RESTRICT. The row's presence is the whole
+//     signal, so there is no NULL to interpret, and a proxy cannot be deleted while a
+//     configuration still references it. MCPProxyService.Delete checks for references
+//     first, but it reads them outside the delete transaction; a configuration committed
+//     between that read and the delete would otherwise be stranded with neither a mapping
+//     row nor a proxy to reconcile against. RESTRICT makes that the database's invariant
+//     to keep rather than the service's to race, and MCPProxyRepo.Delete already maps the
+//     resulting 23503 violation onto ErrMCPProxyHasMappings, so the caller-facing error is
+//     unchanged.
+//
+// ON DELETE CASCADE on the configuration side: the reference means nothing without the
+// configuration it describes.
 var migration044 = migration{
 	ID: 44,
 	Migrate: func(db *gorm.DB) error {
 		return db.Transaction(func(tx *gorm.DB) error {
 			if err := runSQL(
 				tx,
-				`ALTER TABLE agent_configurations ADD COLUMN IF NOT EXISTS mcp_proxy_uuid UUID`,
-				`ALTER TABLE agent_configurations DROP CONSTRAINT IF EXISTS fk_agent_config_mcp_proxy`,
-				`ALTER TABLE agent_configurations ADD CONSTRAINT fk_agent_config_mcp_proxy
-					FOREIGN KEY (mcp_proxy_uuid) REFERENCES mcp_proxies(uuid) ON DELETE RESTRICT`,
-				`CREATE INDEX IF NOT EXISTS idx_agent_configurations_mcp_proxy_uuid
-					ON agent_configurations (mcp_proxy_uuid) WHERE mcp_proxy_uuid IS NOT NULL`,
+				// uuid is already the primary key, so this adds no uniqueness. It exists
+				// only as the target the composite foreign key below must reference.
+				`ALTER TABLE agent_configurations
+					DROP CONSTRAINT IF EXISTS uq_agent_config_uuid_type`,
+				`ALTER TABLE agent_configurations
+					ADD CONSTRAINT uq_agent_config_uuid_type UNIQUE (uuid, type_id)`,
+				`CREATE TABLE IF NOT EXISTS agent_mcp_config_proxy (
+					config_uuid UUID PRIMARY KEY,
+					type_id INTEGER NOT NULL DEFAULT 2 CHECK (type_id = 2),
+					mcp_proxy_uuid UUID NOT NULL
+						REFERENCES mcp_proxies(uuid) ON DELETE RESTRICT,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+					updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+					CONSTRAINT fk_mcp_ref_config
+						FOREIGN KEY (config_uuid, type_id)
+						REFERENCES agent_configurations (uuid, type_id)
+						ON DELETE CASCADE
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_agent_mcp_config_proxy_proxy
+					ON agent_mcp_config_proxy (mcp_proxy_uuid)`,
 			); err != nil {
 				return err
 			}
 
-			// Backfill from the mapping rows, which are the pre-migration source of truth.
-			// HAVING COUNT(DISTINCT ...) = 1 restricts this to configurations whose
-			// environments all agree on one proxy; a divergent configuration stays NULL
-			// rather than having one of its proxies guessed for it.
+			// Backfill from the mapping rows, the pre-migration source of truth. HAVING
+			// COUNT(DISTINCT ...) = 1 restricts this to configurations whose environments
+			// all agree on one proxy; a divergent configuration gets no row rather than
+			// having one of its proxies guessed for it, and readers fall back to its
+			// mapping rows exactly as before.
 			//
 			// The single agreed value is taken with array_agg rather than MIN, which
 			// Postgres does not define for uuid. Given the HAVING clause the aggregated
@@ -74,15 +101,18 @@ var migration044 = migration{
 			// choice between candidates.
 			return runSQL(
 				tx,
-				`UPDATE agent_configurations c
-				 SET mcp_proxy_uuid = agreed.mcp_proxy_uuid
+				`INSERT INTO agent_mcp_config_proxy (config_uuid, type_id, mcp_proxy_uuid)
+				 SELECT agreed.config_uuid, 2, agreed.mcp_proxy_uuid
 				 FROM (
-					SELECT config_uuid, (array_agg(DISTINCT mcp_proxy_uuid))[1] AS mcp_proxy_uuid
-					FROM env_agent_mcp_mapping
-					GROUP BY config_uuid
-					HAVING COUNT(DISTINCT mcp_proxy_uuid) = 1
+					SELECT m.config_uuid,
+					       (array_agg(DISTINCT m.mcp_proxy_uuid))[1] AS mcp_proxy_uuid
+					FROM env_agent_mcp_mapping m
+					JOIN agent_configurations c ON c.uuid = m.config_uuid
+					WHERE c.type_id = 2
+					GROUP BY m.config_uuid
+					HAVING COUNT(DISTINCT m.mcp_proxy_uuid) = 1
 				 ) AS agreed
-				 WHERE c.uuid = agreed.config_uuid AND c.mcp_proxy_uuid IS NULL`,
+				 ON CONFLICT (config_uuid) DO NOTHING`,
 			)
 		})
 	},

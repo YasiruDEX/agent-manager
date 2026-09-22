@@ -1445,10 +1445,6 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, ouID, p
 		TypeID:      models.AgentConfigTypeIDMCP,
 		OUID:        ouID,
 		ProjectName: projectName,
-		// Recorded before the per-environment loop below, so a connection whose proxy is
-		// deployable in no environment at all still carries a resolvable proxy reference
-		// and stays reachable from ReconcileMCPBindingsForProxy.
-		MCPProxyUUID: soleMCPProxyUUID(proxiesByEnv),
 	}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		return s.agentConfigRepo.Create(ctx, tx, config)
@@ -1457,6 +1453,16 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, ouID, p
 			return nil, utils.ErrAgentConfigAlreadyExists
 		}
 		return nil, fmt.Errorf("failed to create MCP configuration: %w", err)
+	}
+
+	// Recorded straight after the configuration row and before the per-environment loop
+	// below, so a connection whose proxy is deployable in no environment at all still
+	// carries a resolvable reference and stays reachable from ReconcileMCPBindingsForProxy.
+	// It cannot be part of the literal above: agent_mcp_config_proxy's composite foreign
+	// key requires the configuration row to exist first.
+	if err := s.setConfigMCPProxy(ctx, config, soleMCPProxyUUID(proxiesByEnv)); err != nil {
+		s.cleanupMCPConfig(ctx, config.UUID, ouID)
+		return nil, err
 	}
 
 	firstEnvName := ""

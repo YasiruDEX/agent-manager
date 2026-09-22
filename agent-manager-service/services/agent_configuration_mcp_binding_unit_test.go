@@ -43,6 +43,16 @@ func mcpVarRows(configUUID uuid.UUID, envUUIDs ...uuid.UUID) []models.AgentEnvCo
 	return rows
 }
 
+// mcpProxyRef builds the agent_mcp_config_proxy relation that records a configuration's
+// environment-agnostic proxy. Its presence is the whole signal — there is no NULL state.
+func mcpProxyRef(configUUID, proxyUUID uuid.UUID) *models.AgentMCPConfigProxy {
+	return &models.AgentMCPConfigProxy{
+		ConfigUUID:   configUUID,
+		TypeID:       models.AgentConfigTypeIDMCP,
+		MCPProxyUUID: proxyUUID,
+	}
+}
+
 // mcpProxyServing builds an org-level MCP proxy with one endpoint bound to each of the
 // given environments — the shape the reconcile reads to decide where a binding could go.
 func mcpProxyServing(proxyUUID uuid.UUID, envUUIDs ...uuid.UUID) *models.MCPProxy {
@@ -150,28 +160,31 @@ func TestMCPEnvsNeedingActivation_IgnoresEnvironmentProxyDoesNotServe(t *testing
 // configured leaves exactly it, and it was previously unreachable from the proxy side.
 func TestMCPConfigTargetsProxy_MatchesRecordedProxyWithNoMappings(t *testing.T) {
 	proxyUUID := uuid.New()
-	config := &models.AgentConfiguration{UUID: uuid.New(), MCPProxyUUID: &proxyUUID}
+	configUUID := uuid.New()
+	config := &models.AgentConfiguration{UUID: configUUID, MCPProxyRef: mcpProxyRef(configUUID, proxyUUID)}
 
 	require.True(t, mcpConfigTargetsProxy(config, proxyUUID))
 }
 
 func TestMCPConfigTargetsProxy_RejectsDifferentRecordedProxyWithNoMappings(t *testing.T) {
 	proxyUUID, otherProxyUUID := uuid.New(), uuid.New()
-	config := &models.AgentConfiguration{UUID: uuid.New(), MCPProxyUUID: &otherProxyUUID}
+	configUUID := uuid.New()
+	config := &models.AgentConfiguration{UUID: configUUID, MCPProxyRef: mcpProxyRef(configUUID, otherProxyUUID)}
 
 	require.False(t, mcpConfigTargetsProxy(config, proxyUUID),
-		"with no mapping rows the column is the only record of intent, and it names another proxy")
+		"with no mapping rows the reference is the only record of intent, and it names another proxy")
 }
 
 // Unanimous mapping rows outrank the column, because they are the actual resource state
-// while the column only caches an intent. This is the shape updateMCPConfig leaves when it
-// re-points every environment and then fails to persist the reference: letting the stale
-// column win made the configuration unreachable from both proxies' reconciles at once.
-func TestMCPConfigTargetsProxy_UnanimousMappingsOutrankStaleColumn(t *testing.T) {
-	newProxyUUID, staleColumnUUID := uuid.New(), uuid.New()
+// while the reference only records an intent. This is the shape updateMCPConfig leaves when
+// it re-points every environment and then fails to persist the reference: letting the stale
+// reference win made the configuration unreachable from both proxies' reconciles at once.
+func TestMCPConfigTargetsProxy_UnanimousMappingsOutrankStaleReference(t *testing.T) {
+	newProxyUUID, staleRefUUID := uuid.New(), uuid.New()
+	configUUID := uuid.New()
 	config := &models.AgentConfiguration{
-		UUID:         uuid.New(),
-		MCPProxyUUID: &staleColumnUUID,
+		UUID:        configUUID,
+		MCPProxyRef: mcpProxyRef(configUUID, staleRefUUID),
 		EnvMCPMappings: []models.EnvAgentMCPMapping{
 			{EnvironmentUUID: uuid.New(), MCPProxyUUID: newProxyUUID},
 			{EnvironmentUUID: uuid.New(), MCPProxyUUID: newProxyUUID},
@@ -180,8 +193,8 @@ func TestMCPConfigTargetsProxy_UnanimousMappingsOutrankStaleColumn(t *testing.T)
 
 	require.True(t, mcpConfigTargetsProxy(config, newProxyUUID),
 		"the proxy its environments actually point at must own the configuration")
-	require.False(t, mcpConfigTargetsProxy(config, staleColumnUUID),
-		"the proxy only the stale column names must not also claim it")
+	require.False(t, mcpConfigTargetsProxy(config, staleRefUUID),
+		"the proxy only the stale reference names must not also claim it")
 }
 
 // A row migration044 left NULL — its environments named different proxies — falls back to
@@ -412,7 +425,7 @@ func TestMCPConfigUUIDsForProxy_FindsConfigReferencedOnlyByColumn(t *testing.T) 
 		agentConfigRepo: &repomocks.AgentConfigurationRepositoryMock{
 			ListMCPConfigsByProxyFunc: func(_ context.Context, _ string, gotProxy uuid.UUID) ([]models.AgentConfiguration, error) {
 				require.Equal(t, proxyUUID, gotProxy)
-				return []models.AgentConfiguration{{UUID: configUUID, MCPProxyUUID: &proxyUUID}}, nil
+				return []models.AgentConfiguration{{UUID: configUUID, MCPProxyRef: mcpProxyRef(configUUID, proxyUUID)}}, nil
 			},
 		},
 		envMCPMappingRepo: &repomocks.EnvAgentMCPMappingRepositoryMock{
@@ -465,7 +478,7 @@ func TestMCPConfigUUIDsForProxy_DedupesConfigFoundOnBothSides(t *testing.T) {
 	svc := &agentConfigurationService{
 		agentConfigRepo: &repomocks.AgentConfigurationRepositoryMock{
 			ListMCPConfigsByProxyFunc: func(_ context.Context, _ string, _ uuid.UUID) ([]models.AgentConfiguration, error) {
-				return []models.AgentConfiguration{{UUID: configUUID, MCPProxyUUID: &proxyUUID}}, nil
+				return []models.AgentConfiguration{{UUID: configUUID, MCPProxyRef: mcpProxyRef(configUUID, proxyUUID)}}, nil
 			},
 		},
 		envMCPMappingRepo: &repomocks.EnvAgentMCPMappingRepositoryMock{
