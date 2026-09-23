@@ -518,6 +518,62 @@ export function useValidationErrorTracking(entity: string) {
 /** localStorage key marking that this browser has seen the console before. */
 const SEEN_KEY = "amp.console.seen";
 
+/** localStorage key holding a pending session-expiry record. */
+const EXPIRY_KEY = "amp.console.session-expired";
+
+/**
+ * A session expiry older than this is dropped rather than reported. The record
+ * is meant to survive a sign-in redirect, not to resurface weeks later against
+ * an unrelated session.
+ */
+const EXPIRY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Records that this session ended because the user's credentials stopped being
+ * accepted. Deliberately *not* reported at the moment it happens.
+ *
+ * A session-expired action cannot be delivered using the session that just
+ * expired: the flush would either authenticate with the token the API just
+ * rejected (so the telemetry call 401s too) or find the token provider already
+ * torn down by logout and drop the buffer. Either way the event is lost, and
+ * with several queries failing at once each one would try — and lose — its own
+ * copy.
+ *
+ * So the fact is parked in localStorage and reported at the start of the next
+ * session, when there is a valid token to send it with. Writing to a single key
+ * also collapses the concurrent-failure case into one record rather than one
+ * per in-flight query.
+ */
+export function markSessionExpired(route: string): void {
+  try {
+    window.localStorage.setItem(
+      EXPIRY_KEY,
+      JSON.stringify({ route: normalizeRoute(route), at: Date.now() }),
+    );
+  } catch {
+    // Blocked storage: the expiry simply goes unreported.
+  }
+}
+
+/**
+ * Reads and clears a pending expiry record, if one is recent enough to report.
+ */
+function takePendingSessionExpiry(): { route: string } | undefined {
+  try {
+    const raw = window.localStorage.getItem(EXPIRY_KEY);
+    if (!raw) return undefined;
+    window.localStorage.removeItem(EXPIRY_KEY);
+
+    const parsed = JSON.parse(raw) as { route?: unknown; at?: unknown };
+    if (typeof parsed.at !== "number" || Date.now() - parsed.at > EXPIRY_MAX_AGE_MS) {
+      return undefined;
+    }
+    return { route: typeof parsed.route === "string" ? parsed.route : "unspecified" };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Session-level telemetry: start, first-ever session, uncaught client errors,
  * and the end-of-session summary.
@@ -551,6 +607,14 @@ export function useSessionAnalytics() {
 
     if (firstEver) {
       track(ConsoleAction.FirstSession, { referrer: safeReferrerHost() });
+    }
+
+    // Reported here rather than when it happened — see markSessionExpired.
+    // The route is the (normalized) page the user was on when they were kicked
+    // out, which is the part worth knowing.
+    const expired = takePendingSessionExpiry();
+    if (expired) {
+      track(ConsoleAction.SessionExpired, { page: expired.route });
     }
   }, [track]);
 
