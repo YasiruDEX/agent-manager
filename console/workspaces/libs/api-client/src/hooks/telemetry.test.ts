@@ -28,8 +28,14 @@
  * class it belongs to, cannot come back silently.
  */
 
-import { describe, expect, it } from "vitest";
-import { normalizeRoute, sanitizePage } from "./telemetry";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  markSessionExpired,
+  normalizeRoute,
+  sanitizePage,
+  setTelemetrySubject,
+  takePendingSessionExpiry,
+} from "./telemetry";
 
 /** Anything a customer could have named. If one of these survives, we leaked. */
 const CUSTOMER_NAMES = [
@@ -101,5 +107,61 @@ describe("normalizeRoute", () => {
   it.each([[""], ["/"], ["//"]])("handles the degenerate path %s", (input) => {
     expect(() => normalizeRoute(input)).not.toThrow();
     expect(normalizeRoute(input).startsWith("/")).toBe(true);
+  });
+});
+
+describe("session-expiry record", () => {
+  const KEY = "amp.console.session-expired";
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    setTelemetrySubject(undefined);
+  });
+
+  it("records nothing when no user is known", () => {
+    markSessionExpired("/org/acme-corp/logs");
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("records the owner and a normalized route", () => {
+    setTelemetrySubject("user-a");
+    markSessionExpired("/org/acme-corp/project/checkout-service");
+    const stored = JSON.parse(window.localStorage.getItem(KEY) ?? "{}");
+    expect(stored.sub).toBe("user-a");
+    expect(leaksAnyName(stored.route)).toBe(false);
+  });
+
+  it("reports the record to the user who owns it, once", () => {
+    setTelemetrySubject("user-a");
+    markSessionExpired("/org/acme-corp");
+    expect(takePendingSessionExpiry("user-a")).toEqual({ route: "/org/:orgId" });
+    expect(takePendingSessionExpiry("user-a")).toBeUndefined();
+  });
+
+  // The reported bug: user B signing in on the same browser must not report
+  // user A's expiry under B's identity — and must not consume it either, so A
+  // can still report it on their own next sign-in.
+  it("does not report another user's expiry, and leaves it for them", () => {
+    setTelemetrySubject("user-a");
+    markSessionExpired("/org/acme-corp");
+
+    expect(takePendingSessionExpiry("user-b")).toBeUndefined();
+    expect(window.localStorage.getItem(KEY)).not.toBeNull();
+    expect(takePendingSessionExpiry("user-a")).toEqual({ route: "/org/:orgId" });
+  });
+
+  it("drops a record older than the reporting window", () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ route: "/org/:orgId", at: Date.now() - 48 * 3600 * 1000, sub: "user-a" }),
+    );
+    expect(takePendingSessionExpiry("user-a")).toBeUndefined();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it("drops a malformed record instead of throwing", () => {
+    window.localStorage.setItem(KEY, "{not json");
+    expect(() => takePendingSessionExpiry("user-a")).not.toThrow();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 });
