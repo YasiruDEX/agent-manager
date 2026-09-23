@@ -94,7 +94,6 @@ window.__RUNTIME_CONFIG__ = {
   },
   maxRequestBodyBytes: '$MAX_REQUEST_BODY_BYTES',
   fileMountMaxFileBytes: '$FILE_MOUNT_MAX_FILE_BYTES',
-  analyticsEnabled: '$ANALYTICS_ENABLED' === 'true',
   docsUrl: '$DOCS_URL',
   footerLinks: {
     privacyPolicyUrl: 'https://wso2.com/agent-platform/agent-manager/',

@@ -31,7 +31,6 @@
  * backend is worse than no telemetry.
  */
 
-import { globalConfig } from "@agent-management-platform/types";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   reportConsoleActions,
@@ -112,6 +111,9 @@ const MAX_BATCH_SIZE = 50;
  */
 let buffer: ConsoleActionPayload[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Session shape counters, reported once by session.end. */
+const sessionStats = { startedAt: Date.now(), pages: 0, actions: 0 };
 
 /**
  * How a flush gets a token.
@@ -201,18 +203,25 @@ export function normalizeRoute(path: string): string {
     .join("/");
 }
 
+/**
+ * Whether this deployment accepts console analytics, as reported by the
+ * service's runtime-config discovery call at bootstrap.
+ *
+ * There is deliberately no console-side flag for this. The service's
+ * CONSOLE_ANALYTICS_ENABLED is the single switch for the whole path: a second
+ * one here could disagree with it, and an operator who set the documented flag
+ * would still get nothing. Defaults to false, so the console reports nothing
+ * until discovery says otherwise — including when discovery fails.
+ */
+let consoleAnalyticsEnabled = false;
+
+/** Set once by the runtime-config bootstrap. */
+export function setConsoleAnalyticsEnabled(enabled: boolean | undefined): void {
+  consoleAnalyticsEnabled = enabled === true;
+}
+
 export function isConsoleAnalyticsEnabled(): boolean {
-  // globalConfig is window.__RUNTIME_CONFIG__, injected by config.js before
-  // React mounts — but only in the real app. Under Vitest nothing injects it,
-  // so a bare property read throws. Since useTrack is embedded in low-level
-  // shared components (a copy button, a confirmation dialog) that are rendered
-  // without any app shell in their own unit tests, this must degrade to
-  // "disabled" rather than take those components down.
-  try {
-    return globalConfig?.analyticsEnabled === true;
-  } catch {
-    return false;
-  }
+  return consoleAnalyticsEnabled;
 }
 
 /**
@@ -275,6 +284,11 @@ export function useTrack() {
           sessionId,
           dimensions,
         });
+
+        sessionStats.actions += 1;
+        if (action === ConsoleAction.PageView) {
+          sessionStats.pages += 1;
+        }
 
         if (buffer.length >= MAX_BATCH_SIZE) {
           void flush();
@@ -353,4 +367,169 @@ export function usePageViewTracking(path: string, entityScope?: string) {
     );
     previous.current = route;
   }, [path, entityScope, track]);
+}
+
+/**
+ * Tracks a create/edit dialog as an intent funnel.
+ *
+ * Opening reports `dialog-opened`; closing without a completed submission
+ * reports `form-abandoned`. Pairing those with the backend's own success event
+ * for the same entity is what turns "N agents were created" into a conversion
+ * rate — the abandonment is invisible server-side, because giving up issues no
+ * request.
+ *
+ * Call `markCompleted()` from the success path (a mutation's `onSuccess`)
+ * before the dialog closes. Anything else — Cancel, Escape, a click outside —
+ * is an abandonment by definition, so no call site has to remember to report
+ * one.
+ *
+ * `step` is optional and, when supplied, rides along as `furthest_step` so a
+ * multi-step form says where the user stopped.
+ */
+export function useDialogAnalytics(
+  entity: string,
+  isOpen: boolean,
+  options?: { trigger?: string; step?: string },
+) {
+  const { track } = useTrack();
+  const completed = useRef(false);
+  const openedAt = useRef<number | undefined>(undefined);
+  const wasOpen = useRef(false);
+  // Read inside the effect without making it a dependency: a step that changes
+  // as the user advances must not re-fire the open/abandon transitions.
+  const latest = useRef(options);
+  latest.current = options;
+
+  const markCompleted = useCallback(() => {
+    completed.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && !wasOpen.current) {
+      wasOpen.current = true;
+      completed.current = false;
+      openedAt.current = Date.now();
+      track(ConsoleAction.DialogOpened, {
+        entity,
+        trigger: latest.current?.trigger ?? "unspecified",
+      });
+      return;
+    }
+
+    if (!isOpen && wasOpen.current) {
+      wasOpen.current = false;
+      if (!completed.current) {
+        track(ConsoleAction.FormAbandoned, {
+          entity,
+          furthest_step: latest.current?.step ?? "unspecified",
+          seconds_on_form: openedAt.current
+            ? Math.round((Date.now() - openedAt.current) / 1000)
+            : 0,
+        });
+      }
+    }
+  }, [isOpen, entity, track]);
+
+  return { markCompleted };
+}
+
+/**
+ * Reports a validation error the user was shown. Call from a form's own
+ * validation, with the field name — never the value the user typed.
+ */
+export function useValidationErrorTracking(entity: string) {
+  const { track } = useTrack();
+  return useCallback(
+    (field: string) => {
+      track(ConsoleAction.ValidationError, { entity, field });
+    },
+    [track, entity],
+  );
+}
+
+/** localStorage key marking that this browser has seen the console before. */
+const SEEN_KEY = "amp.console.seen";
+
+/**
+ * Session-level telemetry: start, first-ever session, uncaught client errors,
+ * and the end-of-session summary.
+ *
+ * Mounted once by the app shell. Everything here is either a one-shot or a
+ * listener, so mounting it twice would double-count — hence one caller, high
+ * up, rather than a hook pages opt into.
+ */
+export function useSessionAnalytics() {
+  const { track, flush } = useTrack();
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
+    let firstEver = false;
+    try {
+      firstEver = window.localStorage.getItem(SEEN_KEY) === null;
+      if (firstEver) window.localStorage.setItem(SEEN_KEY, "1");
+    } catch {
+      // Private mode or blocked storage: treat as a returning user rather than
+      // reporting a first session on every load, which would be worse data.
+    }
+
+    track(ConsoleAction.SessionStart, {
+      referrer: safeReferrerHost(),
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      browser: navigator.userAgent.slice(0, 120),
+    });
+
+    if (firstEver) {
+      track(ConsoleAction.FirstSession, { referrer: safeReferrerHost() });
+    }
+  }, [track]);
+
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      track(ConsoleAction.ClientError, {
+        component: "window",
+        // The error name only. A message can quote page data, and a stack
+        // names internals that belong in logs rather than in analytics.
+        error_name: event.error?.name ?? "Error",
+      });
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason as { name?: string } | undefined;
+      track(ConsoleAction.ClientError, {
+        component: "promise",
+        error_name: reason?.name ?? "UnhandledRejection",
+      });
+    };
+    const onPageHide = () => {
+      track(ConsoleAction.SessionEnd, {
+        duration_seconds: Math.round((Date.now() - sessionStats.startedAt) / 1000),
+        page_count: sessionStats.pages,
+        action_count: sessionStats.actions,
+      });
+      void flush();
+    };
+
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [track, flush]);
+}
+
+/**
+ * The referring site's host, never its full URL — a referrer can carry a
+ * search query or a path that identifies the person who followed it.
+ */
+function safeReferrerHost(): string {
+  try {
+    return document.referrer ? new URL(document.referrer).host : "direct";
+  } catch {
+    return "unknown";
+  }
 }
