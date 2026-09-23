@@ -31,6 +31,21 @@ import (
 
 // consoleActionsRequest builds an authenticated request the way the middleware
 // stack would leave it by the time the handler runs.
+// useFreshLimiter gives the calling test its own rate limiter for its duration.
+//
+// The handler goes through the package-level consoleActionsLimiter, and every
+// test here reports as the same subject. Sharing it means the tests only pass
+// while their combined requests stay under the burst — add one more test, or
+// run with -count=2, and they start failing with 429 for reasons unrelated to
+// what they check. Per test rather than per request: the rate-limit test calls
+// the handler repeatedly and needs the bucket to drain across those calls.
+func useFreshLimiter(t *testing.T) {
+	t.Helper()
+	original := consoleActionsLimiter
+	consoleActionsLimiter = newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
+	t.Cleanup(func() { consoleActionsLimiter = original })
+}
+
 func consoleActionsRequest(t *testing.T, body string) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodPost, "/telemetry/console-actions", strings.NewReader(body))
@@ -59,6 +74,8 @@ func decodeBatchResponse(t *testing.T, body []byte) (accepted, dropped float64) 
 // TestConsoleActionsRejectsMalformedBody: a body that is not a batch is the
 // one client-side failure worth reporting, since retrying will not fix it.
 func TestConsoleActionsRejectsMalformedBody(t *testing.T) {
+	useFreshLimiter(t)
+
 	for _, body := range []string{"not json", `{"actions":[]}`, `{}`} {
 		w := httptest.NewRecorder()
 		handleConsoleActions(w, consoleActionsRequest(t, body))
@@ -71,6 +88,8 @@ func TestConsoleActionsRejectsMalformedBody(t *testing.T) {
 // TestConsoleActionsRejectsOversizedBatch bounds the fan-out: one request must
 // not be able to push an unbounded payload through to the collector.
 func TestConsoleActionsRejectsOversizedBatch(t *testing.T) {
+	useFreshLimiter(t)
+
 	actions := make([]map[string]string, maxConsoleActionsPerBatch+1)
 	for i := range actions {
 		actions[i] = map[string]string{"action": "amp.console.navigation.page-view"}
@@ -88,6 +107,8 @@ func TestConsoleActionsRejectsOversizedBatch(t *testing.T) {
 }
 
 func TestConsoleActionsRejectsOversizedBody(t *testing.T) {
+	useFreshLimiter(t)
+
 	padding := strings.Repeat("x", maxConsoleActionBatchBytes+1)
 	body := `{"actions":[{"action":"amp.console.navigation.page-view","page":"` + padding + `"}]}`
 
@@ -109,6 +130,8 @@ func TestConsoleActionsRejectsOversizedBody(t *testing.T) {
 // here: the response shape and status do not depend on whether this deployment
 // reports anything.
 func TestConsoleActionsAcceptsBatchWithUnknownActions(t *testing.T) {
+	useFreshLimiter(t)
+
 	body := `{"actions":[
 		{"action":"amp.console.navigation.page-view"},
 		{"action":"amp.console.invented-by-a-newer-console"}
@@ -130,6 +153,8 @@ func TestConsoleActionsAcceptsBatchWithUnknownActions(t *testing.T) {
 // endpoint must keep answering 202, or every console in the fleet logs a
 // failed telemetry call on every flush.
 func TestConsoleActionsWithReportingDisabledStillAccepts(t *testing.T) {
+	useFreshLimiter(t)
+
 	body := `{"actions":[{"action":"amp.console.navigation.page-view"}]}`
 
 	w := httptest.NewRecorder()
@@ -144,6 +169,8 @@ func TestConsoleActionsWithReportingDisabledStillAccepts(t *testing.T) {
 // middleware, so absent claims mean an upstream bug — it must degrade to a
 // dropped batch, not a 500.
 func TestConsoleActionsWithoutClaimsDoesNotPanic(t *testing.T) {
+	useFreshLimiter(t)
+
 	r := httptest.NewRequest(http.MethodPost, "/telemetry/console-actions",
 		bytes.NewBufferString(`{"actions":[{"action":"amp.console.navigation.page-view"}]}`))
 
@@ -159,9 +186,7 @@ func TestConsoleActionsWithoutClaimsDoesNotPanic(t *testing.T) {
 // continuously, so an authenticated caller must not be able to drive unbounded
 // outbound work by looping batches.
 func TestConsoleActionsRateLimitsPerUser(t *testing.T) {
-	original := consoleActionsLimiter
-	consoleActionsLimiter = newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
-	t.Cleanup(func() { consoleActionsLimiter = original })
+	useFreshLimiter(t)
 
 	body := `{"actions":[{"action":"amp.console.navigation.page-view"}]}`
 
@@ -185,9 +210,7 @@ func TestConsoleActionsRateLimitsPerUser(t *testing.T) {
 // TestConsoleActionsRateLimitIsPerUserNotGlobal: one busy console must not
 // spend the budget of every other user.
 func TestConsoleActionsRateLimitIsPerUserNotGlobal(t *testing.T) {
-	original := consoleActionsLimiter
-	consoleActionsLimiter = newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
-	t.Cleanup(func() { consoleActionsLimiter = original })
+	useFreshLimiter(t)
 
 	for i := 0; i <= consoleActionsBurst; i++ {
 		consoleActionsLimiter.Allow("noisy-user")
