@@ -977,7 +977,18 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "413":
-          description: Batch exceeds the accepted size
+          description: |
+            Batch exceeds the accepted size — either the body is over the byte
+            cap or it carries more than maxItems actions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: |
+            Per-user reporting rate limit exceeded. Clients must NOT retry:
+            telemetry is best-effort, and a retry into the limit is what the
+            limit exists to prevent. Drop the batch and carry on.
           content:
             application/json:
               schema:

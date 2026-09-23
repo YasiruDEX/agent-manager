@@ -46,6 +46,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/moesifcollector"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
@@ -324,9 +325,18 @@ func truncate(s string) string {
 	return truncateTo(s, maxDimensionValueLength)
 }
 
+// truncateTo bounds a string to max BYTES without splitting a rune.
+//
+// A plain s[:max] can cut a multi-byte character in half, and the resulting
+// invalid UTF-8 is silently rewritten to U+FFFD on the way into JSON — a
+// corrupted trailing character in whatever reaches the collector. Backing up
+// to the last rune boundary costs nothing and keeps the value well-formed.
 func truncateTo(s string, max int) string {
 	if len(s) <= max {
 		return s
+	}
+	for max > 0 && !utf8.RuneStart(s[max]) {
+		max--
 	}
 	return s[:max]
 }

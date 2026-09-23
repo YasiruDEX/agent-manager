@@ -167,6 +167,33 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 	// on every flush.
 	enabled := growthanalytics.ConsoleEnabled(ga)
 
+	// Identity and the rate limit are resolved before the body is touched.
+	// Claims come from the JWT, not the payload, so nothing here needs the
+	// request read first — and rejecting a limited caller only after a 64 KB
+	// read and a JSON parse would leave exactly the unbounded work the limit
+	// exists to prevent.
+	claims := jwtassertion.GetTokenClaims(r.Context())
+	if claims == nil {
+		// The route is behind the auth middleware, so this is an upstream bug
+		// rather than an unauthenticated caller.
+		log.Error("telemetry: no token claims on console-actions request, dropping batch")
+		utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
+			Accepted: 0,
+			Dropped:  0,
+		})
+		return
+	}
+
+	// 429 rather than a silent 202: a client hitting this is malfunctioning or
+	// hostile, and telemetry is the one thing that must never be retried into a
+	// limit — the console drops its buffer on any failure, which is the
+	// behaviour we want here.
+	if !consoleActionsLimiter.Allow(claims.Sub) {
+		utils.WriteErrorResponse(w, http.StatusTooManyRequests,
+			"console action reporting rate limit exceeded")
+		return
+	}
+
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxConsoleActionBatchBytes))
 	if err != nil {
 		var maxErr *http.MaxBytesError
@@ -194,33 +221,8 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := jwtassertion.GetTokenClaims(r.Context())
-	if claims == nil {
-		// The route is behind the auth middleware, so this is an upstream bug
-		// rather than an unauthenticated caller.
-		log.Error("telemetry: no token claims on console-actions request, dropping batch")
-		utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
-			Accepted: 0,
-			Dropped:  int32(len(req.Actions)),
-		})
-		return
-	}
-
-	// Rate-limited per user, after authentication so the key is a real
-	// identity rather than something a caller picks. 429 rather than a silent
-	// 202: a client hitting this is malfunctioning or hostile, and telemetry is
-	// the one thing that must never be retried into a limit — the console
-	// drops its buffer on any failure, which is the behaviour we want here.
-	if !consoleActionsLimiter.Allow(claims.Sub) {
-		utils.WriteErrorResponse(w, http.StatusTooManyRequests,
-			"console action reporting rate limit exceeded")
-		return
-	}
-
 	// Checked after the rate limit, not before: the limit must hold whether or
-	// not this deployment forwards anything, or a deployment with reporting
-	// switched off would leave the endpoint an unbounded, authenticated way to
-	// make the service parse 64 KB of JSON per request.
+	// not this deployment forwards anything.
 	if !enabled {
 		// Accepted and discarded: the client's contract is unchanged whether
 		// or not this deployment reports anything.
@@ -258,7 +260,7 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 		UserID:    claims.Sub,
 		CompanyID: claims.OuId,
 		IPAddress: consoleClientIP(r),
-		UserAgent: r.UserAgent(),
+		UserAgent: truncateUserAgent(r.UserAgent()),
 		URI:       r.Referer(),
 	}, ga)
 
@@ -278,19 +280,45 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func truncateUserAgent(ua string) string {
+	if len(ua) <= maxUserAgentLength {
+		return ua
+	}
+	return ua[:maxUserAgentLength]
+}
+
+// maxUserAgentLength bounds the user agent copied onto every action.
+//
+// Headers are not covered by the request body cap: Go allows up to
+// MaxHeaderBytes (1 MB by default), and this value is duplicated onto each of
+// the batch's actions, so one accepted request could otherwise expand into a
+// payload two orders of magnitude larger than the request that produced it.
+const maxUserAgentLength = 256
+
 // consoleClientIP resolves the reporting browser's address, preferring the
-// proxy-supplied forwarded header over the immediate peer. Mirrors
-// growthanalytics.clientIP, which is unexported.
+// proxy-supplied forwarded header over the immediate peer.
+//
+// The forwarded value is parsed rather than trusted. A client can set
+// X-Forwarded-For itself and a fronting proxy only appends to it, so the
+// left-most entry is caller-controlled: unvalidated, it would let any
+// authenticated user stamp an arbitrary string — of arbitrary length — onto
+// every action as its source address. Anything that is not an IP falls back to
+// the immediate peer, which the caller cannot forge.
 func consoleClientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		if idx := strings.IndexByte(fwd, ','); idx >= 0 {
-			return strings.TrimSpace(fwd[:idx])
-		}
-		return strings.TrimSpace(fwd)
+	peer := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		peer = host
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+
+	fwd := r.Header.Get("X-Forwarded-For")
+	if fwd == "" {
+		return peer
 	}
-	return host
+	if idx := strings.IndexByte(fwd, ','); idx >= 0 {
+		fwd = fwd[:idx]
+	}
+	if ip := net.ParseIP(strings.TrimSpace(fwd)); ip != nil {
+		return ip.String()
+	}
+	return peer
 }
