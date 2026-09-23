@@ -124,10 +124,15 @@ export const LogsComponent: React.FC = () => {
   // useMemo on every searchParams change, so depending on it would re-report a
   // query when only the sort order or an unrelated param moved.
   const logLevelKey = selectedLogLevels.join(",");
+  // The phrase itself goes into the key so that changing one search to another
+  // (timeout → connection refused) counts as a new query. That is safe because
+  // the key never leaves the browser: it is only compared against
+  // lastReportedQuery below. What is reported is filter_count, which records
+  // only whether a phrase is present.
   const logQueryKey = [
     hasCustomRange ? "custom" : (timeRange ?? "unspecified"),
     logLevelKey,
-    searchPhrase ? "q" : "",
+    searchPhrase,
   ].join("|");
 
   // Seeded with the query the page opens on, so the first effect run reports
