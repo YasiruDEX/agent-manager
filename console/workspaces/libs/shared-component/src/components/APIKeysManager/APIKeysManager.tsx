@@ -257,6 +257,7 @@ export function APIKeysManager({
 
   const handleRevoke = (key: APIKeyInfo) => {
     addConfirmation({
+      analytics: { entity: "api-key", action: "revoke" },
       title: "Revoke API Key",
       description: `Are you sure you want to revoke "${key.displayName || key.name}"? Any requests using this key will stop working immediately. This action cannot be undone.`,
       confirmButtonText: "Revoke",
