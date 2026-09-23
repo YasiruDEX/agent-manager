@@ -574,11 +574,35 @@ const EXPIRY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
  * also collapses the concurrent-failure case into one record rather than one
  * per in-flight query.
  */
+/**
+ * The signed-in user's subject, registered by the app shell alongside the
+ * token provider.
+ *
+ * The parked expiry record lives in browser storage, which is shared by
+ * everyone who signs in on that browser. Without a subject on it, user A's
+ * expiry would be reported by user B's next session, under B's identity.
+ */
+let telemetrySubject: string | undefined;
+
+export function setTelemetrySubject(subject: string | undefined): void {
+  telemetrySubject = subject || undefined;
+}
+
 export function markSessionExpired(route: string): void {
+  // No subject means no way to attribute the expiry to the right person
+  // later, so it is not recorded at all rather than recorded ownerless.
+  if (!telemetrySubject) return;
   try {
+    // Stored as-is rather than hashed: this browser's storage already holds
+    // the auth tokens, which carry the same subject, so a hash would hide
+    // nothing that is not already sitting next to it.
     window.localStorage.setItem(
       EXPIRY_KEY,
-      JSON.stringify({ route: normalizeRoute(route), at: Date.now() }),
+      JSON.stringify({
+        route: normalizeRoute(route),
+        at: Date.now(),
+        sub: telemetrySubject,
+      }),
     );
   } catch {
     // Blocked storage: the expiry simply goes unreported.
@@ -588,18 +612,37 @@ export function markSessionExpired(route: string): void {
 /**
  * Reads and clears a pending expiry record, if one is recent enough to report.
  */
-function takePendingSessionExpiry(): { route: string } | undefined {
+/**
+ * Reads a pending expiry record and clears it, but only if it belongs to
+ * `subject` and is recent enough to report.
+ *
+ * A record left by a different user is left in place, not consumed: this
+ * session cannot report it under the right identity, and the user who owns it
+ * may sign back in on this browser before it ages out. Stale or malformed
+ * records are removed whoever reads them.
+ */
+/** @internal Exported for tests only. */
+export function takePendingSessionExpiry(subject: string): { route: string } | undefined {
   try {
     const raw = window.localStorage.getItem(EXPIRY_KEY);
     if (!raw) return undefined;
-    window.localStorage.removeItem(EXPIRY_KEY);
 
-    const parsed = JSON.parse(raw) as { route?: unknown; at?: unknown };
+    const parsed = JSON.parse(raw) as { route?: unknown; at?: unknown; sub?: unknown };
     if (typeof parsed.at !== "number" || Date.now() - parsed.at > EXPIRY_MAX_AGE_MS) {
+      window.localStorage.removeItem(EXPIRY_KEY);
       return undefined;
     }
+    if (parsed.sub !== subject) {
+      return undefined;
+    }
+    window.localStorage.removeItem(EXPIRY_KEY);
     return { route: typeof parsed.route === "string" ? parsed.route : "unspecified" };
   } catch {
+    try {
+      window.localStorage.removeItem(EXPIRY_KEY);
+    } catch {
+      // Blocked storage: nothing to clean up.
+    }
     return undefined;
   }
 }
@@ -612,7 +655,7 @@ function takePendingSessionExpiry(): { route: string } | undefined {
  * listener, so mounting it twice would double-count — hence one caller, high
  * up, rather than a hook pages opt into.
  */
-export function useSessionAnalytics() {
+export function useSessionAnalytics(subject?: string) {
   const { track, flushOnUnload } = useTrack();
   const started = useRef(false);
   // Guards against a second session.end for a session already ended — the
@@ -642,15 +685,21 @@ export function useSessionAnalytics() {
     if (firstEver) {
       track(ConsoleAction.FirstSession, { referrer: safeReferrerHost() });
     }
+  }, [track]);
 
-    // Reported here rather than when it happened — see markSessionExpired.
-    // The route is the (normalized) page the user was on when they were kicked
-    // out, which is the part worth knowing.
-    const expired = takePendingSessionExpiry();
+  // Reported here rather than when it happened — see markSessionExpired. Keyed
+  // on the subject because it is not known on first render: the user's claims
+  // settle after sign-in, and checking before then would match nobody. The
+  // route is the (normalized) page the user was on when they were kicked out.
+  const reportedExpiryFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!subject || reportedExpiryFor.current === subject) return;
+    reportedExpiryFor.current = subject;
+    const expired = takePendingSessionExpiry(subject);
     if (expired) {
       track(ConsoleAction.SessionExpired, { page: expired.route });
     }
-  }, [track]);
+  }, [track, subject]);
 
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
