@@ -192,8 +192,72 @@ func TestBuildConsoleActionsMetadataIdentifiesConsole(t *testing.T) {
 	if meta["environment"] != "development" || meta["deployment_model"] != "saas" {
 		t.Errorf("deployment context missing: %v", meta)
 	}
-	if meta["page"] != "/orgs/acme/projects/p1" {
-		t.Errorf("page = %v", meta["page"])
+	if meta["route_path"] != "/orgs/acme/projects/p1" {
+		t.Errorf("route_path = %v", meta["route_path"])
+	}
+}
+
+// TestBuildConsoleActionsRouteDoesNotClobberPageDimension: three allowlisted
+// actions declare their own "page" dimension, so the action's route must not
+// be written under that key.
+func TestBuildConsoleActionsRouteDoesNotClobberPageDimension(t *testing.T) {
+	inputs := []ConsoleActionInput{{
+		Action:     "amp.console.navigation.tab-switch",
+		Page:       "/orgs/acme/agents/a1/configure",
+		Dimensions: map[string]interface{}{"page": "configure-agent", "tab": "mcp"},
+	}}
+
+	actions, _ := BuildConsoleActions(inputs, testConsoleContext(), consoleTestConfig())
+	meta := actions[0].Metadata
+
+	if meta["page"] != "configure-agent" {
+		t.Errorf("page dimension = %v, want the reported dimension, not the route", meta["page"])
+	}
+	if meta["route_path"] != "/orgs/acme/agents/a1/configure" {
+		t.Errorf("route_path = %v", meta["route_path"])
+	}
+}
+
+// TestBuildConsoleActionsSanitizesURIs: page and Referer are caller-supplied,
+// and a query string is where identifiers and typed input hide.
+func TestBuildConsoleActionsSanitizesURIs(t *testing.T) {
+	base := testConsoleContext()
+	base.URI = "https://console.example.com/search?q=secret-agent#frag"
+
+	inputs := []ConsoleActionInput{
+		{Action: "amp.console.navigation.page-view", Page: "/orgs/acme/traces?selectedTrace=abc123"},
+		{Action: "amp.console.navigation.page-view"},
+	}
+
+	actions, _ := BuildConsoleActions(inputs, base, consoleTestConfig())
+
+	if got := actions[0].Request.URI; got != "/orgs/acme/traces" {
+		t.Errorf("page URI = %q, want the query stripped", got)
+	}
+	if got := actions[0].Metadata["route_path"]; got != "/orgs/acme/traces" {
+		t.Errorf("route_path = %v, want the query stripped", got)
+	}
+	if got := actions[1].Request.URI; got != "https://console.example.com/search" {
+		t.Errorf("referer URI = %q, want the query and fragment stripped", got)
+	}
+}
+
+// TestBuildConsoleActionsBoundsCallerSuppliedLengths stops an oversized URI or
+// session token reaching the collector, which the generated types do not check.
+func TestBuildConsoleActionsBoundsCallerSuppliedLengths(t *testing.T) {
+	inputs := []ConsoleActionInput{{
+		Action:    "amp.console.navigation.page-view",
+		Page:      "/" + strings.Repeat("p", maxURILength*2),
+		SessionID: strings.Repeat("s", maxSessionIDLength*2),
+	}}
+
+	actions, _ := BuildConsoleActions(inputs, testConsoleContext(), consoleTestConfig())
+
+	if len(actions[0].Request.URI) != maxURILength {
+		t.Errorf("URI length = %d, want %d", len(actions[0].Request.URI), maxURILength)
+	}
+	if len(actions[0].SessionToken) != maxSessionIDLength {
+		t.Errorf("session token length = %d, want %d", len(actions[0].SessionToken), maxSessionIDLength)
 	}
 }
 

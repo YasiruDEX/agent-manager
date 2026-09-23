@@ -120,12 +120,17 @@ export const LogsComponent: React.FC = () => {
   // One action per settled query rather than per keystroke: searchPhrase is
   // already debounced above, and the level filter changes discretely. The
   // phrase is never reported — users grep their own logs for their own data.
+  // Keyed on a string rather than the array: selectedLogLevels is rebuilt by
+  // useMemo on every searchParams change, so depending on it would re-report a
+  // query when only the sort order or an unrelated param moved.
+  const logLevelKey = selectedLogLevels.join(",");
   useEffect(() => {
     track(ConsoleAction.LogQuery, {
       time_range: hasCustomRange ? "custom" : (timeRange ?? "unspecified"),
-      filter_count: selectedLogLevels.length + (searchPhrase ? 1 : 0),
+      filter_count:
+        (logLevelKey ? logLevelKey.split(",").length : 0) + (searchPhrase ? 1 : 0),
     });
-  }, [track, timeRange, hasCustomRange, selectedLogLevels, searchPhrase]);
+  }, [track, timeRange, hasCustomRange, logLevelKey, searchPhrase]);
   const setDebouncedSearch = useMemo(
     () => debounce((searchValue: string) => setSearchPhrase(searchValue), DEBOUNCE_TIME),
     [setSearchPhrase],
