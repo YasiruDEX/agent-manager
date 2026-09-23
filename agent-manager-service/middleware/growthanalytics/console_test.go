@@ -417,3 +417,55 @@ func TestConsoleTaxonomyIsDisjointFromEndpointCodes(t *testing.T) {
 		}
 	}
 }
+
+// TestReportConsoleActionsBoundsInFlightSends: the per-user rate limit bounds
+// any one caller, but a slow collector holding every send open for the full
+// timeout must not grow goroutines with traffic. A full pool sheds the batch.
+func TestReportConsoleActionsBoundsInFlightSends(t *testing.T) {
+	release := make(chan struct{})
+	started := make(chan struct{}, maxInFlightConsoleSends+1)
+
+	original := newConsoleSender
+	newConsoleSender = func(config.GrowthAnalyticsConfig, string) consoleActionSender {
+		return &blockingActionSender{started: started, release: release}
+	}
+	t.Cleanup(func() {
+		newConsoleSender = original
+		close(release)
+	})
+
+	actions, _ := BuildConsoleActions(
+		[]ConsoleActionInput{{Action: "amp.console.navigation.page-view"}},
+		testConsoleContext(), consoleTestConfig())
+
+	// Fill every slot and wait until each send is actually in flight.
+	for i := 0; i < maxInFlightConsoleSends; i++ {
+		ReportConsoleActions(context.Background(), consoleTestConfig(), "caller-jwt", actions)
+	}
+	for i := 0; i < maxInFlightConsoleSends; i++ {
+		select {
+		case <-started:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d of %d sends started", i, maxInFlightConsoleSends)
+		}
+	}
+
+	// The next one has no slot, so it is dropped rather than spawning.
+	ReportConsoleActions(context.Background(), consoleTestConfig(), "caller-jwt", actions)
+	select {
+	case <-started:
+		t.Error("a send started with the pool full; in-flight work is unbounded")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+type blockingActionSender struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingActionSender) SendActions(_ context.Context, _ []moesifcollector.Action) error {
+	b.started <- struct{}{}
+	<-b.release
+	return nil
+}

@@ -23,6 +23,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
@@ -39,6 +41,90 @@ import (
 // hits it, small enough that the endpoint cannot be used to push bulk data
 // through to the collector.
 const maxConsoleActionBatchBytes = 64 << 10
+
+// consoleActionsRefillPerSecond / consoleActionsBurst bound how often one user
+// may report. The console flushes at most every 5s (or when a batch fills), so
+// one request per second with a burst of 10 is far above any real client while
+// still capping a scripted caller. Unlike the size caps below, this bounds the
+// *rate* of outbound work rather than one request's size.
+const (
+	consoleActionsRefillPerSecond = 1
+	consoleActionsBurst           = 10
+)
+
+// consoleActionsLimiterTTL is how long an idle user's bucket is kept. The
+// limiter is keyed by user, so without eviction the map grows once per user
+// forever — a slower version of the problem the limiter exists to prevent.
+const consoleActionsLimiterTTL = 30 * time.Minute
+
+// userRateLimiter is a per-user token bucket. Mirrors tokenBucketLimiter in
+// thunder_ask_routes.go (stdlib only, no external rate-limiting dependency),
+// but keyed, because the limit that matters here is per caller: one busy
+// console must not exhaust a budget shared with every other user.
+type userRateLimiter struct {
+	mu              sync.Mutex
+	buckets         map[string]*userBucket
+	refillPerSecond float64
+	burst           float64
+	lastSweep       time.Time
+}
+
+type userBucket struct {
+	tokens float64
+	last   time.Time
+}
+
+func newUserRateLimiter(refillPerSecond, burst float64) *userRateLimiter {
+	return &userRateLimiter{
+		buckets:         make(map[string]*userBucket),
+		refillPerSecond: refillPerSecond,
+		burst:           burst,
+		lastSweep:       time.Now(),
+	}
+}
+
+// Allow reports whether this user may send now, consuming a token if so.
+func (l *userRateLimiter) Allow(userID string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	l.sweepLocked(now)
+
+	b, ok := l.buckets[userID]
+	if !ok {
+		b = &userBucket{tokens: l.burst, last: now}
+		l.buckets[userID] = b
+	}
+	if elapsed := now.Sub(b.last).Seconds(); elapsed > 0 {
+		b.tokens = min(l.burst, b.tokens+elapsed*l.refillPerSecond)
+		b.last = now
+	}
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+// sweepLocked drops buckets no one has touched for consoleActionsLimiterTTL.
+// Amortized into Allow rather than run on a ticker so the limiter owns no
+// goroutine of its own.
+func (l *userRateLimiter) sweepLocked(now time.Time) {
+	if now.Sub(l.lastSweep) < consoleActionsLimiterTTL {
+		return
+	}
+	l.lastSweep = now
+	for id, b := range l.buckets {
+		if now.Sub(b.last) > consoleActionsLimiterTTL {
+			delete(l.buckets, id)
+		}
+	}
+}
+
+// consoleActionsLimiter bounds per-user reporting. Package-level: the limit is
+// meaningless if it is rebuilt per request.
+var consoleActionsLimiter = newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
 
 // maxConsoleActionsPerBatch mirrors the OpenAPI maxItems. Enforced here too:
 // the generated types do not validate, and this bound is what keeps one
@@ -108,9 +194,11 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !enabled {
-		// Accepted and discarded: the client's contract is unchanged whether
-		// or not this deployment reports anything.
+	claims := jwtassertion.GetTokenClaims(r.Context())
+	if claims == nil {
+		// The route is behind the auth middleware, so this is an upstream bug
+		// rather than an unauthenticated caller.
+		log.Error("telemetry: no token claims on console-actions request, dropping batch")
 		utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
 			Accepted: 0,
 			Dropped:  int32(len(req.Actions)),
@@ -118,11 +206,24 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := jwtassertion.GetTokenClaims(r.Context())
-	if claims == nil {
-		// The route is behind the auth middleware, so this is an upstream bug
-		// rather than an unauthenticated caller.
-		log.Error("telemetry: no token claims on console-actions request, dropping batch")
+	// Rate-limited per user, after authentication so the key is a real
+	// identity rather than something a caller picks. 429 rather than a silent
+	// 202: a client hitting this is malfunctioning or hostile, and telemetry is
+	// the one thing that must never be retried into a limit — the console
+	// drops its buffer on any failure, which is the behaviour we want here.
+	if !consoleActionsLimiter.Allow(claims.Sub) {
+		utils.WriteErrorResponse(w, http.StatusTooManyRequests,
+			"console action reporting rate limit exceeded")
+		return
+	}
+
+	// Checked after the rate limit, not before: the limit must hold whether or
+	// not this deployment forwards anything, or a deployment with reporting
+	// switched off would leave the endpoint an unbounded, authenticated way to
+	// make the service parse 64 KB of JSON per request.
+	if !enabled {
+		// Accepted and discarded: the client's contract is unchanged whether
+		// or not this deployment reports anything.
 		utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
 			Accepted: 0,
 			Dropped:  int32(len(req.Actions)),

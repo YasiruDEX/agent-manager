@@ -80,6 +80,24 @@ const maxSessionIDLength = 64
 // unreachable collector must not accumulate background goroutines.
 const consoleActionSendTimeout = 10 * time.Second
 
+// maxInFlightConsoleSends caps how many batches may be in flight at once.
+//
+// The per-user rate limit on the ingest route bounds any single caller, but not
+// the fleet: enough consoles reporting at once — or one slow collector holding
+// every send open for the full timeout — would otherwise grow goroutines and
+// outbound connections without limit. This is the backstop that makes the
+// worst case a fixed cost rather than a function of traffic.
+//
+// Telemetry is the right thing to shed under pressure, so a full pool drops the
+// batch instead of queueing it: a queue deep enough to matter is just a slower
+// way to run out of memory, and a stale action is worth less than the headroom
+// it costs.
+const maxInFlightConsoleSends = 32
+
+// consoleSendSlots is a counting semaphore; a token is held for the duration of
+// one send.
+var consoleSendSlots = make(chan struct{}, maxInFlightConsoleSends)
+
 // consoleActions is the closed set of console actions this service will
 // forward, mapped to the dimension keys each one may carry.
 //
@@ -362,12 +380,24 @@ func ReportConsoleActions(
 		return
 	}
 
+	// Claimed before the goroutine starts, not inside it: acquiring after the
+	// spawn would let unbounded goroutines pile up waiting for a slot, which is
+	// the thing being bounded.
+	select {
+	case consoleSendSlots <- struct{}{}:
+	default:
+		slog.Warn("growthanalytics: console action send pool is full, dropping batch",
+			"actions", len(actions), "maxInFlight", maxInFlightConsoleSends)
+		return
+	}
+
 	sender := newConsoleSender(ga, token)
 	// context.WithoutCancel: the request context is cancelled the moment the
 	// 202 is written, which is before this send would otherwise finish.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), consoleActionSendTimeout)
 
 	go func() {
+		defer func() { <-consoleSendSlots }()
 		defer cancel()
 		defer func() {
 			if rec := recover(); rec != nil {

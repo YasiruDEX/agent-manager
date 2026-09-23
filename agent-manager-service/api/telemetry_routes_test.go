@@ -24,6 +24,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 )
@@ -151,5 +152,73 @@ func TestConsoleActionsWithoutClaimsDoesNotPanic(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Errorf("status = %d, want 202", w.Code)
+	}
+}
+
+// TestConsoleActionsRateLimitsPerUser: the endpoint is designed to be called
+// continuously, so an authenticated caller must not be able to drive unbounded
+// outbound work by looping batches.
+func TestConsoleActionsRateLimitsPerUser(t *testing.T) {
+	original := consoleActionsLimiter
+	consoleActionsLimiter = newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
+	t.Cleanup(func() { consoleActionsLimiter = original })
+
+	body := `{"actions":[{"action":"amp.console.navigation.page-view"}]}`
+
+	// The burst is spendable...
+	for i := 0; i < consoleActionsBurst; i++ {
+		w := httptest.NewRecorder()
+		handleConsoleActions(w, consoleActionsRequest(t, body))
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("request %d within burst → %d, want 202", i, w.Code)
+		}
+	}
+
+	// ...and then exhausted.
+	w := httptest.NewRecorder()
+	handleConsoleActions(w, consoleActionsRequest(t, body))
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("request past burst → %d, want 429", w.Code)
+	}
+}
+
+// TestConsoleActionsRateLimitIsPerUserNotGlobal: one busy console must not
+// spend the budget of every other user.
+func TestConsoleActionsRateLimitIsPerUserNotGlobal(t *testing.T) {
+	original := consoleActionsLimiter
+	consoleActionsLimiter = newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
+	t.Cleanup(func() { consoleActionsLimiter = original })
+
+	for i := 0; i <= consoleActionsBurst; i++ {
+		consoleActionsLimiter.Allow("noisy-user")
+	}
+
+	if !consoleActionsLimiter.Allow("quiet-user") {
+		t.Error("a second user was refused after the first exhausted its own budget")
+	}
+}
+
+// TestUserRateLimiterEvictsIdleBuckets: the limiter is keyed by user, so
+// without eviction it leaks one bucket per user seen — a slower version of the
+// exhaustion it exists to prevent.
+func TestUserRateLimiterEvictsIdleBuckets(t *testing.T) {
+	l := newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
+	l.Allow("old-user")
+
+	// Age the bucket and the sweep clock past the TTL.
+	l.mu.Lock()
+	l.buckets["old-user"].last = time.Now().Add(-2 * consoleActionsLimiterTTL)
+	l.lastSweep = time.Now().Add(-2 * consoleActionsLimiterTTL)
+	l.mu.Unlock()
+
+	l.Allow("new-user")
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, ok := l.buckets["old-user"]; ok {
+		t.Error("idle bucket was not evicted")
+	}
+	if _, ok := l.buckets["new-user"]; !ok {
+		t.Error("active bucket was evicted")
 	}
 }
