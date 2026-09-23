@@ -19,6 +19,7 @@
 import { Box, IconButton, Tooltip } from "@wso2/oxygen-ui";
 import { Copy as ContentCopy } from "@wso2/oxygen-ui-icons-react";
 import { useState } from "react";
+import { ConsoleAction, useTrack } from "@agent-management-platform/api-client";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { materialOceanic } from "react-syntax-highlighter/dist/esm/styles/prism";
 
@@ -26,6 +27,11 @@ interface CodeBlockProps {
     code: string;
     language?: string;
     showCopyButton?: boolean;
+    /**
+     * Identifies which snippet this is. Doubles as the analytics label for a
+     * copy, so prefer something descriptive ("gateway-setup-command",
+     * "otel-endpoint") over the default.
+     */
     fieldId?: string;
 }
 
@@ -36,11 +42,18 @@ export const CodeBlock = ({
     fieldId = "code"
 }: CodeBlockProps) => {
     const [copiedField, setCopiedField] = useState<string | null>(null);
+    const { track } = useTrack();
 
     const handleCopy = async () => {
         try {
             await navigator.clipboard.writeText(code);
             setCopiedField(fieldId);
+            // Which snippet was taken, never its contents — these blocks render
+            // connection strings, setup commands and, on some pages, keys.
+            track(ConsoleAction.CopySnippet, {
+                snippet_type: fieldId,
+                language,
+            });
             setTimeout(() => setCopiedField(null), 2000);
         } catch {
             // Failed to copy - silently fail

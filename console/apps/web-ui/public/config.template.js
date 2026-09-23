@@ -93,6 +93,7 @@ window.__RUNTIME_CONFIG__ = {
     enableUserManagement: '$FEATURE_FLAG_ENABLE_USER_MANAGEMENT' === 'true',
     enableAgentIdentity: true,
   },
+  analyticsEnabled: '$ANALYTICS_ENABLED' === 'true',
   docsUrl: '$DOCS_URL',
   footerLinks: {
     privacyPolicyUrl: 'https://wso2.com/agent-platform/agent-manager/',
