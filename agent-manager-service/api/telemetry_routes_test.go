@@ -288,3 +288,35 @@ func TestTruncateUserAgentBoundsAmplification(t *testing.T) {
 		t.Errorf("a normal user agent was altered: %q", got)
 	}
 }
+
+// TestUserRateLimiterReportsThrottlingOncePerEpisode: a 429 is data the console
+// drops for good, so the first refusal is logged — but only the first, or a
+// caller looping into the limit would turn the warning into a log flood.
+func TestUserRateLimiterReportsThrottlingOncePerEpisode(t *testing.T) {
+	l := newUserRateLimiter(consoleActionsRefillPerSecond, consoleActionsBurst)
+	for i := 0; i < consoleActionsBurst; i++ {
+		if ok, _ := l.AllowWithTransition("user-1"); !ok {
+			t.Fatalf("request %d within burst was refused", i)
+		}
+	}
+
+	if ok, first := l.AllowWithTransition("user-1"); ok || !first {
+		t.Fatalf("first refusal: allowed=%v newlyThrottled=%v, want false/true", ok, first)
+	}
+	for i := 0; i < 5; i++ {
+		if ok, first := l.AllowWithTransition("user-1"); ok || first {
+			t.Fatalf("repeat refusal %d: allowed=%v newlyThrottled=%v, want false/false", i, ok, first)
+		}
+	}
+
+	// Once allowed again, the next refusal is a new episode and is reported.
+	l.mu.Lock()
+	l.buckets["user-1"].tokens = 1
+	l.mu.Unlock()
+	if ok, _ := l.AllowWithTransition("user-1"); !ok {
+		t.Fatal("refilled request was refused")
+	}
+	if _, first := l.AllowWithTransition("user-1"); !first {
+		t.Error("a refusal after recovery was not reported as a new episode")
+	}
+}
