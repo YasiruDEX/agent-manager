@@ -44,6 +44,7 @@ package growthanalytics
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/moesifcollector"
@@ -64,6 +65,15 @@ const (
 // or an attempt to smuggle a payload through a dimension; truncating keeps a
 // usable value rather than dropping the whole action over it.
 const maxDimensionValueLength = 256
+
+// maxURILength bounds a reported page/route. Matches the OpenAPI maxLength for
+// ConsoleAction.page; enforced here too, since the generated types do not
+// validate and this value reaches Moesif as an event URI.
+const maxURILength = 512
+
+// maxSessionIDLength bounds the client-generated session token, matching the
+// OpenAPI maxLength for the same reason.
+const maxSessionIDLength = 64
 
 // consoleActionSendTimeout bounds the detached goroutine that forwards a
 // batch, for the same reason eventSendTimeout bounds a single event: an
@@ -219,9 +229,15 @@ func BuildConsoleActions(
 			occurred = now
 		}
 
-		uri := base.URI
-		if in.Page != "" {
-			uri = in.Page
+		// Both URI sources are caller-supplied: Page comes from the request
+		// body, and base.URI from the Referer header. The console strips query
+		// strings before sending, but nothing stops another client from
+		// posting a URI with a query, a fragment, or an unbounded length — so
+		// the trimming is redone here rather than trusted.
+		page := sanitizeURI(in.Page)
+		uri := sanitizeURI(base.URI)
+		if page != "" {
+			uri = page
 		}
 
 		metadata := buildMetadata(
@@ -232,8 +248,12 @@ func BuildConsoleActions(
 			ga.Environment,
 			SourceConsole,
 		)
-		if in.Page != "" {
-			metadata["page"] = truncate(in.Page)
+		if page != "" {
+			// Deliberately not "page": three allowlisted actions (tab-switch,
+			// filter-applied, session-expired) declare a dimension of that
+			// name, and writing the route here would silently overwrite the
+			// value the action actually reported.
+			metadata["route_path"] = page
 		}
 
 		actions = append(actions, moesifcollector.Action{
@@ -246,7 +266,7 @@ func BuildConsoleActions(
 			},
 			UserID:       base.UserID,
 			CompanyID:    base.CompanyID,
-			SessionToken: in.SessionID,
+			SessionToken: truncateTo(in.SessionID, maxSessionIDLength),
 			Metadata:     metadata,
 		})
 	}
@@ -283,10 +303,30 @@ func sanitizeDimensions(in map[string]interface{}, allowed map[string]bool) map[
 }
 
 func truncate(s string) string {
-	if len(s) <= maxDimensionValueLength {
+	return truncateTo(s, maxDimensionValueLength)
+}
+
+func truncateTo(s string, max int) string {
+	if len(s) <= max {
 		return s
 	}
-	return s[:maxDimensionValueLength]
+	return s[:max]
+}
+
+// sanitizeURI strips anything after the path from a caller-supplied URI and
+// bounds its length.
+//
+// A query string or fragment is where identifiers and free-form input hide —
+// a search term, a selected trace, a filter value — so neither belongs in
+// telemetry even when a well-behaved client already removes them.
+func sanitizeURI(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if idx := strings.IndexAny(raw, "?#"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	return truncateTo(raw, maxURILength)
 }
 
 // newConsoleSender builds the sender used to forward a batch. A package var so

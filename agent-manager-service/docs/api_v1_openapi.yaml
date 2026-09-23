@@ -12032,7 +12032,10 @@ components:
           description: |
             When the user did this, per the browser clock. The server uses it
             as-is so the ordering within a buffered flush survives, and falls
-            back to receipt time when it is missing or unparseable.
+            back to receipt time when it is absent. A value present but not
+            RFC 3339 fails decoding and makes the whole batch malformed (400)
+            — the client controls this field, so a bad value is a client bug
+            worth surfacing rather than silently rewriting.
         page:
           type: string
           description: |

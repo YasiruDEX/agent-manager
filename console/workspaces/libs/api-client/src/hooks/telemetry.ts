@@ -32,6 +32,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   reportConsoleActions,
   reportConsoleActionsOnUnload,
@@ -163,25 +164,51 @@ export function sanitizePage(path: string): string {
 }
 
 /**
- * Segments whose *following* path element is an identifier rather than a
- * fixed part of the route.
+ * Every absolute route template the app declares, longest first so the most
+ * specific match wins.
+ *
+ * Derived from the generated route map rather than hand-listed. A hand-listed
+ * set silently stops covering routes as they are added or renamed, and the
+ * failure mode is not a missing metric — it is a customer's org, project or
+ * agent name being exported to Moesif in a URL.
  */
-const ID_BEARING_SEGMENTS: Record<string, string> = {
-  orgs: ":orgId",
-  projects: ":projectId",
-  agents: ":agentId",
-  environment: ":envId",
-  monitor: ":monitorId",
-  traces: ":traceId",
-  "llm-providers": ":providerId",
-  "mcp-proxies": ":proxyId",
-  gateways: ":gatewayId",
-};
+const ROUTE_TEMPLATES: string[] = (() => {
+  const out: string[] = [];
+  const walk = (node: { path?: string; children?: Record<string, unknown> }) => {
+    if (typeof node?.path === "string" && node.path.startsWith("/")) {
+      out.push(node.path);
+    }
+    for (const child of Object.values(node?.children ?? {})) {
+      walk(child as { path?: string; children?: Record<string, unknown> });
+    }
+  };
+  try {
+    walk(absoluteRouteMap as unknown as { path?: string; children?: Record<string, unknown> });
+  } catch {
+    // A malformed map must not stop the console from booting; normalizeRoute
+    // falls back to masking every unrecognized segment.
+  }
+  return out.sort((a, b) => b.length - a.length);
+})();
+
+/** The static (non-parameter) segments of every declared route. */
+const STATIC_SEGMENTS: Set<string> = new Set(
+  ROUTE_TEMPLATES.flatMap((template) =>
+    template.split("/").filter((segment) => segment && !segment.startsWith(":")),
+  ),
+);
+
+function segmentsMatchTemplate(path: string[], template: string[]): boolean {
+  if (path.length !== template.length) return false;
+  return template.every(
+    (segment, i) => segment.startsWith(":") || segment === path[i],
+  );
+}
 
 /**
  * Rewrites a concrete console path into its route template, e.g.
- * `/orgs/acme/projects/checkout/agents/router/deploy` →
- * `/orgs/:orgId/projects/:projectId/agents/:agentId/deploy`.
+ * `/org/acme/project/checkout/agents/router/deploy` →
+ * `/org/:orgId/project/:projectId/agents/:agentId/deploy`.
  *
  * Two reasons, both load-bearing. Analytics wants the template: a hundred
  * distinct agent URLs are one page, and the raw paths would shard every
@@ -189,18 +216,32 @@ const ID_BEARING_SEGMENTS: Record<string, string> = {
  * customer-chosen names — org, project and agent handles — which telemetry has
  * no reason to export. The organization is already identified server-side by
  * the token's company_id, so nothing is lost by dropping them.
+ *
+ * Matching is against the declared templates first. When nothing matches — a
+ * path deeper than the map, or a route added outside it — every segment that
+ * is not a known static segment is masked as `:id`. That fallback is a
+ * whitelist on purpose: an unrecognized segment is far more likely to be an
+ * identifier than a new keyword, and guessing wrong in the other direction
+ * leaks it.
  */
 export function normalizeRoute(path: string): string {
-  const segments = sanitizePage(path).split("/");
-  return segments
-    .map((segment, index) => {
-      const parent = segments[index - 1];
-      if (parent && ID_BEARING_SEGMENTS[parent] && segment !== "") {
-        return ID_BEARING_SEGMENTS[parent];
-      }
-      return segment;
-    })
-    .join("/");
+  const clean = sanitizePage(path);
+  const segments = clean.split("/").filter(Boolean);
+  if (segments.length === 0) return "/";
+
+  for (const template of ROUTE_TEMPLATES) {
+    const templateSegments = template.split("/").filter(Boolean);
+    if (segmentsMatchTemplate(segments, templateSegments)) {
+      return "/" + templateSegments.join("/");
+    }
+  }
+
+  return (
+    "/" +
+    segments
+      .map((segment) => (STATIC_SEGMENTS.has(segment) ? segment : ":id"))
+      .join("/")
+  );
 }
 
 /**
@@ -241,6 +282,14 @@ export function useTrack() {
       flushTimer = undefined;
     }
     if (buffer.length === 0) {
+      return;
+    }
+    if (!tokenProvider) {
+      // Nothing has registered a token source yet (pre-auth, or a tree without
+      // the app shell). Sending now would post the batch with no Authorization
+      // header and be rejected, so drop it instead of holding actions that
+      // will only grow staler.
+      buffer = [];
       return;
     }
 
@@ -335,7 +384,12 @@ export function useTrack() {
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        void flush();
+        // Not flush(): in Chromium a closing tab can fire visibilitychange
+        // before pagehide, and flush() awaits the token before sending, so the
+        // request is cancelled during teardown while the buffer it already
+        // took is gone. flushOnUnload survives teardown and is equally correct
+        // when the tab merely goes to the background.
+        flushOnUnload();
       }
     };
 
