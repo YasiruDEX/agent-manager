@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EnvironmentSelector } from "@agent-management-platform/shared-component";
 import { LogsPanel, PageLayout, TimeRangeSelector, useTimeRangeParams } from "@agent-management-platform/views";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -124,13 +124,29 @@ export const LogsComponent: React.FC = () => {
   // useMemo on every searchParams change, so depending on it would re-report a
   // query when only the sort order or an unrelated param moved.
   const logLevelKey = selectedLogLevels.join(",");
+  const logQueryKey = [
+    hasCustomRange ? "custom" : (timeRange ?? "unspecified"),
+    logLevelKey,
+    searchPhrase ? "q" : "",
+  ].join("|");
+
+  // Seeded with the query the page opens on, so the first effect run reports
+  // nothing: arriving at Logs is a page view, not a query, and counting it as
+  // one would make this metric a copy of page views. Seeding (rather than a
+  // "first run" flag) also survives StrictMode's double-invoke in dev, where a
+  // flag would let the second run through.
+  const lastReportedQuery = useRef(logQueryKey);
   useEffect(() => {
+    if (lastReportedQuery.current === logQueryKey) {
+      return;
+    }
+    lastReportedQuery.current = logQueryKey;
     track(ConsoleAction.LogQuery, {
       time_range: hasCustomRange ? "custom" : (timeRange ?? "unspecified"),
       filter_count:
         (logLevelKey ? logLevelKey.split(",").length : 0) + (searchPhrase ? 1 : 0),
     });
-  }, [track, timeRange, hasCustomRange, logLevelKey, searchPhrase]);
+  }, [track, timeRange, hasCustomRange, logLevelKey, searchPhrase, logQueryKey]);
   const setDebouncedSearch = useMemo(
     () => debounce((searchValue: string) => setSearchPhrase(searchValue), DEBOUNCE_TIME),
     [setSearchPhrase],
