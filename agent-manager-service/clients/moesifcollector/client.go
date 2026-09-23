@@ -59,6 +59,30 @@ type EventResponse struct {
 	Status int    `json:"status"`
 }
 
+// Action is a single user action, in the shape the moesif-collector-api's
+// POST /v1/actions operation expects. Actions are a distinct object type in
+// Moesif from Events: events model API calls, actions model what a person did
+// in a UI. Console telemetry is reported as actions so it never lands in — or
+// skews the metrics computed over — the API-call event stream, while still
+// joining to it on user_id/company_id.
+type Action struct {
+	ActionName   string                 `json:"action_name"`
+	Request      ActionRequest          `json:"request"`
+	UserID       string                 `json:"user_id,omitempty"`
+	CompanyID    string                 `json:"company_id,omitempty"`
+	SessionToken string                 `json:"session_token,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// ActionRequest is the request context of an Action: where and when the user
+// was when they did it. Moesif requires time and uri on every action.
+type ActionRequest struct {
+	Time            string `json:"time"`
+	URI             string `json:"uri"`
+	IPAddress       string `json:"ip_address,omitempty"`
+	UserAgentString string `json:"user_agent_string,omitempty"`
+}
+
 // Client posts events to a moesif-collector-api instance.
 type Client struct {
 	httpClient requests.HttpClient
@@ -110,6 +134,39 @@ func (c *Client) SendEvent(ctx context.Context, evt Event) error {
 	}
 	if status := result.StatusCode(); status < 200 || status >= 300 {
 		return fmt.Errorf("moesifcollector: send event: unexpected status %d", status)
+	}
+	return nil
+}
+
+// SendActions posts a batch of user actions to POST /v1/actions/batch.
+//
+// Always the batch endpoint, even for one action: console telemetry arrives
+// pre-batched from the browser, and using a single path keeps the proxy's
+// allowed-operation list and this client's error handling from having to care
+// how many actions a flush happened to carry. An empty slice is a no-op rather
+// than an empty POST.
+func (c *Client) SendActions(ctx context.Context, actions []Action) error {
+	if len(actions) == 0 {
+		return nil
+	}
+
+	req := &requests.HttpRequest{
+		Name:   "moesifcollector.SendActions",
+		URL:    c.baseURL + "/v1/actions/batch",
+		Method: http.MethodPost,
+	}
+	req.SetJson(actions)
+	req.SetHeader("Authorization", "Bearer "+c.token)
+	if c.hostHeader != "" {
+		req.SetHost(c.hostHeader)
+	}
+
+	result := requests.SendRequest(ctx, c.httpClient, req)
+	if err := result.Err(); err != nil {
+		return fmt.Errorf("moesifcollector: send actions: %w", err)
+	}
+	if status := result.StatusCode(); status < 200 || status >= 300 {
+		return fmt.Errorf("moesifcollector: send actions: unexpected status %d", status)
 	}
 	return nil
 }

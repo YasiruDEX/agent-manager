@@ -11,6 +11,7 @@ import { useSnackBar } from "@agent-management-platform/views";
 import { useEffect, useRef } from "react";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { isRequestTooLargeError } from "../utils";
+import { ConsoleAction, useTrack } from "./telemetry";
 
 type MutationAction =
   | "assign"
@@ -302,6 +303,15 @@ export function useApiQuery<
   return query;
 }
 
+/** Pulls the HTTP status off the error the http helpers throw, if present. */
+function errorStatus(error: unknown): number | undefined {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = (error as { status: unknown }).status;
+    return typeof status === "number" ? status : undefined;
+  }
+  return undefined;
+}
+
 export function useApiMutation<
   TData = unknown,
   TError = unknown,
@@ -312,6 +322,12 @@ export function useApiMutation<
 ): UseMutationResult<TData, TError, TVariables, TContext> {
   const { pushSnackBar } = useSnackBar();
   const { isAuthenticated, logout } = useAuthHooks();
+  // Every error the user is actually shown is reported as one friction
+  // action. Hooked in here rather than at each call site because this is the
+  // single place that decides an error becomes visible — instrumenting the
+  // wrapper means no mutation can add a user-facing failure that analytics
+  // never hears about.
+  const { track } = useTrack();
   const {
     action,
     successMessage,
@@ -359,6 +375,13 @@ export function useApiMutation<
             extractServerErrorMessage(error, { maxReasonLength: MAX_SNACKBAR_REASON_LENGTH }) ??
             fallbackMessage,
           type: "error",
+        });
+
+        track(ConsoleAction.ErrorShown, {
+          operation: action ? `${action.verb}:${action.target}` : "unknown",
+          // The status is the fact worth keeping; the message is not reported,
+          // since a server error string can quote the payload that caused it.
+          status: errorStatus(error) ?? 0,
         });
       }
 

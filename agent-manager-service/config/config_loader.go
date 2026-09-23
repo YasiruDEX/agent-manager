@@ -162,6 +162,7 @@ func loadEnvs() {
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
 	config.GrowthAnalytics = GrowthAnalyticsConfig{
 		Enabled:                   r.readOptionalBool("MOESIF_ENABLED", true),
+		ConsoleEnabled:            r.readOptionalBool("CONSOLE_ANALYTICS_ENABLED", true),
 		MoesifCollectorBaseURL:    r.readOptionalString("MOESIF_COLLECTOR_BASE_URL", ""),
 		MoesifCollectorHostHeader: r.readOptionalString("MOESIF_COLLECTOR_HOST_HEADER", ""),
 		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "saas"),
@@ -576,7 +577,12 @@ func logGrowthAnalyticsState(ga GrowthAnalyticsConfig, alreadyWarned bool) {
 		slog.Info("growthanalytics: feature-usage tracking enabled",
 			"collector", ga.MoesifCollectorBaseURL,
 			"environment", ga.Environment,
-			"deploymentModel", ga.DeploymentModel)
+			"deploymentModel", ga.DeploymentModel,
+			"consoleActions", ga.ConsoleEnabled)
+		if !ga.ConsoleEnabled {
+			slog.Info("growthanalytics: console action tracking disabled (CONSOLE_ANALYTICS_ENABLED is false); " +
+				"endpoint feature-usage events are unaffected")
+		}
 	}
 }
 

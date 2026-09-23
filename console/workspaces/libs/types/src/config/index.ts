@@ -117,6 +117,17 @@ export interface AppConfig {
   };
   /** Feature flags. All default to false (disabled) unless explicitly enabled. */
   featureFlags?: FeatureFlags;
+  /**
+   * Turns console usage analytics on or off. When false (the default when the
+   * deployment does not set it), the console buffers and sends nothing — no
+   * telemetry request is made at all.
+   *
+   * Load-time like everything else under globalConfig, and independent of the
+   * service-side CONSOLE_ANALYTICS_ENABLED: this decides whether the browser
+   * reports, that decides whether the service forwards. Either one off means
+   * nothing reaches Moesif.
+   */
+  analyticsEnabled?: boolean;
 }
 
 export type FeatureFlags = {

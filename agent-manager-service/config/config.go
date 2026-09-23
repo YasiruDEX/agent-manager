@@ -328,6 +328,18 @@ type GrowthAnalyticsConfig struct {
 	// intent — this does. Both must be set for anything to be exported.
 	// Mirrors MOESIF_ENABLED on billing-service and platform-api-service.
 	Enabled bool
+	// ConsoleEnabled is a second, narrower switch covering only the console
+	// action stream (POST /telemetry/console-actions → Moesif's Actions API),
+	// held separately from Enabled because the two streams have wildly
+	// different volumes: console actions include page views and are driven by
+	// UI interaction, so they can arrive orders of magnitude more often than
+	// the endpoint events Enabled governs. Turning the noisy stream off must
+	// not also blind the feature-usage tracking that Track produces.
+	//
+	// It is an AND, not an override: console reporting needs Enabled,
+	// ConsoleEnabled and MoesifCollectorBaseURL all set. MOESIF_ENABLED=false
+	// still means "this deployment reports nothing to Moesif".
+	ConsoleEnabled bool
 	// MoesifCollectorBaseURL is the proxy's base URL, e.g.
 	// "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
 	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev

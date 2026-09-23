@@ -20,12 +20,26 @@ import { useAuthHooks } from "@agent-management-platform/auth";
 import { FullPageLoader } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { Navigate, useLocation, generatePath, useParams } from "react-router-dom";
-import { useListOrganizations, useListProjects } from "@agent-management-platform/api-client";
+import { useEffect } from "react";
+import {
+    useListOrganizations,
+    useListProjects,
+    setTelemetryTokenProvider,
+} from "@agent-management-platform/api-client";
 import { ErrorPages, getErrorMessage } from "@agent-management-platform/shared-component";
 
 export const Protected = ({ children }: { children: React.ReactNode }) => {
-    const { isAuthenticated, isLoadingIsAuthenticated, logout } = useAuthHooks();
+    const { isAuthenticated, isLoadingIsAuthenticated, logout, getToken } = useAuthHooks();
     const location = useLocation();
+
+    // Hand telemetry its token source once, here, where auth is already in
+    // context. useTrack deliberately does not read auth itself — see
+    // setTelemetryTokenProvider — so that instrumenting a button does not give
+    // that button an auth-provider requirement.
+    useEffect(() => {
+        setTelemetryTokenProvider(isAuthenticated ? getToken : undefined);
+        return () => setTelemetryTokenProvider(undefined);
+    }, [isAuthenticated, getToken]);
     const {
         data: organizations,
         isLoading: isLoadingOrganizations,

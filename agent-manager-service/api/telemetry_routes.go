@@ -1,0 +1,195 @@
+// Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+
+	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
+	"github.com/wso2/agent-manager/agent-manager-service/spec"
+	"github.com/wso2/agent-manager/agent-manager-service/utils"
+)
+
+// maxConsoleActionBatchBytes caps a single telemetry flush. The console sends
+// at most 50 small actions per flush, so this is roughly an order of magnitude
+// of headroom over the largest legitimate batch — enough that a client never
+// hits it, small enough that the endpoint cannot be used to push bulk data
+// through to the collector.
+const maxConsoleActionBatchBytes = 64 << 10
+
+// maxConsoleActionsPerBatch mirrors the OpenAPI maxItems. Enforced here too:
+// the generated types do not validate, and this bound is what keeps one
+// request from fanning out into an unbounded collector payload.
+const maxConsoleActionsPerBatch = 50
+
+// registerTelemetryRoutes registers the console's analytics ingest endpoint.
+//
+// Registered with plain HandleFuncWithValidation — deliberately, and listed in
+// api.unguardedRouteAllowlist. There is no meaningful permission to demand:
+// the endpoint lets an authenticated user report their own UI activity, under
+// their own identity, to a telemetry sink. Gating it on an RBAC permission
+// would mean granting that permission to every role that can open the console
+// (i.e. all of them), which states a rule without enforcing anything, and
+// would silently blind analytics for any role that missed the grant.
+//
+// It takes no controller: the handler owns no state beyond config, has no
+// service or repository layer beneath it, and persists nothing. Routing it
+// through the wire graph would add a controller, a provider and a mock for a
+// function that validates a list and hands it to a client.
+func registerTelemetryRoutes(rr *middleware.RouteRegistrar) {
+	rr.HandleFuncWithValidation("POST /telemetry/console-actions", handleConsoleActions)
+}
+
+// handleConsoleActions accepts a batch of console UI actions and forwards the
+// recognized ones to the analytics collector.
+//
+// It answers 202 for every well-formed batch, including one where the
+// allowlist dropped every action. The console must never retry telemetry and
+// must never show the user an error for it, so the only failures worth
+// reporting are the ones that mean the client is malformed — a body that is
+// not a batch, or one too large to be a real flush.
+func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
+	log := logger.GetLogger(r.Context())
+	ga := config.GetConfig().GrowthAnalytics
+
+	// Checked per request rather than at registration time (as Track does),
+	// because the route must keep answering 202 with reporting switched off:
+	// a 404 would make every console in the fleet log a failed telemetry call
+	// on every flush.
+	enabled := growthanalytics.ConsoleEnabled(ga)
+
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxConsoleActionBatchBytes))
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			utils.WriteErrorResponse(w, http.StatusRequestEntityTooLarge,
+				"console action batch exceeds the accepted size")
+			return
+		}
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "failed to read console action batch")
+		return
+	}
+
+	var req spec.ConsoleActionBatchRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "malformed console action batch")
+		return
+	}
+	if len(req.Actions) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "console action batch contains no actions")
+		return
+	}
+	if len(req.Actions) > maxConsoleActionsPerBatch {
+		utils.WriteErrorResponse(w, http.StatusRequestEntityTooLarge,
+			"console action batch contains too many actions")
+		return
+	}
+
+	if !enabled {
+		// Accepted and discarded: the client's contract is unchanged whether
+		// or not this deployment reports anything.
+		utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
+			Accepted: 0,
+			Dropped:  int32(len(req.Actions)),
+		})
+		return
+	}
+
+	claims := jwtassertion.GetTokenClaims(r.Context())
+	if claims == nil {
+		// The route is behind the auth middleware, so this is an upstream bug
+		// rather than an unauthenticated caller.
+		log.Error("telemetry: no token claims on console-actions request, dropping batch")
+		utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
+			Accepted: 0,
+			Dropped:  int32(len(req.Actions)),
+		})
+		return
+	}
+
+	inputs := make([]growthanalytics.ConsoleActionInput, 0, len(req.Actions))
+	for _, a := range req.Actions {
+		in := growthanalytics.ConsoleActionInput{
+			Action:     a.Action,
+			Dimensions: a.Dimensions,
+		}
+		if a.OccurredAt != nil {
+			in.OccurredAt = *a.OccurredAt
+		}
+		if a.Page != nil {
+			in.Page = *a.Page
+		}
+		if a.SessionId != nil {
+			in.SessionID = *a.SessionId
+		}
+		inputs = append(inputs, in)
+	}
+
+	// Identity is taken from the token, never from the payload: the browser
+	// reports what happened, the server decides who it happened to. OuId
+	// rather than middleware.OUIDFromRequest because this route is not
+	// org-scoped — see registerTelemetryRoutes — so RequireOrgMatch, which is
+	// what populates the resolved-org context, never runs for it.
+	actions, dropped := growthanalytics.BuildConsoleActions(inputs, growthanalytics.ConsoleContext{
+		UserID:    claims.Sub,
+		CompanyID: claims.OuId,
+		IPAddress: consoleClientIP(r),
+		UserAgent: r.UserAgent(),
+		URI:       r.Referer(),
+	}, ga)
+
+	if dropped > 0 {
+		// Worth a log line rather than silence: the usual cause is a console
+		// build emitting an action this service does not know yet, which is
+		// invisible in Moesif precisely because the action never arrives.
+		log.Warn("telemetry: dropped unrecognized console actions",
+			"dropped", dropped, "accepted", len(actions))
+	}
+
+	growthanalytics.ReportConsoleActions(r.Context(), ga, jwtassertion.GetJWTFromContext(r.Context()), actions)
+
+	utils.WriteSuccessResponse(w, http.StatusAccepted, spec.ConsoleActionBatchResponse{
+		Accepted: int32(len(actions)),
+		Dropped:  int32(dropped),
+	})
+}
+
+// consoleClientIP resolves the reporting browser's address, preferring the
+// proxy-supplied forwarded header over the immediate peer. Mirrors
+// growthanalytics.clientIP, which is unexported.
+func consoleClientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		if idx := strings.IndexByte(fwd, ','); idx >= 0 {
+			return strings.TrimSpace(fwd[:idx])
+		}
+		return strings.TrimSpace(fwd)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
