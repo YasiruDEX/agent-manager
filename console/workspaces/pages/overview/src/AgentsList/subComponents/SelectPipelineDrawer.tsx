@@ -63,6 +63,7 @@ export function SelectPipelineDrawer({
       return;
     }
     addConfirmation({
+      analytics: { entity: "deployment-pipeline", action: "discard-changes" },
       title: "Discard changes?",
       description: "You have an unsaved pipeline selection. Closing now will discard it.",
       confirmButtonText: "Discard",
