@@ -28,18 +28,28 @@ interface CodeBlockProps {
     language?: string;
     showCopyButton?: boolean;
     /**
-     * Identifies which snippet this is. Doubles as the analytics label for a
-     * copy, so prefer something descriptive ("gateway-setup-command",
-     * "otel-endpoint") over the default.
+     * Identifies this block among its siblings, so only the one just copied
+     * shows "Copied!". May be interpolated per item when a list renders several
+     * blocks — which is exactly why it must not be used as the analytics label.
      */
     fieldId?: string;
+    /**
+     * Stable analytics label for this snippet, e.g. "token-curl". Must be a
+     * constant: it becomes the snippet_type dimension, so an interpolated value
+     * would export whatever it interpolates (a customer's provider or agent
+     * name) and shard the metric one bucket per item. Defaults to fieldId,
+     * which is safe only while that is itself a constant — pass this explicitly
+     * whenever fieldId is not.
+     */
+    analyticsId?: string;
 }
 
 export const CodeBlock = ({
     code,
     language = "bash",
     showCopyButton = true,
-    fieldId = "code"
+    fieldId = "code",
+    analyticsId
 }: CodeBlockProps) => {
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const { track } = useTrack();
@@ -51,7 +61,7 @@ export const CodeBlock = ({
             // Which snippet was taken, never its contents — these blocks render
             // connection strings, setup commands and, on some pages, keys.
             track(ConsoleAction.CopySnippet, {
-                snippet_type: fieldId,
+                snippet_type: analyticsId ?? fieldId,
                 language,
             });
             setTimeout(() => setCopiedField(null), 2000);
