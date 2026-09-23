@@ -219,7 +219,11 @@ export function useApiQuery<
   const { isAuthenticated, logout } = useAuthHooks();
   const { track } = useTrack();
   const reportSessionExpired = useCallback(
-    () => track(ConsoleAction.SessionExpired, { page: window.location.pathname }),
+    // No page dimension: track() already normalizes the current route into the
+    // action's page field (reported as route_path). Passing the raw pathname
+    // here sent the un-normalized URL — org, project and agent handles intact
+    // — straight past normalizeRoute, which exists to strip exactly those.
+    () => track(ConsoleAction.SessionExpired),
     [track],
   );
   const query = useQuery(options);
@@ -317,6 +321,7 @@ export function useApiQuery<
     query.error,
     query.isError,
     logout,
+    reportSessionExpired,
     silent,
   ]);
 
@@ -349,7 +354,11 @@ export function useApiMutation<
   // never hears about.
   const { track } = useTrack();
   const reportSessionExpired = useCallback(
-    () => track(ConsoleAction.SessionExpired, { page: window.location.pathname }),
+    // No page dimension: track() already normalizes the current route into the
+    // action's page field (reported as route_path). Passing the raw pathname
+    // here sent the un-normalized URL — org, project and agent handles intact
+    // — straight past normalizeRoute, which exists to strip exactly those.
+    () => track(ConsoleAction.SessionExpired),
     [track],
   );
   const {
