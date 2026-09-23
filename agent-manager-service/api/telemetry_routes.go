@@ -43,13 +43,17 @@ import (
 const maxConsoleActionBatchBytes = 64 << 10
 
 // consoleActionsRefillPerSecond / consoleActionsBurst bound how often one user
-// may report. The console flushes at most every 5s (or when a batch fills), so
-// one request per second with a burst of 10 is far above any real client while
-// still capping a scripted caller. Unlike the size caps below, this bounds the
-// *rate* of outbound work rather than one request's size.
+// may report. Unlike the size caps below, this bounds the *rate* of outbound
+// work rather than one request's size.
+//
+// The key is the user, not the tab, so every console tab a person has open
+// draws on the same bucket — and each tab flushes on its own 5s timer and
+// again every time it is hidden. Someone switching between several busy tabs
+// can briefly send several flushes a second. The burst is sized to absorb that
+// without a 429; the sustained refill is what actually caps a scripted caller.
 const (
 	consoleActionsRefillPerSecond = 1
-	consoleActionsBurst           = 10
+	consoleActionsBurst           = 30
 )
 
 // consoleActionsLimiterTTL is how long an idle user's bucket is kept. The
@@ -72,6 +76,10 @@ type userRateLimiter struct {
 type userBucket struct {
 	tokens float64
 	last   time.Time
+	// throttled is set when a request is refused and cleared on the next one
+	// allowed, so the handler can report the start of a throttling episode once
+	// instead of on every refused request.
+	throttled bool
 }
 
 func newUserRateLimiter(refillPerSecond, burst float64) *userRateLimiter {
@@ -85,6 +93,13 @@ func newUserRateLimiter(refillPerSecond, burst float64) *userRateLimiter {
 
 // Allow reports whether this user may send now, consuming a token if so.
 func (l *userRateLimiter) Allow(userID string) bool {
+	allowed, _ := l.AllowWithTransition(userID)
+	return allowed
+}
+
+// AllowWithTransition is Allow, plus whether this refusal is the first since
+// the user was last allowed through — the moment worth logging.
+func (l *userRateLimiter) AllowWithTransition(userID string) (allowed, newlyThrottled bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -101,10 +116,13 @@ func (l *userRateLimiter) Allow(userID string) bool {
 		b.last = now
 	}
 	if b.tokens < 1 {
-		return false
+		newlyThrottled = !b.throttled
+		b.throttled = true
+		return false, newlyThrottled
 	}
 	b.tokens--
-	return true
+	b.throttled = false
+	return true, false
 }
 
 // sweepLocked drops buckets no one has touched for consoleActionsLimiterTTL.
@@ -188,7 +206,18 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 	// hostile, and telemetry is the one thing that must never be retried into a
 	// limit — the console drops its buffer on any failure, which is the
 	// behaviour we want here.
-	if !consoleActionsLimiter.Allow(claims.Sub) {
+	allowed, newlyThrottled := consoleActionsLimiter.AllowWithTransition(claims.Sub)
+	if !allowed {
+		// The console drops its buffer on any failure, so a 429 is data that is
+		// gone for good. Logged so that loss is visible — but once per throttling
+		// episode, not per refused request, or a caller looping into the limit
+		// would turn it into a log flood.
+		if newlyThrottled {
+			log.Warn("telemetry: console action reporting rate-limited; batches are being dropped",
+				"userId", claims.Sub,
+				"refillPerSecond", consoleActionsRefillPerSecond,
+				"burst", consoleActionsBurst)
+		}
 		utils.WriteErrorResponse(w, http.StatusTooManyRequests,
 			"console action reporting rate limit exceeded")
 		return
