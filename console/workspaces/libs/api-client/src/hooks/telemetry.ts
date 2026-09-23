@@ -141,8 +141,14 @@ export function setTelemetryTokenProvider(
   tokenProvider = provider;
 }
 
-/** Per-tab session id. Opaque, not derived from any credential. */
-const sessionId = createSessionId();
+/**
+ * Per-tab session id. Opaque, not derived from any credential.
+ *
+ * Mutable because a back/forward-cache restore begins a new session: the old
+ * one was already ended and reported, so continuing to label actions with its
+ * id would merge two sessions into one.
+ */
+let sessionId = createSessionId();
 
 function createSessionId(): string {
   try {
@@ -402,7 +408,10 @@ export function useTrack() {
   }, [enabled, flush, flushOnUnload]);
 
   return useMemo(
-    () => ({ track, flush, flushOnUnload, sessionId }),
+    // sessionId is deliberately not returned: it is rotated on a back/forward
+    // cache restore, so a value captured in this memo would go stale. Actions
+    // read the live one when they are buffered.
+    () => ({ track, flush, flushOnUnload }),
     [track, flush, flushOnUnload],
   );
 }
@@ -585,6 +594,10 @@ function takePendingSessionExpiry(): { route: string } | undefined {
 export function useSessionAnalytics() {
   const { track, flushOnUnload } = useTrack();
   const started = useRef(false);
+  // Guards against a second session.end for a session already ended — the
+  // back/forward-cache case, where pagehide can fire again without any
+  // intervening page load.
+  const sessionEnded = useRef(false);
 
   useEffect(() => {
     if (started.current) return;
@@ -634,7 +647,18 @@ export function useSessionAnalytics() {
         error_name: reason?.name ?? "UnhandledRejection",
       });
     };
+    // pagehide fires both when the document is really going away and when it
+    // is merely frozen into the back/forward cache. Both end the session as far
+    // as reporting goes, but a frozen page can come back — and when it does,
+    // no fresh page load runs the start effect above. Without the pageshow
+    // handler below, the counters would keep accumulating across the gap and
+    // the next pagehide would report a second, inflated session.end for a
+    // session that had already ended.
     const onPageHide = () => {
+      if (sessionEnded.current) {
+        return;
+      }
+      sessionEnded.current = true;
       track(ConsoleAction.SessionEnd, {
         duration_seconds: Math.round((Date.now() - sessionStats.startedAt) / 1000),
         page_count: sessionStats.pages,
@@ -645,13 +669,33 @@ export function useSessionAnalytics() {
       flushOnUnload();
     };
 
+    // Restored from the back/forward cache: the previous session was already
+    // ended, so begin a new one rather than resuming the old one's totals.
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted || !sessionEnded.current) {
+        return;
+      }
+      sessionEnded.current = false;
+      sessionId = createSessionId();
+      sessionStats.startedAt = Date.now();
+      sessionStats.pages = 0;
+      sessionStats.actions = 0;
+      track(ConsoleAction.SessionStart, {
+        referrer: safeReferrerHost(),
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        browser: navigator.userAgent.slice(0, 120),
+      });
+    };
+
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
     window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     return () => {
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onRejection);
       window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, [track, flushOnUnload]);
 }
