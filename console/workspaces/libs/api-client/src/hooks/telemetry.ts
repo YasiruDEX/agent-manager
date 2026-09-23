@@ -142,6 +142,61 @@ export function setTelemetryTokenProvider(
 }
 
 /**
+ * Sends whatever is buffered in a way that survives document teardown.
+ *
+ * Module-level, not a hook callback: the buffer it drains is module-level too,
+ * and the unload listeners below must exist exactly once per document rather
+ * than once per mounted hook.
+ */
+function flushOnUnloadNow(): void {
+  if (buffer.length === 0) {
+    return;
+  }
+  const batch = buffer;
+  buffer = [];
+  // No await is possible here, so the token must already be in hand.
+  void Promise.resolve(tokenProvider?.())
+    .then((token) => reportConsoleActionsOnUnload(batch, token))
+    .catch(() => false);
+}
+
+let unloadListenersRegistered = false;
+
+/**
+ * Registers the document-level flush listeners, once.
+ *
+ * useTrack is called from useApiMutation and from individual components, so a
+ * busy page mounts it many times over. Registering per instance added a
+ * matching set of listeners each time; they were harmless only because the
+ * first one to run empties the shared buffer and the rest find it empty. Since
+ * the buffer is module state, its listeners belong here too.
+ *
+ * Never removed: they are document-scoped and cost nothing once idle, and
+ * reference-counting them against mounted hooks would risk a window with a
+ * non-empty buffer and no listener left to flush it.
+ */
+function ensureUnloadListeners(): void {
+  if (unloadListenersRegistered || typeof window === "undefined") {
+    return;
+  }
+  unloadListenersRegistered = true;
+
+  // `pagehide` rather than `beforeunload`: it fires for back/forward-cache
+  // navigations too, which `beforeunload` misses, and it does not suppress the
+  // bfcache the way a beforeunload handler can.
+  window.addEventListener("pagehide", flushOnUnloadNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      // Not the awaiting flush(): in Chromium a closing tab can fire
+      // visibilitychange before pagehide, and awaiting a token means the
+      // request is cancelled during teardown while the buffer it already took
+      // is gone.
+      flushOnUnloadNow();
+    }
+  });
+}
+
+/**
  * Per-tab session id. Opaque, not derived from any credential.
  *
  * Mutable because a back/forward-cache restore begins a new session: the old
@@ -367,52 +422,21 @@ export function useTrack() {
    * itself. Without that, the last action of every session is the one that
    * never arrives.
    */
-  const flushOnUnload = useCallback(() => {
-    if (buffer.length === 0) {
-      return;
-    }
-    const batch = buffer;
-    buffer = [];
-    // No await is possible here, so the token must already be in hand.
-    void Promise.resolve(tokenProvider?.())
-      .then((token) => reportConsoleActionsOnUnload(batch, token))
-      .catch(() => false);
-  }, []);
-
-  // Flush on the way out. `pagehide` rather than `beforeunload`: it fires for
-  // back/forward-cache navigations too, which `beforeunload` misses, and it
-  // does not suppress the bfcache the way a beforeunload handler can.
+  // Idempotent: the listeners live at module scope and are installed once
+  // for the document, however many hooks mount.
   useEffect(() => {
     if (!enabled) {
       return;
     }
-
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        // Not flush(): in Chromium a closing tab can fire visibilitychange
-        // before pagehide, and flush() awaits the token before sending, so the
-        // request is cancelled during teardown while the buffer it already
-        // took is gone. flushOnUnload survives teardown and is equally correct
-        // when the tab merely goes to the background.
-        flushOnUnload();
-      }
-    };
-
-    window.addEventListener("pagehide", flushOnUnload);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      window.removeEventListener("pagehide", flushOnUnload);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [enabled, flush, flushOnUnload]);
+    ensureUnloadListeners();
+  }, [enabled]);
 
   return useMemo(
     // sessionId is deliberately not returned: it is rotated on a back/forward
     // cache restore, so a value captured in this memo would go stale. Actions
     // read the live one when they are buffered.
-    () => ({ track, flush, flushOnUnload }),
-    [track, flush, flushOnUnload],
+    () => ({ track, flush, flushOnUnload: flushOnUnloadNow }),
+    [track, flush],
   );
 }
 
