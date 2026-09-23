@@ -52,6 +52,11 @@ services:
       # setup (also needs MOESIF_COLLECTOR_HOST_HEADER).
       - IS_ON_PREM_DEPLOYMENT=${IS_ON_PREM_DEPLOYMENT:-true}
       - MOESIF_ENABLED=${MOESIF_ENABLED:-true}
+      # Console UI actions only. MOESIF_ENABLED is the master switch and turns
+      # this off with everything else; this one silences just the console
+      # stream, which is far higher volume (it includes page views), without
+      # blinding the endpoint feature-usage events.
+      - CONSOLE_ANALYTICS_ENABLED=${CONSOLE_ANALYTICS_ENABLED:-true}
       - MOESIF_COLLECTOR_BASE_URL=${MOESIF_COLLECTOR_BASE_URL:-}
       - MOESIF_COLLECTOR_HOST_HEADER=${MOESIF_COLLECTOR_HOST_HEADER:-}
       - AMP_DEPLOYMENT_MODEL=${AMP_DEPLOYMENT_MODEL:-saas}
