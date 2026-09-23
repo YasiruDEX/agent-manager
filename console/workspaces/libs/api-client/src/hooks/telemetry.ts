@@ -412,16 +412,6 @@ export function useTrack() {
     [enabled, flush, scheduleFlush],
   );
 
-  /**
-   * Sends whatever is buffered in a way that survives document teardown.
-   *
-   * Exposed rather than kept private to the unload listener below because
-   * useSessionAnalytics has to append session.end *after* this hook's own
-   * listener has already run — listener order follows registration order, and
-   * this hook registers first — so it needs to trigger a second, final send
-   * itself. Without that, the last action of every session is the one that
-   * never arrives.
-   */
   // Idempotent: the listeners live at module scope and are installed once
   // for the document, however many hooks mount.
   useEffect(() => {
@@ -432,6 +422,13 @@ export function useTrack() {
   }, [enabled]);
 
   return useMemo(
+    // flushOnUnload is exposed rather than left private to the module listener
+    // because useSessionAnalytics has to append session.end *after* that
+    // listener has already run — listener order follows registration order and
+    // the module one registers first — so it needs to trigger a second, final
+    // send itself. Without that, the last action of every session is the one
+    // that never arrives.
+    //
     // sessionId is deliberately not returned: it is rotated on a back/forward
     // cache restore, so a value captured in this memo would go stale. Actions
     // read the live one when they are buffered.

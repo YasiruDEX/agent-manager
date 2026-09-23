@@ -222,3 +222,46 @@ func TestUserRateLimiterEvictsIdleBuckets(t *testing.T) {
 		t.Error("active bucket was evicted")
 	}
 }
+
+// TestConsoleClientIPRejectsForgedForwardedValues: X-Forwarded-For is
+// caller-controlled (a fronting proxy only appends to it), so an unvalidated
+// left-most entry would let any authenticated user stamp an arbitrary string
+// of arbitrary length onto every action as its source address.
+func TestConsoleClientIPRejectsForgedForwardedValues(t *testing.T) {
+	tests := []struct {
+		name, forwarded, remoteAddr, want string
+	}{
+		{"first hop of a chain is used", "203.0.113.9, 10.0.0.1", "10.0.0.1:1234", "203.0.113.9"},
+		{"single value is trimmed", "  203.0.113.9 ", "10.0.0.1:1234", "203.0.113.9"},
+		{"no header falls back to the peer", "", "10.0.0.1:1234", "10.0.0.1"},
+		{"non-IP falls back to the peer", "not-an-ip", "10.0.0.1:1234", "10.0.0.1"},
+		{"oversized junk falls back to the peer", strings.Repeat("x", 4096), "10.0.0.1:1234", "10.0.0.1"},
+		{"IPv6 is accepted", "2001:db8::1", "10.0.0.1:1234", "2001:db8::1"},
+		{"unsplittable peer is returned as-is", "", "not-a-host-port", "not-a-host-port"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/telemetry/console-actions", nil)
+			r.RemoteAddr = tt.remoteAddr
+			if tt.forwarded != "" {
+				r.Header.Set("X-Forwarded-For", tt.forwarded)
+			}
+			if got := consoleClientIP(r); got != tt.want {
+				t.Errorf("consoleClientIP() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTruncateUserAgentBoundsAmplification: the body is capped, but headers are
+// not, and the user agent is copied onto every action in the batch — so an
+// unbounded one turns a 64 KB request into a far larger collector payload.
+func TestTruncateUserAgentBoundsAmplification(t *testing.T) {
+	if got := truncateUserAgent(strings.Repeat("u", maxUserAgentLength*10)); len(got) != maxUserAgentLength {
+		t.Errorf("length = %d, want %d", len(got), maxUserAgentLength)
+	}
+	if got := truncateUserAgent("Mozilla/5.0"); got != "Mozilla/5.0" {
+		t.Errorf("a normal user agent was altered: %q", got)
+	}
+}

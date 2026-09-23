@@ -22,7 +22,7 @@ var _ MappedNullable = &ConsoleAction{}
 type ConsoleAction struct {
 	// Action name from the console taxonomy, e.g. \"amp.console.navigation.page-view\". Validated against a server-side allowlist; an unrecognized name is dropped.
 	Action string `json:"action"`
-	// When the user did this, per the browser clock. The server uses it as-is so the ordering within a buffered flush survives, and falls back to receipt time when it is missing or unparseable.
+	// When the user did this, per the browser clock. The server uses it as-is so the ordering within a buffered flush survives, and falls back to receipt time when it is absent. A value present but not RFC 3339 fails decoding and makes the whole batch malformed (400) — the client controls this field, so a bad value is a client bug worth surfacing rather than silently rewriting.
 	OccurredAt *time.Time `json:"occurredAt,omitempty"`
 	// The console route the action happened on, e.g. \"/orgs/acme/projects/p1/agents/a1/deploy\". Path only — the client must not send query strings, which can carry identifiers.
 	Page *string `json:"page,omitempty"`
