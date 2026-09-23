@@ -237,6 +237,7 @@ export const TracesComponent: React.FC = () => {
         type: "application/json",
       });
 
+      track(ConsoleAction.DownloadArtifact, { artifact_type: "traces-export" });
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -267,6 +268,7 @@ export const TracesComponent: React.FC = () => {
     hasCustomRange,
     customStartTime,
     customEndTime,
+    track,
   ]);
 
   const handleTimeRangeChange = useCallback(

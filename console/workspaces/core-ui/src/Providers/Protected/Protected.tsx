@@ -25,12 +25,17 @@ import {
     useListOrganizations,
     useListProjects,
     setTelemetryTokenProvider,
+    useSessionAnalytics,
 } from "@agent-management-platform/api-client";
 import { ErrorPages, getErrorMessage } from "@agent-management-platform/shared-component";
 
 export const Protected = ({ children }: { children: React.ReactNode }) => {
     const { isAuthenticated, isLoadingIsAuthenticated, logout, getToken } = useAuthHooks();
     const location = useLocation();
+
+    // Session start/end, first-ever visit and uncaught client errors. Mounted
+    // once here so nothing double-counts.
+    useSessionAnalytics();
 
     // Hand telemetry its token source once, here, where auth is already in
     // context. useTrack deliberately does not read auth itself — see

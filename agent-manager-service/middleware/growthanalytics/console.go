@@ -88,7 +88,7 @@ var consoleActions = map[string]map[string]bool{
 	// works in is invisible server-side.
 	"amp.console.navigation.page-view":       dims("route", "entity_scope", "referrer_route"),
 	"amp.console.navigation.tab-switch":      dims("page", "tab"),
-	"amp.console.navigation.search":          dims("scope", "result_count", "zero_results"),
+	"amp.console.navigation.search":          dims("scope", "result_count", "query_length", "zero_results"),
 	"amp.console.navigation.filter-applied":  dims("page", "filter"),
 	"amp.console.navigation.context-switch":  dims("switch_type"),
 	"amp.console.navigation.docs-link-click": dims("doc_target", "from_page"),
@@ -121,7 +121,7 @@ var consoleActions = map[string]map[string]bool{
 	// Self-serve utility: strong activation signals that leave no server-side
 	// trace. snippet_type names *which* snippet was copied — never its value;
 	// several of these snippets contain credentials.
-	"amp.console.utility.copy-snippet":       dims("snippet_type"),
+	"amp.console.utility.copy-snippet":       dims("snippet_type", "language"),
 	"amp.console.utility.download-artifact":  dims("artifact_type"),
 	"amp.console.utility.secret-revealed":    dims("secret_type", "surface"),
 	"amp.console.utility.cli-connect-viewed": dims("context"),
@@ -129,7 +129,7 @@ var consoleActions = map[string]map[string]bool{
 	// Friction. The reason to instrument the console at all: an error the user
 	// saw, an empty state they landed on, a control RBAC hid from them.
 	"amp.console.friction.error-shown":       dims("operation", "status", "error_code"),
-	"amp.console.friction.empty-state":       dims("resource"),
+	"amp.console.friction.empty-state":       dims("resource", "state"),
 	"amp.console.friction.permission-denied": dims("feature", "required_permission"),
 	"amp.console.friction.session-expired":   dims("page"),
 	"amp.console.friction.client-error":      dims("component", "error_name"),
