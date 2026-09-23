@@ -10,7 +10,7 @@ import {
 import { useSnackBar } from "@agent-management-platform/views";
 import { useEffect, useRef, useCallback} from "react";
 import { useAuthHooks } from "@agent-management-platform/auth";
-import { ConsoleAction, useTrack } from "./telemetry";
+import { ConsoleAction, markSessionExpired, useTrack } from "./telemetry";
 
 type MutationAction =
   | "assign"
@@ -216,14 +216,17 @@ export function useApiQuery<
 }: ApiQueryOptions<TQueryFnData, TError, TData, TQueryKey>): UseQueryResult<TData, TError> {
   const { pushSnackBar } = useSnackBar();
   const { isAuthenticated, logout } = useAuthHooks();
-  const { track } = useTrack();
+  // No useTrack() here: this hook reports nothing itself, and it is
+  // instantiated once per query on a page — calling useTrack would register a
+  // set of unload listeners per instance for no benefit.
+  //
+  // Parked, not reported: the action cannot be delivered with the credentials
+  // that just stopped working. markSessionExpired stores it for the next
+  // session (which normalizes the route on the way in), and writing to one key
+  // collapses the several queries that fail together into a single record.
   const reportSessionExpired = useCallback(
-    // No page dimension: track() already normalizes the current route into the
-    // action's page field (reported as route_path). Passing the raw pathname
-    // here sent the un-normalized URL — org, project and agent handles intact
-    // — straight past normalizeRoute, which exists to strip exactly those.
-    () => track(ConsoleAction.SessionExpired),
-    [track],
+    () => markSessionExpired(window.location.pathname),
+    [],
   );
   const query = useQuery(options);
   const lastErrorMessageRef = useRef<string | null>(null);
@@ -352,13 +355,13 @@ export function useApiMutation<
   // wrapper means no mutation can add a user-facing failure that analytics
   // never hears about.
   const { track } = useTrack();
+  // Parked, not reported: the action cannot be delivered with the credentials
+  // that just stopped working. markSessionExpired stores it for the next
+  // session (which normalizes the route on the way in), and writing to one key
+  // collapses the several queries that fail together into a single record.
   const reportSessionExpired = useCallback(
-    // No page dimension: track() already normalizes the current route into the
-    // action's page field (reported as route_path). Passing the raw pathname
-    // here sent the un-normalized URL — org, project and agent handles intact
-    // — straight past normalizeRoute, which exists to strip exactly those.
-    () => track(ConsoleAction.SessionExpired),
-    [track],
+    () => markSessionExpired(window.location.pathname),
+    [],
   );
   const {
     action,
