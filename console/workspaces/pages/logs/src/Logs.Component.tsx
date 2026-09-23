@@ -25,7 +25,10 @@ import {
   type LogLevel,
 } from "@agent-management-platform/types";
 import { debounce } from "lodash";
-import { useAgentRuntimeLogs, isObserverConfigured } from "@agent-management-platform/api-client";
+import { useAgentRuntimeLogs, isObserverConfigured,
+  ConsoleAction,
+  useTrack,
+} from "@agent-management-platform/api-client";
 import {
   Alert,
   CircularProgress,
@@ -111,7 +114,18 @@ export const LogsComponent: React.FC = () => {
     },
     [searchParams, setSearchParams],
   );
+  const { track } = useTrack();
   const [searchPhrase, setSearchPhrase] = useState(search);
+
+  // One action per settled query rather than per keystroke: searchPhrase is
+  // already debounced above, and the level filter changes discretely. The
+  // phrase is never reported — users grep their own logs for their own data.
+  useEffect(() => {
+    track(ConsoleAction.LogQuery, {
+      time_range: hasCustomRange ? "custom" : (timeRange ?? "unspecified"),
+      filter_count: selectedLogLevels.length + (searchPhrase ? 1 : 0),
+    });
+  }, [track, timeRange, hasCustomRange, selectedLogLevels, searchPhrase]);
   const setDebouncedSearch = useMemo(
     () => debounce((searchValue: string) => setSearchPhrase(searchValue), DEBOUNCE_TIME),
     [setSearchPhrase],

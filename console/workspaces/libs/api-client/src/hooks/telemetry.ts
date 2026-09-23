@@ -302,6 +302,28 @@ export function useTrack() {
     [enabled, flush, scheduleFlush],
   );
 
+  /**
+   * Sends whatever is buffered in a way that survives document teardown.
+   *
+   * Exposed rather than kept private to the unload listener below because
+   * useSessionAnalytics has to append session.end *after* this hook's own
+   * listener has already run — listener order follows registration order, and
+   * this hook registers first — so it needs to trigger a second, final send
+   * itself. Without that, the last action of every session is the one that
+   * never arrives.
+   */
+  const flushOnUnload = useCallback(() => {
+    if (buffer.length === 0) {
+      return;
+    }
+    const batch = buffer;
+    buffer = [];
+    // No await is possible here, so the token must already be in hand.
+    void Promise.resolve(tokenProvider?.())
+      .then((token) => reportConsoleActionsOnUnload(batch, token))
+      .catch(() => false);
+  }, []);
+
   // Flush on the way out. `pagehide` rather than `beforeunload`: it fires for
   // back/forward-cache navigations too, which `beforeunload` misses, and it
   // does not suppress the bfcache the way a beforeunload handler can.
@@ -310,17 +332,6 @@ export function useTrack() {
       return;
     }
 
-    const onPageHide = () => {
-      if (buffer.length === 0) {
-        return;
-      }
-      const batch = buffer;
-      buffer = [];
-      // No await is possible here, so the token must already be in hand.
-      void Promise.resolve(tokenProvider?.())
-        .then((token) => reportConsoleActionsOnUnload(batch, token))
-        .catch(() => false);
-    };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -328,15 +339,18 @@ export function useTrack() {
       }
     };
 
-    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pagehide", flushOnUnload);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pagehide", flushOnUnload);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [enabled, flush]);
+  }, [enabled, flush, flushOnUnload]);
 
-  return useMemo(() => ({ track, flush, sessionId }), [track, flush]);
+  return useMemo(
+    () => ({ track, flush, flushOnUnload, sessionId }),
+    [track, flush, flushOnUnload],
+  );
 }
 
 /**
@@ -459,7 +473,7 @@ const SEEN_KEY = "amp.console.seen";
  * up, rather than a hook pages opt into.
  */
 export function useSessionAnalytics() {
-  const { track, flush } = useTrack();
+  const { track, flushOnUnload } = useTrack();
   const started = useRef(false);
 
   useEffect(() => {
@@ -508,7 +522,9 @@ export function useSessionAnalytics() {
         page_count: sessionStats.pages,
         action_count: sessionStats.actions,
       });
-      void flush();
+      // This hook's listener runs after useTrack's, which has already emptied
+      // the buffer, so session.end needs its own unload-safe send.
+      flushOnUnload();
     };
 
     window.addEventListener("error", onError);
@@ -519,7 +535,7 @@ export function useSessionAnalytics() {
       window.removeEventListener("unhandledrejection", onRejection);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [track, flush]);
+  }, [track, flushOnUnload]);
 }
 
 /**
