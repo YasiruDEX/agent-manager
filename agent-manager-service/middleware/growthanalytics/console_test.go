@@ -425,13 +425,29 @@ func TestReportConsoleActionsBoundsInFlightSends(t *testing.T) {
 	release := make(chan struct{})
 	started := make(chan struct{}, maxInFlightConsoleSends+1)
 
-	original := newConsoleSender
+	// A private semaphore, so the slot counts asserted here cannot be skewed by
+	// sends another test left in flight, and this test's own held slots cannot
+	// leak into whichever test runs next.
+	originalSender, originalSlots := newConsoleSender, consoleSendSlots
+	testSlots := make(chan struct{}, maxInFlightConsoleSends)
+	consoleSendSlots = testSlots
 	newConsoleSender = func(config.GrowthAnalyticsConfig, string) consoleActionSender {
 		return &blockingActionSender{started: started, release: release}
 	}
 	t.Cleanup(func() {
-		newConsoleSender = original
+		// Unblock the senders, then wait for each to return its slot before
+		// restoring the package state. Draining the channel from here instead
+		// would race the owners' own releases and could block one of them.
 		close(release)
+		deadline := time.Now().Add(2 * time.Second)
+		for len(testSlots) > 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		if n := len(testSlots); n > 0 {
+			t.Errorf("%d console sends still held a slot after release", n)
+		}
+		consoleSendSlots = originalSlots
+		newConsoleSender = originalSender
 	})
 
 	actions, _ := BuildConsoleActions(

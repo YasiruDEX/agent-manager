@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
@@ -309,11 +310,18 @@ func handleConsoleActions(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// truncateUserAgent bounds the user agent without splitting a rune: a plain
+// byte slice can cut a multi-byte character in half, and JSON encoding then
+// rewrites the broken tail to U+FFFD in the value sent to the collector.
 func truncateUserAgent(ua string) string {
 	if len(ua) <= maxUserAgentLength {
 		return ua
 	}
-	return ua[:maxUserAgentLength]
+	n := maxUserAgentLength
+	for n > 0 && !utf8.RuneStart(ua[n]) {
+		n--
+	}
+	return ua[:n]
 }
 
 // maxUserAgentLength bounds the user agent copied onto every action.
