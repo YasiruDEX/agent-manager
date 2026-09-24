@@ -225,8 +225,8 @@ export function sanitizePage(path: string): string {
 }
 
 /**
- * Every absolute route template the app declares, longest first so the most
- * specific match wins.
+ * Every absolute route template the app declares, most static segments first
+ * so the most specific match wins.
  *
  * Derived from the generated route map rather than hand-listed. A hand-listed
  * set silently stops covering routes as they are added or renamed, and the
@@ -249,7 +249,14 @@ const ROUTE_TEMPLATES: string[] = (() => {
     // A malformed map must not stop the console from booting; normalizeRoute
     // falls back to masking every unrecognized segment.
   }
-  return out.sort((a, b) => b.length - a.length);
+  // Most static segments first. Matching only compares templates of equal
+  // depth, so the order matters only between siblings like `roles/create` and
+  // `roles/:roleId` — and there the literal must win, or the create page is
+  // reported as a detail page. Sorting by string length got this backwards
+  // whenever the parameter name was longer than the literal.
+  const staticCount = (template: string) =>
+    template.split("/").filter((segment) => segment && !segment.startsWith(":")).length;
+  return out.sort((a, b) => staticCount(b) - staticCount(a));
 })();
 
 /** The static (non-parameter) segments of every declared route. */

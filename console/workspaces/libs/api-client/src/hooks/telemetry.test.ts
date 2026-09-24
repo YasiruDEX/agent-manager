@@ -79,6 +79,18 @@ describe("normalizeRoute", () => {
     expect(normalizeRoute(input)).toBe(expected);
   });
 
+  // A static segment must beat a parameter at the same depth. Sorting by string
+  // length put `:roleId` (7 chars) ahead of `create` (6), so the create page
+  // was reported as the role-detail page and the two merged into one metric.
+  it("prefers a static segment over a parameter at the same depth", () => {
+    expect(normalizeRoute("/org/acme-corp/thunder-instances/roles/create")).toBe(
+      "/org/:orgId/thunder-instances/roles/create",
+    );
+    expect(normalizeRoute("/org/acme-corp/thunder-instances/roles/billing-admins")).toBe(
+      "/org/:orgId/thunder-instances/roles/:roleId",
+    );
+  });
+
   // The regression that shipped: singular `/org/`, not `/orgs/`.
   it("masks the org handle on the singular /org/ route", () => {
     const route = normalizeRoute("/org/acme-corp");

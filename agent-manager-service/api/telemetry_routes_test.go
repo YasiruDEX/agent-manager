@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 )
@@ -286,6 +287,16 @@ func TestTruncateUserAgentBoundsAmplification(t *testing.T) {
 	}
 	if got := truncateUserAgent("Mozilla/5.0"); got != "Mozilla/5.0" {
 		t.Errorf("a normal user agent was altered: %q", got)
+	}
+
+	// A 3-byte rune straddling the limit must be dropped whole, not cut.
+	ua := strings.Repeat("a", maxUserAgentLength-1) + "€€"
+	got := truncateUserAgent(ua)
+	if !utf8.ValidString(got) {
+		t.Errorf("truncation produced invalid UTF-8: %q", got[len(got)-4:])
+	}
+	if len(got) > maxUserAgentLength {
+		t.Errorf("length = %d, want <= %d", len(got), maxUserAgentLength)
 	}
 }
 

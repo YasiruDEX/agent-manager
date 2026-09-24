@@ -393,8 +393,12 @@ func ReportConsoleActions(
 	// Claimed before the goroutine starts, not inside it: acquiring after the
 	// spawn would let unbounded goroutines pile up waiting for a slot, which is
 	// the thing being bounded.
+	// Captured once: the goroutine must release the same semaphore it
+	// acquired, even if the package variable is swapped in the meantime (as
+	// tests do to isolate their slot counts).
+	slots := consoleSendSlots
 	select {
-	case consoleSendSlots <- struct{}{}:
+	case slots <- struct{}{}:
 	default:
 		slog.Warn("growthanalytics: console action send pool is full, dropping batch",
 			"actions", len(actions), "maxInFlight", maxInFlightConsoleSends)
@@ -407,7 +411,7 @@ func ReportConsoleActions(
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(requestCtx), consoleActionSendTimeout)
 
 	go func() {
-		defer func() { <-consoleSendSlots }()
+		defer func() { <-slots }()
 		defer cancel()
 		defer func() {
 			if rec := recover(); rec != nil {
