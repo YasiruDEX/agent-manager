@@ -525,6 +525,7 @@ func TestBuildMetadata(t *testing.T) {
 			environment: "development",
 			want: map[string]interface{}{
 				"platform":         "Agent Manager",
+				"source":           SourceAPI,
 				"growth_action":    "amp.agent-development.delete-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
@@ -540,6 +541,7 @@ func TestBuildMetadata(t *testing.T) {
 			environment: "development",
 			want: map[string]interface{}{
 				"platform":         "Agent Manager",
+				"source":           SourceAPI,
 				"growth_action":    "amp.agent-development.update-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
@@ -555,6 +557,7 @@ func TestBuildMetadata(t *testing.T) {
 			environment: "development",
 			want: map[string]interface{}{
 				"platform":         "Agent Manager",
+				"source":           SourceAPI,
 				"growth_action":    "amp.agent-development.create-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "vm",
@@ -572,6 +575,7 @@ func TestBuildMetadata(t *testing.T) {
 			environment: "",
 			want: map[string]interface{}{
 				"platform":         "Agent Manager",
+				"source":           SourceAPI,
 				"growth_action":    "amp.agent-development.create-agent",
 				"product_version":  "1.2.3",
 				"deployment_model": "saas",
@@ -581,7 +585,7 @@ func TestBuildMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildMetadata(tt.feature, tt.dimensions, tt.version, tt.deployment, tt.environment)
+			got := buildMetadata(tt.feature, tt.dimensions, tt.version, tt.deployment, tt.environment, SourceAPI)
 			if len(got) != len(tt.want) {
 				t.Fatalf("buildMetadata() = %v, want %v", got, tt.want)
 			}

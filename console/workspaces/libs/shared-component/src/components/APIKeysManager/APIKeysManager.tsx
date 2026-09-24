@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useState, useEffect} from "react";
 import {
   AdapterDateFns,
   Alert,
@@ -44,6 +44,10 @@ import { capitalize } from "../../utils/format";
 import { monospaceInputSx } from "../AgentIdentityCredentials/AgentIdentityCredentials";
 import { useConfirmationDialog } from "../ConfirmationDialog/ConfirmationDialogProvider";
 import type { APIKeyInfo, SecurityConfig } from "@agent-management-platform/types";
+import {
+  ConsoleAction,
+  useTrack,
+} from "@agent-management-platform/api-client";
 
 /**
  * Returns true when API-key authentication is enabled in a resource's security
@@ -191,6 +195,17 @@ function NewKeyBanner({
   apiKey: string;
   onDismiss: () => void;
 }) {
+  const { track } = useTrack();
+  // A key was put on screen. Worth counting on its own — it says the
+  // issue flow completed all the way to the user actually receiving the
+  // secret, which the create call alone does not. The key is never reported.
+  useEffect(() => {
+    track(ConsoleAction.SecretRevealed, {
+      secret_type: "api-key",
+      surface: "issue-banner",
+    });
+  }, [track]);
+
   return (
     <Alert
       severity="info"
@@ -241,6 +256,7 @@ export function APIKeysManager({
 
   const handleRevoke = (key: APIKeyInfo) => {
     addConfirmation({
+      analytics: { entity: "api-key", action: "revoke" },
       title: "Revoke API Key",
       description: `Are you sure you want to revoke "${key.displayName || key.name}"? Any requests using this key will stop working immediately. This action cannot be undone.`,
       confirmButtonText: "Revoke",

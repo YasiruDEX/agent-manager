@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -16,14 +16,11 @@
  * under the License.
  */
 
-import '@testing-library/jest-dom';
-
 // The runtime config is injected by public/config.js before React mounts in the
-// real app, and by nothing at all under Vitest. Several packages read it at
-// module scope — @agent-management-platform/auth picks its implementation from
-// globalConfig.disableAuth as it loads — so without this, merely importing a
-// module that transitively reaches auth throws before any test runs.
-//
-// Deliberately minimal: tests that care about a specific flag should set it
-// themselves. This only has to exist.
-(window as unknown as { __RUNTIME_CONFIG__: Record<string, unknown> }).__RUNTIME_CONFIG__ ??= {};
+// real app, and by nothing at all under Vitest. @agent-management-platform/auth
+// picks its implementation from globalConfig.disableAuth as it loads, so
+// without this, importing any module that transitively reaches auth throws
+// before a single test runs.
+(
+  window as unknown as { __RUNTIME_CONFIG__: Record<string, unknown> }
+).__RUNTIME_CONFIG__ ??= {};

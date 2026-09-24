@@ -16,14 +16,15 @@
  * under the License.
  */
 
-// Response for the unauthenticated runtime discovery endpoint served by
-// agent-manager: GET /api/v1/config.
-export interface ConfigResponse {
-  observerBaseUrl: string;
-  /**
-   * Whether this deployment accepts console usage analytics, from the
-   * service's CONSOLE_ANALYTICS_ENABLED. The console has no flag of its own —
-   * that one switch governs the whole path. Absent is treated as false.
-   */
-  consoleAnalyticsEnabled?: boolean;
-}
+/// <reference types="vitest" />
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: "./setupTests.ts",
+  },
+});

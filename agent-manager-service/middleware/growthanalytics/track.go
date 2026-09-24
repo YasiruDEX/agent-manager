@@ -263,7 +263,7 @@ func reportEvent(
 		}
 		resolved[k] = v
 	}
-	metadata := buildMetadata(featureCode, resolved, config.GetConfig().PackageVersion, ga.DeploymentModel, ga.Environment)
+	metadata := buildMetadata(featureCode, resolved, config.GetConfig().PackageVersion, ga.DeploymentModel, ga.Environment, SourceAPI)
 
 	evt := moesifcollector.Event{
 		Request: reqSnapshot,
@@ -394,9 +394,17 @@ func resolveDimensions(dimensions map[string]interface{}, holder *statusHolder) 
 // event's request URI. An empty value omits the field entirely rather than
 // reporting environment:"" — a blank bucket would be indistinguishable from
 // a real environment named "".
-func buildMetadata(featureCode string, dimensions map[string]interface{}, productVersion, deploymentModel, environment string) map[string]interface{} {
+//
+// source says which stream the record came from — SourceAPI for the endpoint
+// events this package's Track produces, SourceConsole for the UI actions
+// reported through console.go. Both streams share "platform": "Agent Manager"
+// so they aggregate into one product view; source is what lets a query keep
+// them apart without knowing that one arrives as a Moesif Event and the other
+// as a Moesif Action.
+func buildMetadata(featureCode string, dimensions map[string]interface{}, productVersion, deploymentModel, environment, source string) map[string]interface{} {
 	meta := map[string]interface{}{
 		"platform":         "Agent Manager",
+		"source":           source,
 		"growth_action":    featureCode,
 		"product_version":  productVersion,
 		"deployment_model": deploymentModel,
