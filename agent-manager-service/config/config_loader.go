@@ -165,7 +165,7 @@ func loadEnvs() {
 		ConsoleEnabled:            r.readOptionalBool("CONSOLE_ANALYTICS_ENABLED", false),
 		MoesifCollectorBaseURL:    r.readOptionalString("MOESIF_COLLECTOR_BASE_URL", ""),
 		MoesifCollectorHostHeader: r.readOptionalString("MOESIF_COLLECTOR_HOST_HEADER", ""),
-		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "saas"),
+		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "on-prem"),
 		Environment:               r.readOptionalString("AMP_ENVIRONMENT", ""),
 	}
 	config.ThunderHostBaseDomain = r.readOptionalString("IDP_HOST_BASE_DOMAIN", "amp.localhost")

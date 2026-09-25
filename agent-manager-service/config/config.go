@@ -354,11 +354,8 @@ type GrowthAnalyticsConfig struct {
 	// host is already the real vhost (i.e. reached directly in-cluster).
 	MoesifCollectorHostHeader string
 	// DeploymentModel is reported as every event's "deployment_model"
-	// metadata field. Defaults to "saas" because that is the only shape this
-	// is deployed in today, but it is read from config rather than compiled
-	// in so a non-cloud deployment that does enable export (this repo still
-	// ships docker-compose and VM paths) labels its events honestly instead
-	// of claiming to be SaaS.
+	// metadata field. Defaults to "on-prem"; the cloud deployment sets
+	// AMP_DEPLOYMENT_MODEL=saas so its events are labelled accordingly.
 	DeploymentModel string
 	// Environment names the deployment environment (e.g. "development",
 	// "production") this instance runs in, reported as every event's
