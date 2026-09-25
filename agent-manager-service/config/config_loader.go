@@ -161,8 +161,8 @@ func loadEnvs() {
 	config.IsOnPremDeployment = r.readOptionalBool("IS_ON_PREM_DEPLOYMENT", true)
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
 	config.GrowthAnalytics = GrowthAnalyticsConfig{
-		Enabled:                   r.readOptionalBool("MOESIF_ENABLED", true),
-		ConsoleEnabled:            r.readOptionalBool("CONSOLE_ANALYTICS_ENABLED", true),
+		Enabled:                   r.readOptionalBool("MOESIF_ENABLED", false),
+		ConsoleEnabled:            r.readOptionalBool("CONSOLE_ANALYTICS_ENABLED", false),
 		MoesifCollectorBaseURL:    r.readOptionalString("MOESIF_COLLECTOR_BASE_URL", ""),
 		MoesifCollectorHostHeader: r.readOptionalString("MOESIF_COLLECTOR_HOST_HEADER", ""),
 		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "saas"),

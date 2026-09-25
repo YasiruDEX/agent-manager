@@ -341,7 +341,7 @@ type GrowthAnalyticsConfig struct {
 	// still means "this deployment reports nothing to Moesif".
 	ConsoleEnabled bool
 	// MoesifCollectorBaseURL is the proxy's base URL, e.g.
-	// "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
+	// "http://<collector-host>:<port>/<collector-path>"
 	// in-cluster, or "http://localhost:18080/moesif-collector" for local dev
 	// through a `kubectl port-forward` of the internal gateway. Empty
 	// disables telemetry export entirely — the middleware/growthanalytics

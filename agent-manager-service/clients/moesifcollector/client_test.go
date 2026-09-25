@@ -185,7 +185,7 @@ func TestSendEvent_HostHeader(t *testing.T) {
 	t.Run("overrides Host when set", func(t *testing.T) {
 		srv, got := newFakeCollector(t, http.StatusOK)
 
-		const vhost = "development-wso2cloud.gateway-internal.openchoreo-data-plane"
+		const vhost = "moesif-collector.example.internal"
 		c := newTestClient(srv.URL, "caller-jwt", vhost)
 		if err := c.SendEvent(context.Background(), sampleEvent()); err != nil {
 			t.Fatalf("SendEvent() error = %v, want nil", err)

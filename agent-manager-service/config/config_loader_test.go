@@ -643,7 +643,7 @@ func TestValidateFileMountLimitsConfig(t *testing.T) {
 // disables tracking (the collector URL is cleared, which is what makes Track
 // no-op) and the process carries on.
 func TestValidateGrowthAnalyticsConfig(t *testing.T) {
-	const vhost = "development-wso2cloud.gateway-internal.openchoreo-data-plane"
+	const vhost = "moesif-collector.example.internal"
 
 	tests := []struct {
 		name        string

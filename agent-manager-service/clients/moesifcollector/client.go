@@ -94,7 +94,7 @@ type Client struct {
 // NewClient builds a Client.
 //
 //   - baseURL is the proxy's base URL, e.g.
-//     "http://development-wso2cloud.gateway-internal.openchoreo-data-plane:8080/moesif-collector"
+//     "http://<collector-host>:<port>/<collector-path>"
 //     when reached directly inside the OpenChoreo data plane, or
 //     "http://localhost:18080/moesif-collector" for local dev through a
 //     `kubectl port-forward` of the internal gateway.
