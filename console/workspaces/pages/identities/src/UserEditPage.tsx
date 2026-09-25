@@ -42,6 +42,7 @@ import {
   absoluteRouteMap,
   type ThunderGroup,
 } from "@agent-management-platform/types";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { BackButton } from "./components/BackButton";
 import { EditFormSkeleton } from "./components/EditFormSkeleton";
 import { EntityHeader } from "./components/EntityHeader";
@@ -107,6 +108,7 @@ export const UserEditPage: React.FC = () => {
       selectedGroups.some((g) => !initial.has(g.id))
     );
   }, [initialGroups, selectedGroups]);
+  useUnsavedChangesGuard(hasEdited.current && isGroupsDirty);
 
   const usersPath = orgId
     ? generatePath(

@@ -36,6 +36,7 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import { useFormValidation } from "@agent-management-platform/views";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { z } from "zod";
 import { type EndpointDraft } from "./EndpointFormFields";
 import { EndpointsEditorSection } from "./EndpointsEditorSection";
@@ -95,6 +96,15 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
       : undefined;
 
   const isCreating = createMCPProxy.isPending;
+
+  const isDirty =
+    Boolean(proxyName) ||
+    proxyVersion !== DEFAULT_PROXY_VERSION ||
+    Boolean(proxyDescription) ||
+    Boolean(proxyContext) ||
+    Boolean(handle) ||
+    endpoints.length > 0;
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const handleVersionChange = useCallback(
     (value: string) => {
@@ -168,12 +178,15 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
     };
 
     await createMCPProxy.mutateAsync({ params: { orgName: orgId }, body });
-    navigate(
-      generatePath(absoluteRouteMap.children.org.children.mcpProxies.path, {
-        orgId,
-      }),
+    allowNavigation(() =>
+      navigate(
+        generatePath(absoluteRouteMap.children.org.children.mcpProxies.path, {
+          orgId,
+        }),
+      ),
     );
   }, [
+    allowNavigation,
     createMCPProxy,
     endpoints,
     navigate,

@@ -21,6 +21,7 @@ import {
   type AccessControlItem,
   type AccessControlMode,
   type AccessControlStatus,
+  useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import { useMCPPoliciesCatalog } from "@agent-management-platform/api-client";
 import type {
@@ -211,6 +212,7 @@ export function MCPProxyManageToolsTab({
     return mode !== saved.mode || currentKeys !== savedKeys;
   }, [mode, exceptionKeys]);
 
+  useUnsavedChangesGuard(isDirty);
   const handleSave = useCallback(async () => {
     if (!config) return;
     if (!availableAclPolicy) {

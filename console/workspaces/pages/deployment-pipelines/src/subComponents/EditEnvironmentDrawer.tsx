@@ -38,6 +38,7 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateEnvironment } from "@agent-management-platform/api-client";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import type { Environment } from "@agent-management-platform/types";
 import { editEnvironmentSchema, type EditEnvironmentFormValues } from "../form/environmentSchema";
 
@@ -59,6 +60,7 @@ export function EditEnvironmentDrawer({
     description: "",
     isProduction: environment.isProduction,
   });
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
   const { errors, validateForm, setFieldError, validateField } =
     useFormValidation<EditEnvironmentFormValues>(editEnvironmentSchema);
@@ -75,15 +77,23 @@ export function EditEnvironmentDrawer({
 
   useEffect(() => {
     if (open) {
-      setFormData({
+      const seed = {
         displayName: environment.displayName ?? "",
         description: "",
         isProduction: environment.isProduction,
-      });
+      };
+      setFormData(seed);
+      setInitialSnapshot(JSON.stringify(seed));
       setLastSubmittedValidationErrors({});
       resetMutation();
     }
   }, [open, environment, resetMutation]);
+
+  const isDirty = useMemo(
+    () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
+    [open, initialSnapshot, formData],
+  );
+  useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (field: keyof EditEnvironmentFormValues, value: string | boolean) => {

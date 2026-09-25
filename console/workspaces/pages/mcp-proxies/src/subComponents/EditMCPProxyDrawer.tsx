@@ -35,6 +35,7 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateMCPProxy } from "@agent-management-platform/api-client";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import type { Environment, MCPProxy } from "@agent-management-platform/types";
 import { z } from "zod";
 import { type EndpointDraft } from "./EndpointFormFields";
@@ -92,6 +93,13 @@ export function EditMCPProxyDrawer({
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [seededSnapshot, setSeededSnapshot] = useState<string | null>(null);
+  const isDirty =
+    open &&
+    seededSnapshot !== null &&
+    JSON.stringify({ formData, endpoints }) !== seededSnapshot;
+  useUnsavedChangesGuard(isDirty);
+
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
@@ -102,18 +110,23 @@ export function EditMCPProxyDrawer({
     // would clobber whatever the user is mid-editing.
     if (!justOpened) return;
 
-    setFormData({
+    const seededFormData = {
       name: proxy.name,
       version: proxy.version,
       context: proxy.context ?? "",
       description: proxy.description ?? "",
-    });
+    };
+    const seededEndpoints = (proxy.endpoints ?? []).map(endpointToDraft);
+    setFormData(seededFormData);
+    setSeededSnapshot(
+      JSON.stringify({ formData: seededFormData, endpoints: seededEndpoints }),
+    );
     clearErrors();
     resetMutation();
 
     // Seed the working list from the proxy's native endpoints each time the drawer is
     // opened. A draft seeded from a backend endpoint keeps its handle as its id.
-    setEndpoints((proxy.endpoints ?? []).map(endpointToDraft));
+    setEndpoints(seededEndpoints);
     setAddOpen(false);
     setEditingId(null);
   }, [proxy, open, clearErrors, resetMutation]);

@@ -52,7 +52,7 @@ import {
   type ThunderGroup,
   type ThunderRole,
 } from "@agent-management-platform/types";
-import { EditFormSkeleton } from "@agent-management-platform/shared-component";
+import { EditFormSkeleton, useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
 import { useAssignmentDelta } from "./useAssignmentDelta";
 import { withSearchParams } from "../../utils/withSearchParams";
@@ -342,6 +342,9 @@ export const AgentDetailPage: React.FC = () => {
 
   const title = agentData?.displayName || agentName || "Agent";
 
+  const isDirty = roleDelta.isDirty || groupDelta.isDirty;
+  useUnsavedChangesGuard(isDirty);
+
   if (isLoading) {
     return (
       <PageLayout title={title} backHref={agentsPath} backLabel="Back to Agents" disableIcon>
@@ -350,7 +353,6 @@ export const AgentDetailPage: React.FC = () => {
     );
   }
 
-  const isDirty = roleDelta.isDirty || groupDelta.isDirty;
   const canEdit = !!thunderAgentId;
 
   return (

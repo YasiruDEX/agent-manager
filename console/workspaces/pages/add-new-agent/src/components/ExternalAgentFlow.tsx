@@ -19,6 +19,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Form } from "@wso2/oxygen-ui";
 import { PageLayout, useFormValidation } from "@agent-management-platform/views";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { absoluteRouteMap, OrgProjPathParams } from "@agent-management-platform/types";
 import { useCreateAgent } from "@agent-management-platform/api-client";
@@ -40,6 +41,8 @@ export const ExternalAgentFlow: React.FC = () => {
     displayName: "",
     description: "",
   });
+  const isDirty = Boolean(formData.displayName || formData.description);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const { errors, validateForm, setFieldError, validateField } =
     useFormValidation<ConnectAgentFormValues>(connectAgentSchema);
@@ -67,15 +70,17 @@ export const ExternalAgentFlow: React.FC = () => {
       const payload = buildAgentCreationPayload(values, params);
       createAgent(payload, {
         onSuccess: () => {
-          navigate(
-            generatePath(
-              absoluteRouteMap.children.org.children.projects.children.agents.path,
-              {
-                orgId: params.orgName ?? "",
-                projectId: params.projName ?? "",
-                agentId: payload.body.name,
-              }
-            ) + "?setup=true"
+          allowNavigation(() =>
+            navigate(
+              generatePath(
+                absoluteRouteMap.children.org.children.projects.children.agents.path,
+                {
+                  orgId: params.orgName ?? "",
+                  projectId: params.projName ?? "",
+                  agentId: payload.body.name,
+                }
+              ) + "?setup=true"
+            )
           );
         },
         onError: (e: unknown) => {
@@ -84,7 +89,7 @@ export const ExternalAgentFlow: React.FC = () => {
         },
       });
     },
-    [createAgent, navigate, params]
+    [createAgent, navigate, allowNavigation, params]
   );
 
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] = useState<

@@ -23,6 +23,7 @@ import type {
   UpdateLLMProviderRequest,
 } from "@agent-management-platform/types";
 import { z } from "zod";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import {
   Alert,
   Button,
@@ -137,6 +138,8 @@ export function LLMProviderSecurityTab({
     setFieldErrors({});
     setStatus(null);
   }, [providerData]);
+
+  useUnsavedChangesGuard(isDirty);
 
   const handleSave = useCallback(async () => {
     if (!providerData) return;

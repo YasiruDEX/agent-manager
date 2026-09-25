@@ -55,6 +55,7 @@ import {
   getAgentManagerUrl,
   getAmpVersionHelm,
   getRawScriptUrl,
+  useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 
 const SCRIPT_NAME = "manage-identity-provider.sh";
@@ -244,6 +245,18 @@ export function ManageIdentityProviderDialog({
       setSkipTlsVerify(false);
     }
   }, [open, isDelete, provider, lockedGateway]);
+
+  // Delete mode is read-only; in upsert mode only user-entered values count.
+  const isDirty =
+    open &&
+    !isDelete &&
+    (!!name.trim() ||
+      !!issuer.trim() ||
+      !!jwksUri.trim() ||
+      skipTlsVerify ||
+      !!discoveryUrl.trim() ||
+      (!isGatewayLocked && !!envName));
+  useUnsavedChangesGuard(isDirty);
 
   // Clear the gateway selection when the environment changes (upsert flow only —
   // a locked gateway stays fixed regardless of environment).

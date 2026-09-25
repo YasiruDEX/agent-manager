@@ -33,6 +33,7 @@ import {
   useListAgentIdentityScopes,
 } from "@agent-management-platform/api-client";
 import { useFormValidation, useDirtyState } from "@agent-management-platform/views";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { withSearchParams } from "../../utils/withSearchParams";
 import {
@@ -61,7 +62,8 @@ export const RoleCreatePage: React.FC = () => {
 
   const { errors, validateField, validateForm, clearErrors, setFieldError } =
     useFormValidation<CreateAgentIdentityRoleFormValues>(createAgentIdentityRoleSchema);
-  const { checkDirty, resetDirty } = useDirtyState(formData);
+  const { isDirty, checkDirty, resetDirty } = useDirtyState(formData);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty || selectedScopes.length > 0);
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
     useState<typeof errors>({});
 
@@ -106,10 +108,12 @@ export const RoleCreatePage: React.FC = () => {
       });
       resetDirty();
       clearErrors();
-      navigate(
-        withSearchParams(
-          generatePath(rolesNode.children.detail.path, { orgId, roleId: created.id }),
-          searchParams,
+      allowNavigation(() =>
+        navigate(
+          withSearchParams(
+            generatePath(rolesNode.children.detail.path, { orgId, roleId: created.id }),
+            searchParams,
+          ),
         ),
       );
     } catch {
@@ -125,6 +129,7 @@ export const RoleCreatePage: React.FC = () => {
     selectedScopes,
     resetDirty,
     clearErrors,
+    allowNavigation,
     navigate,
     rolesNode,
     searchParams,

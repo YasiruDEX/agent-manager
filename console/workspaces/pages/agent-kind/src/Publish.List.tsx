@@ -40,7 +40,11 @@ import {
   type AgentKindVersionResponse,
   type BuildResponse,
 } from "@agent-management-platform/types";
-import { LabelsEditor, useConfirmationDialog } from "@agent-management-platform/shared-component";
+import {
+  LabelsEditor,
+  useConfirmationDialog,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import { RuntimeConfigEditor, createRuntimeConfigRow, type RuntimeConfigRow } from "./RuntimeConfigEditor";
 import { KindDescriptionField } from "./KindDescriptionField";
 import { DangerZoneCard } from "./DangerZoneCard";
@@ -139,9 +143,26 @@ export const PublishedList: React.FC = () => {
     editDescription !== (existingKind?.description ?? "") ||
     !labelsEqual(editLabels, existingKind?.labels ?? {});
 
+  // The create form is pre-filled from the kind (or agent), so only edits
+  // beyond that pre-fill count as unsaved for the route guard.
+  const prefillSource = existingKind ?? agent;
+  const isCreateDirty =
+    isCreateOpen &&
+    (versionName.trim() !== "" ||
+      selectedBuildName !== "" ||
+      kindDisplayName !== (prefillSource?.displayName ?? "") ||
+      kindDescription !== (prefillSource?.description ?? "") ||
+      Object.keys(kindLabels).length > 0 ||
+      createRows.some((r) => r.key.trim() !== ""));
+  const { allowNavigation } = useUnsavedChangesGuard(
+    isCreateDirty || (isEditKindOpen && isEditKindDirty),
+  );
+
   const handleCloseEditKind = useCallback(() => {
-    confirmDiscardIfDirty(isEditKindDirty, () => navigate(listPath));
-  }, [isEditKindDirty, confirmDiscardIfDirty, navigate, listPath]);
+    confirmDiscardIfDirty(isEditKindDirty, () =>
+      allowNavigation(() => navigate(listPath)),
+    );
+  }, [isEditKindDirty, confirmDiscardIfDirty, allowNavigation, navigate, listPath]);
 
   const handleSaveEditKind = useCallback(async () => {
     if (!orgId || !agentId) return;
@@ -155,9 +176,9 @@ export const PublishedList: React.FC = () => {
         labels: editLabels,
       },
     });
-    navigate(listPath);
+    allowNavigation(() => navigate(listPath));
   }, [orgId, agentId, editDisplayName, editDescription,
-    editLabels, updateKind, navigate, listPath]);
+    editLabels, updateKind, allowNavigation, navigate, listPath]);
 
   // Pre-fill drawer fields from existing kind data when either drawer opens.
   // Skipped once hasUnpublished is true — the drawers are closed at that
@@ -211,9 +232,10 @@ export const PublishedList: React.FC = () => {
   const handleDrawerClose = useCallback(() => {
     confirmDiscardIfDirty(isDirty, () => {
       resetCreateForm();
-      navigate(listPath);
+      allowNavigation(() => navigate(listPath));
     });
-  }, [isDirty, confirmDiscardIfDirty, resetCreateForm, navigate, listPath]);
+  }, [isDirty, confirmDiscardIfDirty, resetCreateForm, allowNavigation,
+    navigate, listPath]);
 
   const handleCreate = useCallback(async () => {
     const configSchema: AgentKindConfigSchemaItem[] = createRows
@@ -240,9 +262,10 @@ export const PublishedList: React.FC = () => {
     });
 
     resetCreateForm();
-    navigate(listPath);
+    allowNavigation(() => navigate(listPath));
   }, [orgId, projectId, agentId, versionName, selectedBuildName, kindDisplayName, kindDescription,
-    kindLabels, createRows, publishAgentKind, resetCreateForm, navigate, listPath]);
+    kindLabels, createRows, publishAgentKind, resetCreateForm, allowNavigation,
+    navigate, listPath]);
 
   const { data: buildsData, isLoading: isBuildsLoading } = useGetAllAgentBuilds({
     orgName: orgId,

@@ -39,7 +39,8 @@ import type {
   AgentResourceConfigsResponse,
   UpdateAgentResourceConfigsRequest,
 } from "@agent-management-platform/types";
-import { useCallback, useEffect, useState } from "react";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const cpuPattern = /^[0-9]+(\.[0-9]+)?m?$/i;
 const memoryPattern = /^[0-9]+(\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei)$/i;
@@ -231,6 +232,7 @@ export function EditResourceConfigsDrawer({
   environment,
 }: EditResourceConfigsDrawerProps) {
   const [formData, setFormData] = useState<ResourceConfigsFormValues>(DEFAULT_FORM_VALUES);
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
   const {
     errors,
@@ -245,12 +247,18 @@ export function EditResourceConfigsDrawer({
 
   useEffect(() => {
     if (open) {
-      setFormData(
-        resourceConfigs ? toFormValues(resourceConfigs) : DEFAULT_FORM_VALUES
-      );
+      const seed = resourceConfigs ? toFormValues(resourceConfigs) : DEFAULT_FORM_VALUES;
+      setFormData(seed);
+      setInitialSnapshot(JSON.stringify(seed));
       clearErrors();
     }
   }, [open, resourceConfigs, clearErrors]);
+
+  const isDirty = useMemo(
+    () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
+    [open, initialSnapshot, formData],
+  );
+  useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (field: keyof ResourceConfigsFormValues, value: unknown) => {

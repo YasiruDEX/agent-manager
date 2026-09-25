@@ -36,6 +36,7 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateGateway } from "@agent-management-platform/api-client";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import type {
   GatewayResponse,
   UpdateGatewayRequest,
@@ -61,6 +62,7 @@ export function EditGatewayDrawer({
     displayName: gateway.displayName,
     isCritical: gateway.isCritical,
   });
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
   const { errors, validateForm, setFieldError, validateField } =
     useFormValidation<EditGatewayFormValues>(editGatewaySchema);
@@ -79,13 +81,21 @@ export function EditGatewayDrawer({
 
   useEffect(() => {
     if (open) {
-      setFormData({
+      const seed = {
         displayName: gateway.displayName,
         isCritical: gateway.isCritical,
-      });
+      };
+      setFormData(seed);
+      setInitialSnapshot(JSON.stringify(seed));
       resetMutation();
     }
   }, [gateway, open, resetMutation]);
+
+  const isDirty = useMemo(
+    () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
+    [open, initialSnapshot, formData],
+  );
+  useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (

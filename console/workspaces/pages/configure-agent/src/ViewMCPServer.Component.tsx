@@ -34,6 +34,7 @@ import {
   useAgentIdentityCredentials,
   usePipelineEnvironmentsState,
   useThunderInstanceForEnv,
+  useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import {
   Alert,
@@ -548,6 +549,8 @@ export const ViewMCPServerComponent = () => {
   const isDirty = visibleEnvVarRows.some(
     (envVar) => (envVarNames[envVar.key] ?? envVar.name) !== envVar.name,
   );
+
+  useUnsavedChangesGuard(panelOpen && isDirty);
 
   const handleSave = () => {
     if (

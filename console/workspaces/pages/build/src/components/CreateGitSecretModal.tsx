@@ -30,6 +30,7 @@ import {
 } from '@wso2/oxygen-ui';
 import { useCreateGitSecret } from '@agent-management-platform/api-client';
 import { useFormValidation } from '@agent-management-platform/views';
+import { useUnsavedChangesGuard } from '@agent-management-platform/shared-component';
 import { z } from 'zod';
 
 interface CreateGitSecretModalProps {
@@ -69,6 +70,9 @@ export const CreateGitSecretModal = ({
   orgId,
 }: CreateGitSecretModalProps) => {
   const [formState, setFormState] = useState<FormState>(initialFormState);
+  useUnsavedChangesGuard(
+    open && JSON.stringify(formState) !== JSON.stringify(initialFormState),
+  );
   const { errors, validateForm, clearErrors, clearFieldError } =
     useFormValidation<FormState>(gitSecretSchema);
 

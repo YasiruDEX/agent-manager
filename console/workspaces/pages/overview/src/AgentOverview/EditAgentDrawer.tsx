@@ -29,8 +29,12 @@ import {
 import { z } from "zod";
 import { useUpdateAgent } from "@agent-management-platform/api-client";
 import { AgentResponse, UpdateAgentRequest } from "@agent-management-platform/types";
-import { LabelsEditor, MarkdownEditor } from "@agent-management-platform/shared-component";
-import { useEffect, useState, useCallback } from "react";
+import {
+  LabelsEditor,
+  MarkdownEditor,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
+import { useEffect, useState, useCallback, useMemo } from "react";
 
 interface EditAgentDrawerProps {
   open: boolean;
@@ -70,6 +74,7 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
     description: agent.description || '',
   });
   const [labels, setLabels] = useState<Record<string, string>>(agent.labels ?? {});
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
   const { isFullscreen, toggle: toggleFullscreen, reset: resetFullscreen } = useDrawerFullscreen();
 
   const { errors, validateField, validateForm, clearErrors, setFieldError } =
@@ -80,16 +85,27 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
   // Reset form when agent changes or drawer opens
   useEffect(() => {
     if (open) {
-      setFormData({
+      const seed = {
         name: agent.name,
         displayName: agent.displayName,
         description: agent.description || '',
-      });
+      };
+      setFormData(seed);
       setLabels(agent.labels ?? {});
+      setInitialSnapshot(JSON.stringify({ formData: seed, labels: agent.labels ?? {} }));
       clearErrors();
       resetFullscreen();
     }
   }, [agent, open, clearErrors, resetFullscreen]);
+
+  const isDirty = useMemo(
+    () =>
+      open &&
+      initialSnapshot !== null &&
+      JSON.stringify({ formData, labels }) !== initialSnapshot,
+    [open, initialSnapshot, formData, labels],
+  );
+  useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback((field: keyof EditAgentFormValues, value: string) => {
     const error = validateField(field, value);

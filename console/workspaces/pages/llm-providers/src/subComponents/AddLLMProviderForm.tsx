@@ -100,6 +100,8 @@ interface AddLLMProviderFormProps {
    */
   showGuardrails?: boolean;
   onCancel: () => void;
+  /** Called whenever the form gains or loses unsaved user input. */
+  onDirtyChange?: (isDirty: boolean) => void;
   onSubmit: (
     values: AddLLMProviderFormValues,
     guardrails: GuardrailSelection[],
@@ -143,6 +145,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
   showAdvancedBasicDetails = true,
   showGuardrails = true,
   onCancel,
+  onDirtyChange,
   onSubmit,
 }) => {
   const [formData, setFormData] =
@@ -202,6 +205,22 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
   // which is the signal to resume auto-deriving from Name.
   const [isContextManuallyEdited, setIsContextManuallyEdited] =
     useState(false);
+
+  // upstreamUrl and gatewayIds are auto-filled from the template / gateway
+  // selector, so they're left out; a manual edit to them implies a template.
+  const isDirty = useMemo(
+    () =>
+      guardrails.length > 0 ||
+      (["templateId", "displayName", "version", "description", "context",
+        "apiKey", "resilienceTimeout", "resilienceIdleTimeout"] as const).some(
+        (k) => (formData[k] ?? "") !== (INITIAL_FORM_VALUES[k] ?? ""),
+      ),
+    [formData, guardrails],
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const handleAddGuardrail = useCallback((guardrail: GuardrailSelection) => {
     setGuardrails((prev) => {

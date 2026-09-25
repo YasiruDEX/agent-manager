@@ -37,6 +37,7 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import {
   listAgentIdentityRoles,
   useCreateMCPProxyScope,
@@ -141,6 +142,13 @@ export function CreateScopeDrawer({
     clearErrors();
     resetCreateScope();
   }, [open, clearErrors, resetCreateScope]);
+
+  const isDirty =
+    open &&
+    (JSON.stringify(formData) !== JSON.stringify(DEFAULT_FORM) ||
+      selectedTools.length > 0 ||
+      Object.values(selectedRolesByEnv).some((roles) => roles.length > 0));
+  useUnsavedChangesGuard(isDirty);
 
   const roleQueries = useQueries({
     queries: environments.map(

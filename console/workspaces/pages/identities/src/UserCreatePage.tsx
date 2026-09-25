@@ -29,6 +29,7 @@ import {
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
 import { TextInput } from "@agent-management-platform/views";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { BackButton } from "./components/BackButton";
 
@@ -44,6 +45,9 @@ export const UserCreatePage: React.FC = () => {
     username?: string;
     password?: string;
   }>({});
+
+  const isDirty = !!(username || password || givenName || familyName);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const {
     mutateAsync: createUser,
@@ -90,7 +94,7 @@ export const UserCreatePage: React.FC = () => {
           attributes,
         },
       });
-      navigate(usersPath);
+      allowNavigation(() => navigate(usersPath));
     } catch {
       // createError state is set by React Query and displayed in the Alert above
     }

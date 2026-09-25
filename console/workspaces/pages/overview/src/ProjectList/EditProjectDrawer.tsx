@@ -29,7 +29,7 @@ import {
 import { z } from "zod";
 import { useListDeploymentPipelines, useListEnvironments, useUpdateProject } from "@agent-management-platform/api-client";
 import { type DeploymentPipelineResponse, ProjectResponse, UpdateProjectRequest } from "@agent-management-platform/types";
-import { MarkdownEditor } from "@agent-management-platform/shared-component";
+import { MarkdownEditor, useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
 function pipelineChainLabel(
@@ -126,7 +126,8 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
     setFieldError,
   } = useFormValidation<EditProjectFormValues>(editProjectSchema);
 
-  const { checkDirty, resetDirty } = useDirtyState(formData);
+  const { isDirty: formChanged, checkDirty, resetDirty } = useDirtyState(formData);
+  useUnsavedChangesGuard(open && formChanged);
 
   const handleFieldChange = useCallback((field: keyof EditProjectFormValues, value: string) => {
     setFormData(prevData => {
@@ -171,14 +172,15 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
   // Reset form when project changes or drawer opens
   useEffect(() => {
     if (open) {
-      setFormData({
+      const seed = {
         name: project.name,
         displayName: project.displayName,
         description: project.description || '',
         deploymentPipeline: project.deploymentPipeline || '',
-      });
+      };
+      setFormData(seed);
       clearErrors();
-      resetDirty();
+      resetDirty(seed);
       resetFullscreen();
     }
   }, [project, open, clearErrors, resetDirty, resetFullscreen]);

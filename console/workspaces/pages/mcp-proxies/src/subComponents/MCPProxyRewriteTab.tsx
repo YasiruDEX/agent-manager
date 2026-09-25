@@ -49,6 +49,7 @@ import type {
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
 import { TextInput } from "@agent-management-platform/views";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { REWRITE_POLICY_NAME } from "../constants";
 import type { CapabilityKind } from "./mcpEndpoints";
 
@@ -429,6 +430,7 @@ export function MCPProxyRewriteTab({
     return JSON.stringify(saved.state) !== JSON.stringify(state);
   }, [enabled, state]);
 
+  useUnsavedChangesGuard(isDirty);
   const updateTool = useCallback(
     (backendId: string, patch: Partial<ToolEntry>) => {
       setState((prev) => ({

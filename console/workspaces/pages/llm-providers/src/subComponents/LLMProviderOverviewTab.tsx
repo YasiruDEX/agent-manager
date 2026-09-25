@@ -28,6 +28,7 @@ import {
   InvokeEndpoints,
   type InvokeEndpoint,
   SwaggerSpecViewer,
+  useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import {
   useCreateLLMProviderAPIKey,
@@ -132,6 +133,8 @@ export function LLMProviderOverviewTab({
   const hasOpenapiChanged =
     openapiValue.trim() !==
     (providerData?.openapi?.trim() ?? openapiSpecUrl ?? "").trim();
+
+  useUnsavedChangesGuard(hasOpenapiChanged);
 
   const swaggerSource = useMemo(() => {
     const v = openapiValue.trim();

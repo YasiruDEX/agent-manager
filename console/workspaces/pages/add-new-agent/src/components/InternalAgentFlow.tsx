@@ -19,6 +19,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, Form } from "@wso2/oxygen-ui";
 import { PageLayout, useFormValidation } from "@agent-management-platform/views";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   absoluteRouteMap,
@@ -45,7 +46,7 @@ export const InternalAgentFlow: React.FC = () => {
     projectId?: string;
   }>();
 
-  const [formData, setFormData] = useState<CreateAgentFormValues>({
+  const [initialFormData] = useState<CreateAgentFormValues>(() => ({
     deploymentType: "new" as const,
     enableAutoInstrumentation: true,
     // instrumentationVersion and languageVersion start undefined and get
@@ -67,7 +68,8 @@ export const InternalAgentFlow: React.FC = () => {
     openApiPath: "",
     env: [],
     files: [],
-  });
+  }));
+  const [formData, setFormData] = useState<CreateAgentFormValues>(initialFormData);
 
   const { errors, validateForm, setFieldError, validateField } =
     useFormValidation<CreateAgentFormValues>(createAgentSchema);
@@ -76,6 +78,22 @@ export const InternalAgentFlow: React.FC = () => {
   const [mcpProxies, setMCPProxies] = useState<MCPProxyFormEntry[]>([]);
 
   const { mutate: createAgent, isPending, error } = useCreateAgent();
+
+  // languageVersion / instrumentationVersion are seeded asynchronously from
+  // build options, so they don't count as user edits.
+  const isDirty = useMemo(() => {
+    const strip = (values: CreateAgentFormValues) => ({
+      ...values,
+      languageVersion: undefined,
+      instrumentationVersion: undefined,
+    });
+    return (
+      llmProviders.length > 0 ||
+      mcpProxies.length > 0 ||
+      JSON.stringify(strip(formData)) !== JSON.stringify(strip(initialFormData))
+    );
+  }, [formData, initialFormData, llmProviders, mcpProxies]);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const params = useMemo<OrgProjPathParams>(
     () => ({
@@ -136,15 +154,17 @@ export const InternalAgentFlow: React.FC = () => {
     );
     createAgent(payload, {
       onSuccess: () => {
-        navigate(
-          generatePath(
-            absoluteRouteMap.children.org.children.projects.children.agents.path,
-            {
-              orgId: params.orgName ?? "",
-              projectId: params.projName ?? "",
-              agentId: payload.body.name,
-            }
-          ) + "?setup=true"
+        allowNavigation(() =>
+          navigate(
+            generatePath(
+              absoluteRouteMap.children.org.children.projects.children.agents.path,
+              {
+                orgId: params.orgName ?? "",
+                projectId: params.projName ?? "",
+                agentId: payload.body.name,
+              }
+            ) + "?setup=true"
+          )
         );
       },
       onError: (e: unknown) => {
@@ -157,6 +177,7 @@ export const InternalAgentFlow: React.FC = () => {
     formData,
     createAgent,
     navigate,
+    allowNavigation,
     params,
     errors,
     llmProviders,

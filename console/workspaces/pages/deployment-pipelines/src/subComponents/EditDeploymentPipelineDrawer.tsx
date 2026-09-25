@@ -39,6 +39,7 @@ import {
   useListEnvironments,
 } from "@agent-management-platform/api-client";
 import type { DeploymentPipelineResponse } from "@agent-management-platform/types";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { editPipelineSchema, type EditPipelineFormValues } from "../form/schema";
 import { chainToPromotionPaths } from "../utils/chainUtils";
 import { validatePromotionChain } from "../utils/validatePromotionChain";
@@ -71,6 +72,7 @@ export function EditDeploymentPipelineDrawer(
     description: pipeline.description ?? "",
     chain: pipelineToChain(pipeline),
   }));
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
 
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -89,15 +91,23 @@ export function EditDeploymentPipelineDrawer(
 
   useEffect(() => {
     if (open) {
-      setFormData({
+      const seed = {
         displayName: pipeline.displayName,
         description: pipeline.description ?? "",
         chain: pipelineToChain(pipeline),
-      });
+      };
+      setFormData(seed);
+      setInitialSnapshot(JSON.stringify(seed));
       setSubmitError(null);
       resetMutation();
     }
   }, [open, pipeline, resetMutation]);
+
+  const isDirty = useMemo(
+    () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
+    [open, initialSnapshot, formData],
+  );
+  useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (field: "displayName" | "description", value: string) => {

@@ -16,7 +16,8 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import {
   Alert,
   Autocomplete,
@@ -766,7 +767,10 @@ const emptyParam = (): EvaluatorConfigParam => ({
 });
 
 interface EvaluatorFormProps {
-  onSubmit: (values: EvaluatorFormValues) => void;
+  onSubmit: (
+    values: EvaluatorFormValues,
+    allowNavigation: (action: () => void) => void,
+  ) => void;
   isSubmitting: boolean;
   serverError?: unknown;
   submitLabel: string;
@@ -790,6 +794,12 @@ export function EvaluatorForm({
   const [errors, setErrors] = useState<
     Partial<Record<keyof EvaluatorFormValues, string>>
   >({});
+  const isDirty = useMemo(
+    () =>
+      JSON.stringify(values) !== JSON.stringify(initialValues ?? defaultValues),
+    [values, initialValues],
+  );
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
   const [page, setPage] = useState<1 | 2>(1);
   const [referenceTypeKey, setReferenceTypeKey] =
     useState<ReferenceTypeKey | null>(null);
@@ -1027,9 +1037,9 @@ export function EvaluatorForm({
 
   const handleSubmit = useCallback(() => {
     if (validate()) {
-      onSubmit(values);
+      onSubmit(values, allowNavigation);
     }
-  }, [validate, onSubmit, values]);
+  }, [validate, onSubmit, values, allowNavigation]);
 
   const canAdvance = values.displayName.trim().length > 0;
 

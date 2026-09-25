@@ -38,6 +38,7 @@ import {
   useCreateDeploymentPipeline,
   useListEnvironments,
 } from "@agent-management-platform/api-client";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { createPipelineSchema, type CreatePipelineFormValues } from "../form/schema";
 import { chainToPromotionPaths } from "../utils/chainUtils";
 import { PipelineChainEditor } from "./PipelineChainEditor";
@@ -78,6 +79,10 @@ export function CreateDeploymentPipelineDrawer(
       resetMutation();
     }
   }, [open, resetMutation]);
+
+  useUnsavedChangesGuard(
+    open && JSON.stringify(formData) !== JSON.stringify(DEFAULT_FORM),
+  );
 
   const handleFieldChange = useCallback(
     (field: "displayName" | "description", value: string) => {

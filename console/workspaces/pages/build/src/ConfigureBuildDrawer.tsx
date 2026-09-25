@@ -45,6 +45,7 @@ import {
   InputInterfaceType,
   globalConfig,
 } from "@agent-management-platform/types";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { useEffect, useCallback, useMemo, useState } from "react";
 import { GitSecretSelect } from "./components/GitSecretSelect";
 
@@ -264,6 +265,7 @@ export function ConfigureBuildDrawer({
   );
   
   const [formData, setFormData] = useState<ConfigureBuildFormValues>(buildDefaults);
+  const [initialSnapshot, setInitialSnapshot] = useState<string | null>(null);
   const { errors, validateField, validateForm, clearErrors, setFieldError } =
     useFormValidation<ConfigureBuildFormValues>(configureBuildSchema);
 
@@ -273,9 +275,16 @@ export function ConfigureBuildDrawer({
   useEffect(() => {
     if (open) {
       setFormData(buildDefaults);
+      setInitialSnapshot(JSON.stringify(buildDefaults));
       clearErrors();
     }
   }, [open, buildDefaults, clearErrors]);
+
+  const isDirty = useMemo(
+    () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
+    [open, initialSnapshot, formData],
+  );
+  useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (

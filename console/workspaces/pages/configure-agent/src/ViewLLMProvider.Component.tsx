@@ -28,6 +28,7 @@ import {
   PolicyListSection,
   ResilienceTimeoutFields,
   usePipelineEnvironmentsState,
+  useUnsavedChangesGuard,
   type PolicySelection as GuardrailSelection,
 } from "@agent-management-platform/shared-component";
 import {
@@ -545,6 +546,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
       [selectedEnvName]: { ...prev[selectedEnvName], idleTimeout },
     }));
   }, [selectedEnvName, resilienceByEnv]);
+
+  useUnsavedChangesGuard(isDirty);
 
   const handleSave = useCallback(() => {
     if (!orgId || !projectId || !agentId || !configId || !config) return;

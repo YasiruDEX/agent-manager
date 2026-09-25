@@ -40,6 +40,7 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
+import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import {
   useListDataPlanes,
   useCheckThunderUrlAvailability,
@@ -261,6 +262,16 @@ export function CreateEnvironmentDrawer({
       setFormData((prev) => ({ ...prev, dataplaneRef: planes[0].name }));
     }
   }, [planes, formData.dataplaneRef]);
+
+  // The auto-selected default data plane isn't a user edit.
+  const isDirty = useMemo(() => {
+    if (!open) return false;
+    const current = JSON.stringify({ ...formData, dataplaneRef: "" });
+    const autoDefault = formData.dataplaneRef === "" ||
+      formData.dataplaneRef === planes[0]?.name;
+    return !autoDefault || current !== JSON.stringify(DEFAULT_FORM);
+  }, [open, formData, planes]);
+  useUnsavedChangesGuard(isDirty);
 
   const handleChange = useCallback(
     (field: keyof CreateEnvironmentFormValues, value: string | boolean) => {
