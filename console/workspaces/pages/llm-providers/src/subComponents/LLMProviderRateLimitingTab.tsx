@@ -653,7 +653,7 @@ export function LLMProviderRateLimitingTab({
     [filteredResources, resourcePage],
   );
 
-  useUnsavedChangesGuard(isDirty);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const handleSave = useCallback(async () => {
     if (!providerData || isLoading) return;
@@ -788,9 +788,12 @@ export function LLMProviderRateLimitingTab({
               onChange={(_, v: "global" | "resourceWise" | null) => {
                 if (v) {
                   setProviderMode(v);
-                  setSearchParams(
-                    (prev) => { const next = new URLSearchParams(prev); next.set("mode", v); return next; },
-                    { replace: true },
+                  // ?mode= mirrors this in-form toggle, not a page change.
+                  allowNavigation(() =>
+                    setSearchParams(
+                      (prev) => { const next = new URLSearchParams(prev); next.set("mode", v); return next; },
+                      { replace: true },
+                    ),
                   );
                 }
               }}

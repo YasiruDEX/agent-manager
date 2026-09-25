@@ -17,7 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
-import { type NavigateFunction, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useConfirmationDialog } from "../components/ConfirmationDialog/ConfirmationDialogProvider";
 
 type ShowLeaveDialog = (onLeave: () => void) => void;
@@ -26,7 +26,9 @@ type ShowLeaveDialog = (onLeave: () => void) => void;
 // dialog, however many dirty forms (e.g. nested tabs) are on screen.
 const activeGuards = new Set<symbol>();
 let showLeaveDialog: ShowLeaveDialog | null = null;
-let routerNavigate: NavigateFunction | null = null;
+let routerNavigate:
+  | ((to: string, options: { replace: boolean; state: unknown }) => void)
+  | null = null;
 let dialogOpen = false;
 let bypass = false;
 let originalPushState: History["pushState"] | null = null;
@@ -51,13 +53,15 @@ function runUnguarded(action: () => void) {
   }
 }
 
-function openLeaveDialog(onLeave: () => void) {
-  if (dialogOpen || !showLeaveDialog) return;
+function openLeaveDialog(onLeave: () => void, dialog = showLeaveDialog) {
+  if (dialogOpen || !dialog) return;
   dialogOpen = true;
-  showLeaveDialog(() => runUnguarded(onLeave));
+  dialog(() => runUnguarded(onLeave));
 }
 
 function handleBeforeUnload(e: BeforeUnloadEvent) {
+  // allowNavigation(() => window.location.assign(...)) is a deliberate exit.
+  if (bypass) return;
   e.preventDefault();
   e.returnValue = "";
 }
@@ -70,7 +74,7 @@ function interceptHistory(replace: boolean): History["pushState"] {
   return (data, unused, url) => {
     const original = (replace ? originalReplaceState : originalPushState)!;
     const passThrough = () => {
-      original(data, unused, url);
+      original.call(window.history, data, unused, url);
       currentIdx = readIdx(data) ?? currentIdx;
     };
     if (bypass || url == null) {
@@ -107,7 +111,9 @@ function handlePopState(e: PopStateEvent) {
   const nextIdx = readIdx(e.state);
   if (allowNextPop || activeGuards.size === 0 || currentIdx === null || nextIdx === null) {
     allowNextPop = false;
-    currentIdx = nextIdx;
+    // An entry without an idx (e.g. a hash-anchor click) keeps the last known
+    // position rather than switching the Back/Forward guard off.
+    currentIdx = nextIdx ?? currentIdx;
     return;
   }
   const delta = currentIdx - nextIdx;
@@ -129,8 +135,10 @@ function install() {
   currentIdx = readIdx(window.history.state);
   ignoreNextPop = false;
   allowNextPop = false;
-  originalPushState = window.history.pushState.bind(window.history);
-  originalReplaceState = window.history.replaceState.bind(window.history);
+  // Kept unbound (and called with window.history) so uninstall restores the
+  // exact original functions rather than a new bound wrapper each cycle.
+  originalPushState = window.history.pushState;
+  originalReplaceState = window.history.replaceState;
   window.history.pushState = interceptHistory(false);
   window.history.replaceState = interceptHistory(true);
   window.addEventListener("beforeunload", handleBeforeUnload);
@@ -180,25 +188,26 @@ export function useUnsavedChangesGuard(isDirty: boolean) {
   const navigate = useNavigate();
   const leaveDialog = useLeaveDialog();
   const idRef = useRef(Symbol("unsaved-changes-guard"));
+  // useNavigate's identity changes with the location; reading it through a ref
+  // keeps location changes from reinstalling the patch (and resetting the
+  // popstate flags) mid-traversal.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
     if (!isDirty) return undefined;
     const id = idRef.current;
     showLeaveDialog = leaveDialog;
-    routerNavigate = navigate;
+    routerNavigate = (to, options) => navigateRef.current(to, options);
     if (activeGuards.size === 0) install();
     activeGuards.add(id);
     return () => {
       activeGuards.delete(id);
       if (activeGuards.size === 0) uninstall();
     };
-  }, [isDirty, leaveDialog, navigate]);
+  }, [isDirty, leaveDialog]);
 
-  const allowNavigation = useCallback((action: () => void) => {
-    runUnguarded(action);
-  }, []);
-
-  return { allowNavigation };
+  return { allowNavigation: runUnguarded };
 }
 
 /**
@@ -215,8 +224,7 @@ export function useConfirmIfUnsaved() {
         action();
         return;
       }
-      showLeaveDialog ??= leaveDialog;
-      openLeaveDialog(action);
+      openLeaveDialog(action, leaveDialog);
     },
     [leaveDialog],
   );

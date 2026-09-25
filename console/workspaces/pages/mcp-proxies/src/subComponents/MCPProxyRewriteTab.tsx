@@ -422,6 +422,9 @@ export function MCPProxyRewriteTab({
 
   const hasAnyCapability = meta.length > 0;
 
+  // lastSavedRef is a ref, so a save bumps this to recompute isDirty at once
+  // (otherwise the unsaved-changes guard stays armed until a refetch).
+  const [savedVersion, setSavedVersion] = useState(0);
   const isDirty = useMemo(() => {
     const saved = lastSavedRef.current;
     if (!saved) return false;
@@ -429,7 +432,8 @@ export function MCPProxyRewriteTab({
     // When disabled, only the toggle matters; field edits are ignored.
     if (!enabled) return false;
     return JSON.stringify(saved.state) !== JSON.stringify(state);
-  }, [enabled, state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- savedVersion marks a ref update
+  }, [enabled, state, savedVersion]);
 
   useUnsavedChangesGuard(isDirty);
   const updateTool = useCallback(
@@ -510,6 +514,7 @@ export function MCPProxyRewriteTab({
     try {
       await onUpdate({ policies: nextPolicies });
       lastSavedRef.current = { enabled, state };
+      setSavedVersion((v) => v + 1);
       setStatus({
         message: enabled
           ? "Rewrite policy updated successfully."

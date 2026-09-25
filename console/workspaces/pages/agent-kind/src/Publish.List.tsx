@@ -44,6 +44,7 @@ import {
 import {
   LabelsEditor,
   useConfirmationDialog,
+  useConfirmIfUnsaved,
   useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import { RuntimeConfigEditor, createRuntimeConfigRow, type RuntimeConfigRow } from "./RuntimeConfigEditor";
@@ -115,20 +116,13 @@ export const PublishedList: React.FC = () => {
   const { addConfirmation } = useConfirmationDialog();
 
   // Shared "close a dirty drawer" confirmation, used by both the Create
-  // Version and Edit Kind drawers below.
-  const confirmDiscardIfDirty = useCallback((dirty: boolean, onDiscard: () => void) => {
-    if (dirty) {
-      addConfirmation({
-        title: "Discard Changes?",
-        description: "You have unsaved changes. Are you sure you want to close without saving?",
-        confirmButtonText: "Discard",
-        confirmButtonColor: "error",
-        onConfirm: onDiscard,
-      });
-    } else {
-      onDiscard();
-    }
-  }, [addConfirmation]);
+  // Version and Edit Kind drawers below — the same unsaved-changes dialog the
+  // route guard shows.
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  const confirmDiscardIfDirty = useCallback(
+    (dirty: boolean, onDiscard: () => void) => confirmIfUnsaved(onDiscard, dirty),
+    [confirmIfUnsaved],
+  );
 
   // Edit Kind drawer state — separate from the create-version drawer's
   // kind-detail fields above, so editing an existing kind never interacts
@@ -216,11 +210,6 @@ export const PublishedList: React.FC = () => {
     });
   }, [addConfirmation, unpublishAgentKind, orgId, agentId]);
 
-  const isDirty = useMemo(
-    () => versionName.trim() !== "" || selectedBuildName !== "" || kindDisplayName.trim() !== "" || kindDescription.trim() !== "" || Object.keys(kindLabels).length > 0 || createRows.some((r) => r.key.trim() !== ""),
-    [versionName, selectedBuildName, kindDisplayName, kindDescription, kindLabels, createRows],
-  );
-
   const resetCreateForm = useCallback(() => {
     setVersionName("");
     setSelectedBuildName("");
@@ -231,11 +220,13 @@ export const PublishedList: React.FC = () => {
   }, []);
 
   const handleDrawerClose = useCallback(() => {
-    confirmDiscardIfDirty(isDirty, () => {
+    // isCreateDirty, not isDirty: the latter counts the pre-filled kind name
+    // and description, so it prompted even when nothing was edited.
+    confirmDiscardIfDirty(isCreateDirty, () => {
       resetCreateForm();
       allowNavigation(() => navigate(listPath));
     });
-  }, [isDirty, confirmDiscardIfDirty, resetCreateForm, allowNavigation,
+  }, [isCreateDirty, confirmDiscardIfDirty, resetCreateForm, allowNavigation,
     navigate, listPath]);
 
   const handleCreate = useCallback(async () => {
