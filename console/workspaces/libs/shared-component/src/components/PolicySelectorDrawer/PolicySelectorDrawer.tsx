@@ -56,7 +56,10 @@ import {
 import { globalConfig } from "@agent-management-platform/types";
 import PolicyParameterEditor from "../PolicyParameterEditor/PolicyParameterEditor";
 import type { ParameterValues } from "../../utils/policyParameterEditor";
-import { useUnsavedChangesGuard } from "../../utils/useUnsavedChangesGuard";
+import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "../../utils/useUnsavedChangesGuard";
 import {
   hasInlinePolicyDefinition,
   resolvePolicyDetail,
@@ -68,6 +71,8 @@ const PolicyDetailView: React.FC<{
   getPolicyDefinitionVersion?: (policy: GuardrailDefinition) => string;
   policyNoun?: string;
   onBack: () => void;
+  /** Explicit discard from the editor; defaults to `onBack`. */
+  onCancel?: () => void;
   onSubmit: (policy: GuardrailDefinition, settings: ParameterValues) => void;
 }> = ({
   policy,
@@ -75,6 +80,7 @@ const PolicyDetailView: React.FC<{
   getPolicyDefinitionVersion,
   policyNoun = "policy",
   onBack,
+  onCancel = onBack,
   onSubmit,
 }) => {
   const hasInlineDefinition = hasInlinePolicyDefinition(policy);
@@ -166,7 +172,7 @@ const PolicyDetailView: React.FC<{
         policyDisplayName={policy.displayName || policy.name}
         existingValues={existingSettings}
         isEditMode={Boolean(existingSettings)}
-        onCancel={onBack}
+        onCancel={onCancel}
         onSubmit={(values) => onSubmit(policy, values)}
       />
     </Stack>
@@ -255,7 +261,9 @@ export function PolicySelectorDrawer({
   const [searchQuery, setSearchQuery] = useState("");
   // Parameter values live inside PolicyParameterEditor, so a policy picked in
   // the create flow (not the edit-mode auto-selection) is the dirty signal.
-  useUnsavedChangesGuard(open && !editPolicyKey && selectedPolicy !== null);
+  const isCreateDirty = open && !editPolicyKey && selectedPolicy !== null;
+  useUnsavedChangesGuard(isCreateDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
 
   const activeCatalogData = catalogData ?? defaultCatalogData;
   const isLoadingCatalog =
@@ -294,6 +302,17 @@ export function PolicySelectorDrawer({
     onClose();
   }, [onClose]);
 
+  // Backdrop, header X and Back discard the picked policy's parameters, so
+  // they confirm first; the editor's Cancel stays an explicit discard.
+  const handleGuardedClose = useCallback(
+    () => confirmIfUnsaved(handleClose, isCreateDirty),
+    [confirmIfUnsaved, handleClose, isCreateDirty],
+  );
+  const handleGuardedBack = useCallback(
+    () => confirmIfUnsaved(() => setSelectedPolicy(null), isCreateDirty),
+    [confirmIfUnsaved, isCreateDirty],
+  );
+
   const handleSubmit = useCallback(
     (policy: GuardrailDefinition, settings: ParameterValues) => {
       onSubmit(policy, settings);
@@ -328,14 +347,14 @@ export function PolicySelectorDrawer({
   return (
     <DrawerWrapper
       open={open}
-      onClose={handleClose}
+      onClose={handleGuardedClose}
       minWidth={minWidth}
       maxWidth={maxWidth}
     >
       <DrawerHeader
         icon={<ShieldAlert size={24} />}
         title={drawerTitle}
-        onClose={handleClose}
+        onClose={handleGuardedClose}
       />
       <DrawerContent>
         {!selectedPolicy && (
@@ -455,7 +474,8 @@ export function PolicySelectorDrawer({
             existingSettings={existingSettings}
             getPolicyDefinitionVersion={getPolicyDefinitionVersion}
             policyNoun={policyNoun}
-            onBack={
+            onBack={editPolicyKey ? handleClose : handleGuardedBack}
+            onCancel={
               editPolicyKey ? handleClose : () => setSelectedPolicy(null)
             }
             onSubmit={handleSubmit}

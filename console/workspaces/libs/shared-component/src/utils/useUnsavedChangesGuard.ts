@@ -153,14 +153,15 @@ export function useUnsavedChangesGuard(isDirty: boolean) {
 
 /**
  * For in-page switches that don't change the URL (e.g. tabs held in local
- * state): runs `action` straight away when no form is dirty, otherwise only
- * after the user chooses Leave.
+ * state, closing a drawer): runs `action` straight away when nothing is dirty,
+ * otherwise only after the user chooses Leave. Pass `isDirty` to check just
+ * the caller's own form; without it, any active guard counts.
  */
 export function useConfirmIfUnsaved() {
   const leaveDialog = useLeaveDialog();
   return useCallback(
-    (action: () => void) => {
-      if (activeGuards.size === 0) {
+    (action: () => void, isDirty?: boolean) => {
+      if (isDirty === false || (isDirty === undefined && activeGuards.size === 0)) {
         action();
         return;
       }
