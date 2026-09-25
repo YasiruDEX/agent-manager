@@ -31,7 +31,10 @@ import {
 } from '@wso2/oxygen-ui';
 import { useCreateGitSecret } from '@agent-management-platform/api-client';
 import { useFormValidation } from '@agent-management-platform/views';
-import { useUnsavedChangesGuard } from '@agent-management-platform/shared-component';
+import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from '@agent-management-platform/shared-component';
 import { z } from 'zod';
 import { INPUT_LIMITS } from "@agent-management-platform/types";
 
@@ -75,9 +78,10 @@ export const CreateGitSecretModal = ({
 }: CreateGitSecretModalProps) => {
   const { orgId } = useParams<{ orgId: string }>();
   const [formState, setFormState] = useState<FormState>(initialFormState);
-  useUnsavedChangesGuard(
-    open && JSON.stringify(formState) !== JSON.stringify(initialFormState),
-  );
+  const isDirty =
+    open && JSON.stringify(formState) !== JSON.stringify(initialFormState);
+  useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
   const { errors, validateForm, clearErrors, clearFieldError } =
     useFormValidation<FormState>(gitSecretSchema);
 
@@ -128,8 +132,14 @@ export const CreateGitSecretModal = ({
     onClose();
   }, [onClose, clearErrors, resetMutation, isPending]);
 
+  // Backdrop and Escape confirm before discarding; Cancel stays an explicit discard.
+  const handleDialogClose = useCallback(
+    () => confirmIfUnsaved(handleClose, isDirty),
+    [confirmIfUnsaved, handleClose, isDirty],
+  );
+
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleDialogClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create Git Secret</DialogTitle>
       <DialogContent>
         <Form.Stack spacing={3} sx={{ mt: 1 }}>
