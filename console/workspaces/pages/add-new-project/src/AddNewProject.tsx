@@ -56,11 +56,11 @@ export const AddNewProject: React.FC = () => {
   const { mutate: createProject, isPending, error } = useCreateProject(params);
 
   const handleCancel = useCallback(() => {
-    navigate(generatePath(
+    allowNavigation(() => navigate(generatePath(
       absoluteRouteMap.children.org.path,
       { orgId: orgId ?? '' }
-    ));
-  }, [navigate, orgId]);
+    )));
+  }, [allowNavigation, navigate, orgId]);
 
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] = useState<
     typeof errors

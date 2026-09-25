@@ -332,6 +332,11 @@ export function MonitorLLMProviderDrawer({
       }),
     [confirmIfUnsaved],
   );
+  // Cancel is an explicit discard, so it skips the unsaved-changes prompt.
+  const cancelCreate = useCallback(() => {
+    setIsCreateFormDirty(false);
+    setMode("list");
+  }, []);
   const {
     mutate: createLLMProvider,
     isPending: isCreatingProvider,
@@ -543,7 +548,7 @@ export function MonitorLLMProviderDrawer({
               submitLabel="Create & use provider"
               showAdvancedBasicDetails={false}
               showGuardrails={false}
-              onCancel={backToList}
+              onCancel={cancelCreate}
               onDirtyChange={setIsCreateFormDirty}
               onSubmit={handleCreateProvider}
             />

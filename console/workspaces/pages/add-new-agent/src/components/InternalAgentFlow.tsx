@@ -118,13 +118,15 @@ export const InternalAgentFlow: React.FC = () => {
   const firstEnvOnlyNotice = multipleEnvironments ? initialEnvironmentName : undefined;
 
   const handleCancel = useCallback(() => {
-    navigate(
-      generatePath(absoluteRouteMap.children.org.children.projects.path, {
-        orgId: orgId ?? "",
-        projectId: projectId ?? "default",
-      })
+    allowNavigation(() =>
+      navigate(
+        generatePath(absoluteRouteMap.children.org.children.projects.path, {
+          orgId: orgId ?? "",
+          projectId: projectId ?? "default",
+        })
+      )
     );
-  }, [navigate, orgId, projectId]);
+  }, [allowNavigation, navigate, orgId, projectId]);
 
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] = useState<
     Record<string, string | undefined>

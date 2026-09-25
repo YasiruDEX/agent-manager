@@ -306,7 +306,7 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
 
       {addOpen || editingId !== null ? null : (
         <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={onCancel}>
+          <Button variant="outlined" onClick={() => allowNavigation(onCancel)}>
             Cancel
           </Button>
           <Button

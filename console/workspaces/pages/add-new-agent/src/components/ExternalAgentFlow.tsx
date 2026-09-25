@@ -57,13 +57,15 @@ export const ExternalAgentFlow: React.FC = () => {
   );
 
   const handleCancel = useCallback(() => {
-    navigate(
-      generatePath(absoluteRouteMap.children.org.children.projects.path, {
-        orgId: orgId ?? "",
-        projectId: projectId ?? "default",
-      })
+    allowNavigation(() =>
+      navigate(
+        generatePath(absoluteRouteMap.children.org.children.projects.path, {
+          orgId: orgId ?? "",
+          projectId: projectId ?? "default",
+        })
+      )
     );
-  }, [navigate, orgId, projectId]);
+  }, [allowNavigation, navigate, orgId, projectId]);
 
   const onSubmit = useCallback(
     (values: ConnectAgentFormValues) => {
