@@ -281,7 +281,9 @@ export function PromoteAgentDrawer({
     (formState.useConfigFromSourceEnv !== DEFAULT_STATE.useConfigFromSourceEnv ||
       formState.instrumentationVersionDirty ||
       isTargetConfigDirty);
-  useUnsavedChangesGuard(isDirty);
+  // onClose drops a URL param, so the guard would otherwise block the
+  // deliberate Cancel and post-save closes too.
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
   const confirmIfUnsaved = useConfirmIfUnsaved();
 
   const handleTargetChange = useCallback(
@@ -409,7 +411,7 @@ export function PromoteAgentDrawer({
                 }),
           },
         });
-        onClose();
+        allowNavigation(onClose);
       } catch {
         // handled by error
       }
@@ -702,7 +704,7 @@ export function PromoteAgentDrawer({
               <Button
                 variant="outlined"
                 color="inherit"
-                onClick={onClose}
+                onClick={() => allowNavigation(onClose)}
                 disabled={isPending}
               >
                 Cancel

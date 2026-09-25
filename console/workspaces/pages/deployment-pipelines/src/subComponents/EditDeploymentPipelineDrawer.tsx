@@ -38,7 +38,10 @@ import {
   useUpdateOrgDeploymentPipeline,
   useListEnvironments,
 } from "@agent-management-platform/api-client";
-import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
+import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import { type DeploymentPipelineResponse, INPUT_LIMITS } from "@agent-management-platform/types";
 import { editPipelineSchema, type EditPipelineFormValues, PIPELINE_DISPLAY_NAME_MAX_LENGTH } from "../form/schema";
 import { chainToPromotionPaths } from "../utils/chainUtils";
@@ -108,6 +111,10 @@ export function EditDeploymentPipelineDrawer(
     [open, initialSnapshot, formData],
   );
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const handleFieldChange = useCallback(
     (field: "displayName" | "description", value: string) => {
@@ -160,8 +167,8 @@ export function EditDeploymentPipelineDrawer(
   const allFilled = formData.chain.every((v) => v !== "");
 
   return (
-    <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Edit size={24} />} title="Edit Deployment Pipeline" onClose={onClose} />
+    <DrawerWrapper open={open} onClose={handleGuardedClose}>
+      <DrawerHeader icon={<Edit size={24} />} title="Edit Deployment Pipeline" onClose={handleGuardedClose} />
       <DrawerContent>
         <form onSubmit={handleSubmit}>
           <Stack spacing={3}>

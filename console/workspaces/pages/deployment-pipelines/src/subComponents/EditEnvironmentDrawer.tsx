@@ -38,7 +38,10 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateEnvironment } from "@agent-management-platform/api-client";
-import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
+import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import { type Environment, INPUT_LIMITS } from "@agent-management-platform/types";
 import {
   editEnvironmentSchema,
@@ -98,6 +101,10 @@ export function EditEnvironmentDrawer({
     [open, initialSnapshot, formData],
   );
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const handleFieldChange = useCallback(
     (field: keyof EditEnvironmentFormValues, value: string | boolean) => {
@@ -155,8 +162,8 @@ export function EditEnvironmentDrawer({
   const validationErrorsList = Object.values(lastSubmittedValidationErrors).filter(Boolean);
 
   return (
-    <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Edit size={24} />} title="Edit Environment" onClose={onClose} />
+    <DrawerWrapper open={open} onClose={handleGuardedClose}>
+      <DrawerHeader icon={<Edit size={24} />} title="Edit Environment" onClose={handleGuardedClose} />
       <DrawerContent>
         <form onSubmit={handleSubmit}>
           <Stack spacing={3}>

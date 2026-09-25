@@ -50,6 +50,7 @@ import {
   getAmpVersionHelm,
   getIsolationTierMeta,
   getRawScriptUrl,
+  useConfirmIfUnsaved,
   useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import {
@@ -324,6 +325,10 @@ export function CreateEnvironmentDrawer({
     return !autoDefault || current !== JSON.stringify(DEFAULT_FORM);
   }, [open, formData, defaultPlaneName]);
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const handleChange = useCallback(
     (field: keyof CreateEnvironmentFormValues, value: string | boolean) => {
@@ -480,11 +485,11 @@ export function CreateEnvironmentDrawer({
   );
 
   return (
-    <DrawerWrapper open={open} onClose={onClose}>
+    <DrawerWrapper open={open} onClose={handleGuardedClose}>
       <DrawerHeader
         icon={<Plus size={24} />}
         title="Create Environment"
-        onClose={onClose}
+        onClose={handleGuardedClose}
       />
       <DrawerContent>
         <Stack spacing={3}>

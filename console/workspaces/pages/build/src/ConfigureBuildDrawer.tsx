@@ -285,7 +285,9 @@ export function ConfigureBuildDrawer({
     () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
     [open, initialSnapshot, formData],
   );
-  useUnsavedChangesGuard(isDirty);
+  // onClose drops a URL param, so the guard would otherwise block the
+  // deliberate Cancel and post-save closes too.
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (
@@ -424,7 +426,7 @@ export function ConfigureBuildDrawer({
       {
         onSuccess: () => {
           clearErrors();
-          onClose();
+          allowNavigation(onClose);
         },
       },
     );
@@ -733,7 +735,7 @@ export function ConfigureBuildDrawer({
               <Button
                 variant="outlined"
                 color="inherit"
-                onClick={onClose}
+                onClick={() => allowNavigation(onClose)}
                 disabled={isPending}
               >
                 Cancel

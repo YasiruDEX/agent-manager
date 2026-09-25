@@ -259,7 +259,9 @@ export function EditResourceConfigsDrawer({
     () => open && initialSnapshot !== null && JSON.stringify(formData) !== initialSnapshot,
     [open, initialSnapshot, formData],
   );
-  useUnsavedChangesGuard(isDirty);
+  // onClose drops a URL param, so the guard would otherwise block the
+  // deliberate Cancel and post-save closes too.
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const handleFieldChange = useCallback(
     (field: keyof ResourceConfigsFormValues, value: unknown) => {
@@ -292,7 +294,7 @@ export function EditResourceConfigsDrawer({
         {
           onSuccess: () => {
             clearErrors();
-            onClose();
+            allowNavigation(onClose);
           },
           onError: (error) => {
             const body = (error as { body?: { message?: string } })?.body;
@@ -475,7 +477,7 @@ export function EditResourceConfigsDrawer({
             <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
               <Button
                 variant="outlined"
-                onClick={onClose}
+                onClick={() => allowNavigation(onClose)}
                 disabled={isPending}
               >
                 Cancel

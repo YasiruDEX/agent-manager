@@ -97,10 +97,14 @@ export function EditMCPProxyDrawer({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [seededSnapshot, setSeededSnapshot] = useState<string | null>(null);
+  // An endpoint being added/edited inline isn't in `endpoints` until the user
+  // applies it, so its form reports its own dirty state.
+  const [isEndpointFormDirty, setIsEndpointFormDirty] = useState(false);
   const isDirty =
     open &&
-    seededSnapshot !== null &&
-    JSON.stringify({ formData, endpoints }) !== seededSnapshot;
+    (isEndpointFormDirty ||
+      (seededSnapshot !== null &&
+        JSON.stringify({ formData, endpoints }) !== seededSnapshot));
   useUnsavedChangesGuard(isDirty);
   const confirmIfUnsaved = useConfirmIfUnsaved();
   // Backdrop and header X discard edits, so confirm first; Cancel and the
@@ -309,6 +313,7 @@ export function EditMCPProxyDrawer({
                   editingId={editingId}
                   onEditingIdChange={setEditingId}
                   emptyStateText="No endpoints configured yet."
+                  onEndpointFormDirtyChange={setIsEndpointFormDirty}
                 />
               </Form.Stack>
             </Form.Section>
