@@ -17,7 +17,10 @@
  */
 
 import React, { useCallback, useMemo, useState } from "react";
-import { getErrorMessage } from "@agent-management-platform/shared-component";
+import {
+  getErrorMessage,
+  useConfirmIfUnsaved,
+} from "@agent-management-platform/shared-component";
 import {
   useGetLLMProvider,
   useListLLMProviderTemplates,
@@ -83,7 +86,16 @@ function TabPanel({ value, index, children }: TabPanelProps) {
 }
 
 export const ViewLLMProvider: React.FC = () => {
-  const [tabIndex, setTabIndex] = useState(0);
+  const [tabIndex, setTabIndexState] = useState(0);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Inactive panels unmount, so switching tabs would drop unsaved edits.
+  const setTabIndex = useCallback(
+    (index: number) => {
+      if (index === tabIndex) return;
+      confirmIfUnsaved(() => setTabIndexState(index));
+    },
+    [confirmIfUnsaved, tabIndex],
+  );
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false);
 
   const { providerId, orgId } = useParams<{
