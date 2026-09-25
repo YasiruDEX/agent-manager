@@ -43,10 +43,11 @@ import {
 } from "@wso2/oxygen-ui";
 import { ChevronDown } from "@wso2/oxygen-ui-icons-react";
 import { useMCPPoliciesCatalog } from "@agent-management-platform/api-client";
-import type {
-  MCPEndpointConfig,
-  MCPProxy,
-  MCPProxyPolicy,
+import {
+  type MCPEndpointConfig,
+  type MCPProxy,
+  type MCPProxyPolicy,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import { TextInput } from "@agent-management-platform/views";
 import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
@@ -786,6 +787,7 @@ function RewriteFieldsForm({
       {meta.kind === "tool" && (
         <>
           <TextInput
+            maxLength={INPUT_LIMITS.NAME}
             label="Name"
             size="small"
             fullWidth
@@ -795,6 +797,7 @@ function RewriteFieldsForm({
             }
           />
           <TextInput
+            maxLength={INPUT_LIMITS.DESCRIPTION}
             label="Description"
             size="small"
             fullWidth
@@ -806,6 +809,7 @@ function RewriteFieldsForm({
             }
           />
           <TextInput
+            maxLength={INPUT_LIMITS.SOURCE}
             label="Input Schema"
             size="small"
             fullWidth
@@ -832,6 +836,7 @@ function RewriteFieldsForm({
             <AccordionDetails>
               <Stack spacing={2}>
                 <TextInput
+                  maxLength={INPUT_LIMITS.SOURCE}
                   label="Output Schema"
                   size="small"
                   fullWidth
@@ -848,6 +853,7 @@ function RewriteFieldsForm({
                   }}
                 />
                 <TextInput
+                  maxLength={INPUT_LIMITS.SHORT_TEXT}
                   label="Target"
                   size="small"
                   fullWidth
@@ -870,6 +876,7 @@ function RewriteFieldsForm({
       {meta.kind === "resource" && (
         <>
           <TextInput
+            maxLength={INPUT_LIMITS.URL}
             label="URI"
             size="small"
             fullWidth
@@ -880,6 +887,7 @@ function RewriteFieldsForm({
             sx={{ "& .MuiInputBase-input": { fontFamily: "monospace" } }}
           />
           <TextInput
+            maxLength={INPUT_LIMITS.DESCRIPTION}
             label="Description"
             size="small"
             fullWidth
@@ -904,6 +912,7 @@ function RewriteFieldsForm({
             <AccordionDetails>
               <Stack spacing={2}>
                 <TextInput
+                  maxLength={INPUT_LIMITS.SHORT_TEXT}
                   label="Target"
                   size="small"
                   fullWidth
@@ -927,6 +936,7 @@ function RewriteFieldsForm({
       {meta.kind === "prompt" && (
         <>
           <TextInput
+            maxLength={INPUT_LIMITS.NAME}
             label="Name"
             size="small"
             fullWidth
@@ -936,6 +946,7 @@ function RewriteFieldsForm({
             }
           />
           <TextInput
+            maxLength={INPUT_LIMITS.DESCRIPTION}
             label="Description"
             size="small"
             fullWidth
@@ -960,6 +971,7 @@ function RewriteFieldsForm({
             <AccordionDetails>
               <Stack spacing={2}>
                 <TextInput
+                  maxLength={INPUT_LIMITS.SHORT_TEXT}
                   label="Target"
                   size="small"
                   fullWidth

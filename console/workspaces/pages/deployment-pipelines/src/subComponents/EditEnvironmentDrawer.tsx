@@ -39,8 +39,12 @@ import {
 } from "@agent-management-platform/views";
 import { useUpdateEnvironment } from "@agent-management-platform/api-client";
 import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
-import type { Environment } from "@agent-management-platform/types";
-import { editEnvironmentSchema, type EditEnvironmentFormValues } from "../form/environmentSchema";
+import { type Environment, INPUT_LIMITS } from "@agent-management-platform/types";
+import {
+  editEnvironmentSchema,
+  ENVIRONMENT_DISPLAY_NAME_MAX_LENGTH,
+  type EditEnvironmentFormValues,
+} from "../form/environmentSchema";
 
 interface EditEnvironmentDrawerProps {
   open: boolean;
@@ -176,6 +180,7 @@ export function EditEnvironmentDrawer({
                 <FormControl fullWidth error={Boolean(errors.displayName)}>
                   <FormLabel required>Display Name</FormLabel>
                   <TextField
+                    slotProps={{ htmlInput: { maxLength: ENVIRONMENT_DISPLAY_NAME_MAX_LENGTH } }}
                     fullWidth
                     size="small"
                     value={formData.displayName}
@@ -189,6 +194,7 @@ export function EditEnvironmentDrawer({
                 <FormControl fullWidth>
                   <FormLabel>Description</FormLabel>
                   <TextField
+                    slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
                     fullWidth
                     size="small"
                     multiline

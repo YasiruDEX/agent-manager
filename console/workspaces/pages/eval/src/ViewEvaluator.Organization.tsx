@@ -29,6 +29,7 @@ import {
   type EvaluatorConfigParam,
   type EvaluatorLevel,
   type UpdateCustomEvaluatorRequest,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import {
   useGetEvaluator,
@@ -463,6 +464,7 @@ function EditableConfigParams({
                 useFlexGap
               >
                 <TextField
+                  slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.KEY } }}
                   placeholder="Key"
                   size="small"
                   value={param.key}
@@ -471,6 +473,7 @@ function EditableConfigParams({
                   InputProps={{ sx: { fontFamily: "monospace" } }}
                 />
                 <TextField
+                  slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.SHORT_TEXT } }}
                   select
                   placeholder="Type"
                   size="small"
@@ -492,6 +495,7 @@ function EditableConfigParams({
                   ))}
                 </TextField>
                 <TextField
+                  slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
                   placeholder="Default"
                   size="small"
                   value={
@@ -506,6 +510,7 @@ function EditableConfigParams({
                   sx={{ flex: 1.5, minWidth: 100 }}
                 />
                 <TextField
+                  slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
                   placeholder="Description"
                   size="small"
                   value={param.description}
@@ -583,6 +588,7 @@ function EditableConfigParams({
 
               {param.type === "enum" && (
                 <TextField
+                  slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
                   placeholder="value1, value2, value3"
                   size="small"
                   value={(param.enumValues ?? []).join(", ")}
@@ -1032,6 +1038,7 @@ export const ViewEvaluatorOrganization: React.FC = () => {
               Name
             </Typography>
             <TextField
+              slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.NAME } }}
               placeholder="Enter evaluator name"
               value={editValues.displayName}
               onChange={(e) =>
@@ -1057,6 +1064,7 @@ export const ViewEvaluatorOrganization: React.FC = () => {
               Description
             </Typography>
             <TextField
+              slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
               placeholder="Describe what this evaluator checks"
               value={editValues.description}
               onChange={(e) =>
@@ -1159,7 +1167,11 @@ export const ViewEvaluatorOrganization: React.FC = () => {
                 ))
               }
               renderInput={(params) => (
-                <TextField {...params} placeholder="Add tags and press Enter" />
+                <TextField {...params} placeholder="Add tags and press Enter"
+                  slotProps={{
+                    htmlInput: { ...params.inputProps, maxLength: INPUT_LIMITS.SHORT_TEXT },
+                  }}
+                />
               )}
             />
           </Box>

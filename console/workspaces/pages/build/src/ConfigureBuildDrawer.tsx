@@ -44,6 +44,7 @@ import {
   UpdateAgentBuildParametersRequest,
   InputInterfaceType,
   globalConfig,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { useEffect, useCallback, useMemo, useState } from "react";
@@ -446,6 +447,7 @@ export function ConfigureBuildDrawer({
                 <Typography variant="h5">Repository Details</Typography>
                 <Box display="flex" flexDirection="column" gap={1}>
                   <TextInput
+                    maxLength={INPUT_LIMITS.URL}
                     placeholder="https://github.com/username/repo"
                     label="GitHub Repository"
                     fullWidth
@@ -467,6 +469,7 @@ export function ConfigureBuildDrawer({
                   )}
                   <Box display="flex" flexDirection="row" gap={1}>
                     <TextInput
+                      maxLength={INPUT_LIMITS.SHORT_TEXT}
                       placeholder="main"
                       label="Branch"
                       fullWidth
@@ -478,6 +481,7 @@ export function ConfigureBuildDrawer({
                       disabled={isPending}
                     />
                     <TextInput
+                      maxLength={INPUT_LIMITS.PATH}
                       placeholder="my-agent"
                       label="Project Path"
                       fullWidth
@@ -521,6 +525,7 @@ export function ConfigureBuildDrawer({
                   <Collapse in={formData.language === "python"}>
                     <Box display="flex" flexDirection="column" gap={1}>
                       <TextInput
+                        maxLength={INPUT_LIMITS.SHORT_TEXT}
                         placeholder="3.11"
                         label="Language Version"
                         fullWidth
@@ -532,6 +537,7 @@ export function ConfigureBuildDrawer({
                         disabled={isPending}
                       />
                       <TextInput
+                        maxLength={INPUT_LIMITS.VALUE}
                         placeholder="python main.py"
                         label="Start Command"
                         fullWidth
@@ -550,6 +556,7 @@ export function ConfigureBuildDrawer({
                   </Collapse>
                   <Collapse in={formData.language === "docker"}>
                     <TextInput
+                      maxLength={INPUT_LIMITS.PATH}
                       placeholder="./Dockerfile"
                       label="Dockerfile Path"
                       fullWidth
@@ -659,6 +666,7 @@ export function ConfigureBuildDrawer({
                           flexGrow={1}
                         >
                           <TextInput
+                            maxLength={INPUT_LIMITS.PATH}
                             label="OpenAPI Spec Path"
                             placeholder="/openapi.yaml"
                             required={formData.interfaceType === "CUSTOM"}
@@ -699,6 +707,7 @@ export function ConfigureBuildDrawer({
                       </Box>
                       <Box>
                         <TextInput
+                          maxLength={INPUT_LIMITS.PATH}
                           label="Base Path"
                           placeholder="/"
                           required={formData.interfaceType === "CUSTOM"}

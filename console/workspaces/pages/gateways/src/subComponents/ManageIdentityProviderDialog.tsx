@@ -50,6 +50,7 @@ import {
   globalConfig,
   type GatewayEnvironmentResponse,
   type IdentityProvider,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import {
   getAgentManagerUrl,
@@ -426,6 +427,7 @@ export function ManageIdentityProviderDialog({
             <FormControl fullWidth disabled={isDelete}>
               <FormLabel required>Name</FormLabel>
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.NAME } }}
                 size="small"
                 fullWidth
                 value={name}
@@ -441,6 +443,7 @@ export function ManageIdentityProviderDialog({
                   <FormLabel>Discover from URL (optional)</FormLabel>
                   <Stack direction="row" spacing={1}>
                     <TextField
+                      slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.URL } }}
                       size="small"
                       fullWidth
                       value={discoveryUrl}
@@ -466,6 +469,7 @@ export function ManageIdentityProviderDialog({
                 <FormControl fullWidth>
                   <FormLabel required>Issuer</FormLabel>
                   <TextField
+                    slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.URL } }}
                     size="small"
                     fullWidth
                     value={issuer}
@@ -477,6 +481,7 @@ export function ManageIdentityProviderDialog({
                 <FormControl fullWidth>
                   <FormLabel required>JWKS URI</FormLabel>
                   <TextField
+                    slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.URL } }}
                     size="small"
                     fullWidth
                     value={jwksUri}
