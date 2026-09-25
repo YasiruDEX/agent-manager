@@ -93,10 +93,11 @@ function interceptHistory(replace: boolean): History["pushState"] {
   };
 }
 
-// Browser Back/Forward fires popstate without going through pushState. This
-// capture listener runs before the router's own (bubble) one at the window, so
-// it can hide the traversal from the router, step back to where the user was,
-// and replay the traversal only once they choose Leave.
+// Browser Back/Forward fires popstate without going through pushState. Window
+// listeners run in registration order (capture doesn't jump the queue there),
+// so this is registered at module load — before BrowserRouter mounts and adds
+// its own — letting it hide the traversal from the router, step back to where
+// the user was, and replay the traversal only once they choose Leave.
 function handlePopState(e: PopStateEvent) {
   if (ignoreNextPop) {
     ignoreNextPop = false;
@@ -104,7 +105,7 @@ function handlePopState(e: PopStateEvent) {
     return;
   }
   const nextIdx = readIdx(e.state);
-  if (allowNextPop || currentIdx === null || nextIdx === null) {
+  if (allowNextPop || activeGuards.size === 0 || currentIdx === null || nextIdx === null) {
     allowNextPop = false;
     currentIdx = nextIdx;
     return;
@@ -120,6 +121,10 @@ function handlePopState(e: PopStateEvent) {
   });
 }
 
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", handlePopState);
+}
+
 function install() {
   currentIdx = readIdx(window.history.state);
   ignoreNextPop = false;
@@ -128,7 +133,6 @@ function install() {
   originalReplaceState = window.history.replaceState.bind(window.history);
   window.history.pushState = interceptHistory(false);
   window.history.replaceState = interceptHistory(true);
-  window.addEventListener("popstate", handlePopState, true);
   window.addEventListener("beforeunload", handleBeforeUnload);
 }
 
@@ -137,7 +141,6 @@ function uninstall() {
   if (originalReplaceState) window.history.replaceState = originalReplaceState;
   originalPushState = null;
   originalReplaceState = null;
-  window.removeEventListener("popstate", handlePopState, true);
   window.removeEventListener("beforeunload", handleBeforeUnload);
 }
 
