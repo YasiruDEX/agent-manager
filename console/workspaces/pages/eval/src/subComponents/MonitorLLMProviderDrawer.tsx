@@ -34,7 +34,11 @@ import {
   DrawerHeader,
   DrawerWrapper,
 } from "@agent-management-platform/views";
-import { getErrorMessage } from "@agent-management-platform/shared-component";
+import {
+  getErrorMessage,
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import {
   Avatar,
   Box,
@@ -317,6 +321,17 @@ export function MonitorLLMProviderDrawer({
   // so it fires at most once per drawer-open and never overrides a user who
   // deliberately navigated back to the list.
   const autoSwitchDone = useRef(false);
+  const [isCreateFormDirty, setIsCreateFormDirty] = useState(false);
+  useUnsavedChangesGuard(open && mode === "create" && isCreateFormDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  const backToList = useCallback(
+    () =>
+      confirmIfUnsaved(() => {
+        setIsCreateFormDirty(false);
+        setMode("list");
+      }),
+    [confirmIfUnsaved],
+  );
   const {
     mutate: createLLMProvider,
     isPending: isCreatingProvider,
@@ -340,6 +355,7 @@ export function MonitorLLMProviderDrawer({
       setFetchOffset(0);
       setRefreshKey((k) => k + 1);
       setMode("list");
+      setIsCreateFormDirty(false);
       autoSwitchDone.current = false;
     }
   }, [open]);
@@ -504,7 +520,7 @@ export function MonitorLLMProviderDrawer({
               variant="text"
               size="small"
               startIcon={<ArrowLeft size={16} />}
-              onClick={() => setMode("list")}
+              onClick={backToList}
               sx={{ alignSelf: "flex-start" }}
             >
               Back to providers
@@ -527,7 +543,8 @@ export function MonitorLLMProviderDrawer({
               submitLabel="Create & use provider"
               showAdvancedBasicDetails={false}
               showGuardrails={false}
-              onCancel={() => setMode("list")}
+              onCancel={backToList}
+              onDirtyChange={setIsCreateFormDirty}
               onSubmit={handleCreateProvider}
             />
           </Stack>

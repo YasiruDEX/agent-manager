@@ -56,6 +56,7 @@ import {
 import { globalConfig } from "@agent-management-platform/types";
 import PolicyParameterEditor from "../PolicyParameterEditor/PolicyParameterEditor";
 import type { ParameterValues } from "../../utils/policyParameterEditor";
+import { useUnsavedChangesGuard } from "../../utils/useUnsavedChangesGuard";
 import {
   hasInlinePolicyDefinition,
   resolvePolicyDetail,
@@ -252,6 +253,9 @@ export function PolicySelectorDrawer({
   const [selectedPolicy, setSelectedPolicy] =
     useState<GuardrailDefinition | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Parameter values live inside PolicyParameterEditor, so a policy picked in
+  // the create flow (not the edit-mode auto-selection) is the dirty signal.
+  useUnsavedChangesGuard(open && !editPolicyKey && selectedPolicy !== null);
 
   const activeCatalogData = catalogData ?? defaultCatalogData;
   const isLoadingCatalog =
