@@ -187,7 +187,7 @@ export const UserCreatePage: React.FC = () => {
         <Stack direction="row" spacing={1} justifyContent="flex-end">
           <Button
             variant="outlined"
-            onClick={() => navigate(usersPath)}
+            onClick={() => allowNavigation(() => navigate(usersPath))}
             disabled={isCreating}
           >
             Cancel

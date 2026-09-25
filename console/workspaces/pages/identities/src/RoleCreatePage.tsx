@@ -172,7 +172,7 @@ export const RoleCreatePage: React.FC = () => {
             <Button
               variant="outlined"
               color="primary"
-              onClick={() => navigate(rolesPath)}
+              onClick={() => allowNavigation(() => navigate(rolesPath))}
             >
               Cancel
             </Button>

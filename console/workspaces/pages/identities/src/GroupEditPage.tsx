@@ -205,7 +205,7 @@ export const GroupEditPage: React.FC = () => {
 
   // Show the action row only when there are unsaved member changes.
   const isDirty = pendingAdds.length > 0 || removedIds.size > 0;
-  useUnsavedChangesGuard(isDirty);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   if (isLoading) {
     return (
@@ -417,7 +417,7 @@ export const GroupEditPage: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              onClick={() => navigate(groupsPath)}
+              onClick={() => allowNavigation(() => navigate(groupsPath))}
               disabled={isSaving}
             >
               Cancel

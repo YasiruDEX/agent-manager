@@ -289,7 +289,7 @@ export const RoleEditPage: React.FC = () => {
   }, [isPermissionsReadOnly, initialScopeNames, selectedScopeIds]);
 
   const isDirty = scopesDirty || agentDelta.isDirty || groupDelta.isDirty;
-  useUnsavedChangesGuard(
+  const { allowNavigation } = useUnsavedChangesGuard(
     (scopesDirty && hasEditedScopes.current) || agentDelta.isDirty || groupDelta.isDirty,
   );
 
@@ -525,7 +525,7 @@ export const RoleEditPage: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              onClick={() => navigate(rolesPath)}
+              onClick={() => allowNavigation(() => navigate(rolesPath))}
               disabled={isSaving}
             >
               Cancel

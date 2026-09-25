@@ -232,7 +232,7 @@ export const UserAddPage: React.FC = () => {
             <Button
               variant="outlined"
               color="primary"
-              onClick={() => navigate(usersPath)}
+              onClick={() => allowNavigation(() => navigate(usersPath))}
               disabled={loading}
             >
               Cancel

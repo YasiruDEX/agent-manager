@@ -266,7 +266,7 @@ export const GroupEditPage: React.FC = () => {
   const isLoading = isLoadingGroup || isLoadingMembers || isLoadingAgents;
 
   const isDirty = memberDelta.isDirty || roleDelta.isDirty;
-  useUnsavedChangesGuard(isDirty);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   if (isLoading) {
     return (
@@ -482,7 +482,7 @@ export const GroupEditPage: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              onClick={() => navigate(groupsPath)}
+              onClick={() => allowNavigation(() => navigate(groupsPath))}
               disabled={isSaving}
             >
               Cancel

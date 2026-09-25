@@ -140,7 +140,7 @@ export const AddLLMProvidersOrganization: React.FC = () => {
         missingParamsMessage={missingParamsMessage}
         errorMessage={combinedErrorMessage}
         isSubmitting={isCreating}
-        onCancel={() => navigate(backHref)}
+        onCancel={() => allowNavigation(() => navigate(backHref))}
         onDirtyChange={setIsDirty}
         onSubmit={handleSubmit}
       />

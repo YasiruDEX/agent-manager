@@ -49,7 +49,7 @@ export const UserInvitePage: React.FC = () => {
   const { errors, validateField, validateForm, clearErrors, setFieldError } =
     useFormValidation<InviteUserFormValues>(inviteUserSchema);
   const { isDirty, checkDirty, resetDirty } = useDirtyState(formData);
-  useUnsavedChangesGuard(isDirty && inviteLink == null);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty && inviteLink == null);
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
     useState<typeof errors>({});
 
@@ -167,7 +167,7 @@ export const UserInvitePage: React.FC = () => {
                 <Button
                   variant="outlined"
                   color="primary"
-                  onClick={() => navigate(usersPath)}
+                  onClick={() => allowNavigation(() => navigate(usersPath))}
                   disabled={isInviting}
                 >
                   Cancel

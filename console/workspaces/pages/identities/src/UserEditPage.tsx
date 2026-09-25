@@ -108,7 +108,7 @@ export const UserEditPage: React.FC = () => {
       selectedGroups.some((g) => !initial.has(g.id))
     );
   }, [initialGroups, selectedGroups]);
-  useUnsavedChangesGuard(hasEdited.current && isGroupsDirty);
+  const { allowNavigation } = useUnsavedChangesGuard(hasEdited.current && isGroupsDirty);
 
   const usersPath = orgId
     ? generatePath(
@@ -277,7 +277,7 @@ export const UserEditPage: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              onClick={() => navigate(usersPath)}
+              onClick={() => allowNavigation(() => navigate(usersPath))}
               disabled={isSaving}
             >
               Cancel

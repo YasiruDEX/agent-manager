@@ -353,7 +353,7 @@ export const RoleEditPage: React.FC = () => {
     removedUserIds.size > 0 ||
     pendingGroupAdds.length > 0 ||
     removedGroupIds.size > 0;
-  useUnsavedChangesGuard(
+  const { allowNavigation } = useUnsavedChangesGuard(
     (permissionsDirty && hasEditedPermissions.current) ||
       pendingUserAdds.length > 0 ||
       removedUserIds.size > 0 ||
@@ -563,7 +563,7 @@ export const RoleEditPage: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              onClick={() => navigate(rolesPath)}
+              onClick={() => allowNavigation(() => navigate(rolesPath))}
               disabled={isSaving}
             >
               Cancel

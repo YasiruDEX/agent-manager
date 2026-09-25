@@ -1117,7 +1117,7 @@ export const AddLLMProviderComponent: React.FC = () => {
 
         {/* Actions */}
         <Box sx={{ display: "flex", gap: 1 }}>
-          <Button variant="outlined" onClick={() => navigate(backHref)}>
+          <Button variant="outlined" onClick={() => allowNavigation(() => navigate(backHref))}>
             Cancel
           </Button>
           <Tooltip

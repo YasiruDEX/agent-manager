@@ -343,7 +343,7 @@ export const AgentDetailPage: React.FC = () => {
   const title = agentData?.displayName || agentName || "Agent";
 
   const isDirty = roleDelta.isDirty || groupDelta.isDirty;
-  useUnsavedChangesGuard(isDirty);
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   if (isLoading) {
     return (
@@ -437,7 +437,7 @@ export const AgentDetailPage: React.FC = () => {
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"
-              onClick={() => navigate(agentsPath)}
+              onClick={() => allowNavigation(() => navigate(agentsPath))}
               disabled={isSaving}
             >
               Cancel

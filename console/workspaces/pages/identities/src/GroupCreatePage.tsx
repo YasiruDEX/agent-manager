@@ -172,7 +172,7 @@ export const GroupCreatePage: React.FC = () => {
             <Button
               variant="outlined"
               color="primary"
-              onClick={() => navigate(groupsPath)}
+              onClick={() => allowNavigation(() => navigate(groupsPath))}
             >
               Cancel
             </Button>
