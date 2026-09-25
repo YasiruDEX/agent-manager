@@ -31,6 +31,16 @@ let dialogOpen = false;
 let bypass = false;
 let originalPushState: History["pushState"] | null = null;
 let originalReplaceState: History["replaceState"] | null = null;
+// React Router stores each entry's position in history.state.idx; tracking the
+// current one lets a Back/Forward traversal be measured and undone.
+let currentIdx: number | null = null;
+let ignoreNextPop = false;
+let allowNextPop = false;
+
+function readIdx(state: unknown): number | null {
+  const idx = (state as { idx?: unknown } | null)?.idx;
+  return typeof idx === "number" ? idx : null;
+}
 
 function runUnguarded(action: () => void) {
   bypass = true;
@@ -53,19 +63,24 @@ function handleBeforeUnload(e: BeforeUnloadEvent) {
 }
 
 // BrowserRouter has no useBlocker, so in-app navigation (links, sidebar,
-// navigate(), query-string tab switches) is caught at the History API. A
+// navigate(), query-string tab switches) is caught at the History API; browser
+// Back/Forward is handled by handlePopState below. A
 // blocked push leaves the URL untouched, so the router re-renders in place.
 function interceptHistory(replace: boolean): History["pushState"] {
   return (data, unused, url) => {
     const original = (replace ? originalReplaceState : originalPushState)!;
-    if (bypass || url == null) {
+    const passThrough = () => {
       original(data, unused, url);
+      currentIdx = readIdx(data) ?? currentIdx;
+    };
+    if (bypass || url == null) {
+      passThrough();
       return;
     }
     const target = new URL(String(url), window.location.href);
     const current = new URL(window.location.href);
     if (target.pathname === current.pathname && target.search === current.search) {
-      original(data, unused, url);
+      passThrough();
       return;
     }
     const usr = (data as { usr?: unknown } | null)?.usr;
@@ -78,11 +93,42 @@ function interceptHistory(replace: boolean): History["pushState"] {
   };
 }
 
+// Browser Back/Forward fires popstate without going through pushState. This
+// capture listener runs before the router's own (bubble) one at the window, so
+// it can hide the traversal from the router, step back to where the user was,
+// and replay the traversal only once they choose Leave.
+function handlePopState(e: PopStateEvent) {
+  if (ignoreNextPop) {
+    ignoreNextPop = false;
+    e.stopImmediatePropagation();
+    return;
+  }
+  const nextIdx = readIdx(e.state);
+  if (allowNextPop || currentIdx === null || nextIdx === null) {
+    allowNextPop = false;
+    currentIdx = nextIdx;
+    return;
+  }
+  const delta = currentIdx - nextIdx;
+  if (delta === 0) return;
+  e.stopImmediatePropagation();
+  ignoreNextPop = true;
+  window.history.go(delta);
+  openLeaveDialog(() => {
+    allowNextPop = true;
+    window.history.go(-delta);
+  });
+}
+
 function install() {
+  currentIdx = readIdx(window.history.state);
+  ignoreNextPop = false;
+  allowNextPop = false;
   originalPushState = window.history.pushState.bind(window.history);
   originalReplaceState = window.history.replaceState.bind(window.history);
   window.history.pushState = interceptHistory(false);
   window.history.replaceState = interceptHistory(true);
+  window.addEventListener("popstate", handlePopState, true);
   window.addEventListener("beforeunload", handleBeforeUnload);
 }
 
@@ -91,6 +137,7 @@ function uninstall() {
   if (originalReplaceState) window.history.replaceState = originalReplaceState;
   originalPushState = null;
   originalReplaceState = null;
+  window.removeEventListener("popstate", handlePopState, true);
   window.removeEventListener("beforeunload", handleBeforeUnload);
 }
 
