@@ -535,8 +535,8 @@ func validateGrowthAnalyticsConfig(cfg *Config) {
 		warned = true
 	}
 
-	switch {
-	case cfg.GrowthAnalytics.MoesifCollectorBaseURL == "":
+	switch cfg.GrowthAnalytics.MoesifCollectorBaseURL {
+	case "":
 		if cfg.GrowthAnalytics.MoesifCollectorHostHeader != "" {
 			disable("MOESIF_COLLECTOR_HOST_HEADER is set but MOESIF_COLLECTOR_BASE_URL is empty, "+
 				"and the host header only applies to a configured collector URL",
