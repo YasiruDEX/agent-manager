@@ -58,6 +58,7 @@ import type {
 import {
   RestrictedAction,
   useAgentEnvironmentAccess,
+  useConfirmIfUnsaved,
   useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import {
@@ -268,15 +269,31 @@ export function PromoteAgentDrawer({
     compatibleInstrumentation,
   ]);
 
+  // Env/files edited for the current target; re-seeded (and so lost) when the
+  // target changes.
+  const isTargetConfigDirty =
+    targetConfigReady &&
+    seededConfigSnapshot !== null &&
+    JSON.stringify({ env: formState.env, files: formState.files }) !==
+      seededConfigSnapshot;
   const isDirty =
     open &&
     (formState.useConfigFromSourceEnv !== DEFAULT_STATE.useConfigFromSourceEnv ||
       formState.instrumentationVersionDirty ||
-      (targetConfigReady &&
-        seededConfigSnapshot !== null &&
-        JSON.stringify({ env: formState.env, files: formState.files }) !==
-          seededConfigSnapshot));
+      isTargetConfigDirty);
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+
+  const handleTargetChange = useCallback(
+    (targetEnvironment: string) => {
+      if (targetEnvironment === formState.targetEnvironment) return;
+      confirmIfUnsaved(
+        () => setFormState((prev) => ({ ...prev, targetEnvironment })),
+        isTargetConfigDirty,
+      );
+    },
+    [confirmIfUnsaved, formState.targetEnvironment, isTargetConfigDirty],
+  );
 
   const handleToggleUseSourceConfig = useCallback((checked: boolean) => {
     setFormState((prev) => ({ ...prev, useConfigFromSourceEnv: checked }));
@@ -449,10 +466,7 @@ export function PromoteAgentDrawer({
                         size="small"
                         value={formState.targetEnvironment}
                         onChange={(e) =>
-                          setFormState((prev) => ({
-                            ...prev,
-                            targetEnvironment: e.target.value as string,
-                          }))
+                          handleTargetChange(e.target.value as string)
                         }
                         displayEmpty
                         disabled={isPending}
