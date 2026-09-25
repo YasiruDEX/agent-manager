@@ -322,15 +322,23 @@ export function MonitorLLMProviderDrawer({
   // deliberately navigated back to the list.
   const autoSwitchDone = useRef(false);
   const [isCreateFormDirty, setIsCreateFormDirty] = useState(false);
-  useUnsavedChangesGuard(open && mode === "create" && isCreateFormDirty);
+  const isCreateDraftDirty = open && mode === "create" && isCreateFormDirty;
+  useUnsavedChangesGuard(isCreateDraftDirty);
   const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Only this drawer's own draft decides the prompt — a dirty monitor wizard
+  // behind it stays on screen, so it mustn't trigger a warning here.
   const backToList = useCallback(
     () =>
       confirmIfUnsaved(() => {
         setIsCreateFormDirty(false);
         setMode("list");
-      }),
-    [confirmIfUnsaved],
+      }, isCreateDraftDirty),
+    [confirmIfUnsaved, isCreateDraftDirty],
+  );
+  // Header X, Escape and backdrop discard the create draft, so confirm first.
+  const handleDrawerClose = useCallback(
+    () => confirmIfUnsaved(onClose, isCreateDraftDirty),
+    [confirmIfUnsaved, onClose, isCreateDraftDirty],
   );
   // Cancel is an explicit discard, so it skips the unsaved-changes prompt.
   const cancelCreate = useCallback(() => {
@@ -446,11 +454,11 @@ export function MonitorLLMProviderDrawer({
   );
 
   return (
-    <DrawerWrapper open={open} onClose={onClose} maxWidth={520}>
+    <DrawerWrapper open={open} onClose={handleDrawerClose} maxWidth={520}>
       <DrawerHeader
         icon={<DoorClosedLocked size={24} />}
         title={mode === "create" ? "Create LLM Provider" : "Select LLM Provider"}
-        onClose={onClose}
+        onClose={handleDrawerClose}
       />
       <DrawerContent>
         {mode === "list" ? (
