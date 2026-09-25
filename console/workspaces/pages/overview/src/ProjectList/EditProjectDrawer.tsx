@@ -29,7 +29,7 @@ import {
 import { z } from "zod";
 import { useListDeploymentPipelines, useListEnvironments, useUpdateProject } from "@agent-management-platform/api-client";
 import { type DeploymentPipelineResponse, ProjectResponse, UpdateProjectRequest, INPUT_LIMITS } from "@agent-management-platform/types";
-import { MarkdownEditor, useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
+import { MarkdownEditor, useConfirmIfUnsaved, useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
 import { useEffect, useState, useCallback, useMemo } from "react";
 
 function pipelineChainLabel(
@@ -128,6 +128,10 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
 
   const { isDirty: formChanged, checkDirty, resetDirty } = useDirtyState(formData);
   useUnsavedChangesGuard(open && formChanged);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, open && formChanged);
 
   const handleFieldChange = useCallback((field: keyof EditProjectFormValues, value: string) => {
     setFormData(prevData => {
@@ -217,11 +221,11 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
   }, [formData.displayName, formData.name, errors]);
 
   return (
-    <DrawerWrapper open={open} onClose={onClose} fullscreen={isFullscreen}>
+    <DrawerWrapper open={open} onClose={handleGuardedClose} fullscreen={isFullscreen}>
       <DrawerHeader
         icon={<Edit size={24} />}
         title="Edit Project"
-        onClose={onClose}
+        onClose={handleGuardedClose}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
       />

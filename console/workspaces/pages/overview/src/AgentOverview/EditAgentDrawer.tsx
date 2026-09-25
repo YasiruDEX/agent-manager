@@ -32,6 +32,7 @@ import { AgentResponse, UpdateAgentRequest, INPUT_LIMITS } from "@agent-manageme
 import {
   LabelsEditor,
   MarkdownEditor,
+  useConfirmIfUnsaved,
   useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import { useEffect, useState, useCallback, useMemo } from "react";
@@ -106,6 +107,10 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
     [open, initialSnapshot, formData, labels],
   );
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const handleFieldChange = useCallback((field: keyof EditAgentFormValues, value: string) => {
     const error = validateField(field, value);
@@ -150,11 +155,11 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
     !errors.displayName && !errors.description && formData.displayName.trim().length > 0;
 
   return (
-    <DrawerWrapper open={open} onClose={onClose} fullscreen={isFullscreen}>
+    <DrawerWrapper open={open} onClose={handleGuardedClose} fullscreen={isFullscreen}>
       <DrawerHeader
         icon={<Edit size={24} />}
         title="Edit Agent"
-        onClose={onClose}
+        onClose={handleGuardedClose}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
       />

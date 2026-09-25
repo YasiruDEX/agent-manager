@@ -36,7 +36,10 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateGateway } from "@agent-management-platform/api-client";
-import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
+import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import {
   type GatewayResponse,
   type UpdateGatewayRequest,
@@ -96,6 +99,10 @@ export function EditGatewayDrawer({
     [open, initialSnapshot, formData],
   );
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const handleFieldChange = useCallback(
     (
@@ -159,11 +166,11 @@ export function EditGatewayDrawer({
   const hasValidationErrors = validationErrorsList.length > 0;
 
   return (
-    <DrawerWrapper open={open} onClose={onClose}>
+    <DrawerWrapper open={open} onClose={handleGuardedClose}>
       <DrawerHeader
         icon={<Edit size={24} />}
         title="Edit Gateway"
-        onClose={onClose}
+        onClose={handleGuardedClose}
       />
       <DrawerContent>
         <form onSubmit={handleSubmit}>

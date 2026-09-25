@@ -35,7 +35,10 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateMCPProxy } from "@agent-management-platform/api-client";
-import { useUnsavedChangesGuard } from "@agent-management-platform/shared-component";
+import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import { type Environment, type MCPProxy, INPUT_LIMITS } from "@agent-management-platform/types";
 import { z } from "zod";
 import { type EndpointDraft } from "./EndpointFormFields";
@@ -99,6 +102,10 @@ export function EditMCPProxyDrawer({
     seededSnapshot !== null &&
     JSON.stringify({ formData, endpoints }) !== seededSnapshot;
   useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const wasOpenRef = useRef(false);
 
@@ -193,11 +200,11 @@ export function EditMCPProxyDrawer({
     formData.version.trim().length > 0;
 
   return (
-    <DrawerWrapper open={open} onClose={onClose}>
+    <DrawerWrapper open={open} onClose={handleGuardedClose}>
       <DrawerHeader
         icon={<Edit size={24} />}
         title="Edit MCP Server"
-        onClose={onClose}
+        onClose={handleGuardedClose}
       />
       <DrawerContent>
         <form onSubmit={handleSubmit}>
