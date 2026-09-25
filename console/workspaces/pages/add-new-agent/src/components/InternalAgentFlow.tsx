@@ -25,7 +25,11 @@ import {
   absoluteRouteMap,
   OrgProjPathParams,
 } from "@agent-management-platform/types";
-import { useCreateAgent, useGetDeploymentPipeline } from "@agent-management-platform/api-client";
+import {
+  useAgentBuildOptions,
+  useCreateAgent,
+  useGetDeploymentPipeline,
+} from "@agent-management-platform/api-client";
 import { createAgentSchema, type CreateAgentFormValues, type LLMProviderFormEntry, type MCPProxyFormEntry } from "../form/schema";
 import { InternalAgentForm } from "../forms/InternalAgentForm";
 import { CreateButtons } from "./CreateButtons";
@@ -79,20 +83,39 @@ export const InternalAgentFlow: React.FC = () => {
 
   const { mutate: createAgent, isPending, error } = useCreateAgent();
 
-  // languageVersion / instrumentationVersion are seeded asynchronously from
-  // build options, so they don't count as user edits.
+  // InternalAgentForm seeds languageVersion / instrumentationVersion from the
+  // build options once they load. Mirror that seeding here (same cached
+  // query) so the seeded defaults are the baseline and only a user's change
+  // to either version counts as an edit.
+  const { data: buildOptions } = useAgentBuildOptions({ orgName: orgId ?? "" });
+  const baselineFormData = useMemo<CreateAgentFormValues>(() => {
+    if (!buildOptions) return initialFormData;
+    const languageVersion = buildOptions.python.defaultVersion;
+    const defaultInstrumentation = buildOptions.instrumentation.defaultVersion;
+    const compat = buildOptions.instrumentation.versions.filter((v) =>
+      v.pythonVersions.includes(languageVersion),
+    );
+    const instrumentationVersion = compat.some((c) => c.version === defaultInstrumentation)
+      ? defaultInstrumentation
+      : (compat[0]?.version ?? null);
+    return { ...initialFormData, languageVersion, instrumentationVersion };
+  }, [buildOptions, initialFormData]);
   const isDirty = useMemo(() => {
-    const strip = (values: CreateAgentFormValues) => ({
+    // Until the form has applied its seeding, an unseeded version isn't an edit.
+    const withSeeded = (values: CreateAgentFormValues) => ({
       ...values,
-      languageVersion: undefined,
-      instrumentationVersion: undefined,
+      languageVersion: values.languageVersion ?? baselineFormData.languageVersion,
+      instrumentationVersion:
+        values.instrumentationVersion === undefined
+          ? baselineFormData.instrumentationVersion
+          : values.instrumentationVersion,
     });
     return (
       llmProviders.length > 0 ||
       mcpProxies.length > 0 ||
-      JSON.stringify(strip(formData)) !== JSON.stringify(strip(initialFormData))
+      JSON.stringify(withSeeded(formData)) !== JSON.stringify(baselineFormData)
     );
-  }, [formData, initialFormData, llmProviders, mcpProxies]);
+  }, [formData, baselineFormData, llmProviders, mcpProxies]);
   const { allowNavigation } = useUnsavedChangesGuard(isDirty);
 
   const params = useMemo<OrgProjPathParams>(
