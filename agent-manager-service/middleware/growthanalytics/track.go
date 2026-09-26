@@ -14,8 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Package growthanalytics reports feature-usage telemetry for the SaaS
-// deployment of agent-manager-service to Moesif, per the Product Feature
+// Package growthanalytics reports opt-in feature-usage telemetry
+// (MOESIF_ENABLED, off by default) from agent-manager-service to Moesif, per the Product Feature
 // Usage Tracking taxonomy (see samples/products/agent-manager/taxonomy.yaml
 // in the Feature Usage Tracking initiative docs). It instruments the
 // "Agent Development", "Security & Access", "Discovery", "Deployment Ops"
@@ -189,9 +189,9 @@ var newSender = func(ga config.GrowthAnalyticsConfig, token string) eventSender 
 // collector URL always resolves once deployed, so its presence cannot
 // signal intent: MOESIF_ENABLED is what turns reporting off in an
 // environment without deleting the rest of the configuration.
-// IsOnPremDeployment is not consulted — this codebase is only ever built and
-// deployed for the SaaS/cloud environment, so there's no separate on-prem
-// build of it to guard against. Every route Track wraps requires
+// IsOnPremDeployment is not consulted: both switches are off by default, so
+// any deployment that reports has opted in, and deployment_model labels its
+// events as on-prem or SaaS. Every route Track wraps requires
 // authentication (see the package doc comment on the token this uses), so a
 // missing caller JWT at send time is treated as a bug, not a normal case —
 // it's logged and the event is dropped rather than sent unauthenticated.
@@ -280,14 +280,28 @@ func reportEvent(
 	// this package controls before the send is fired off in the
 	// background — the only place that can say "we tried to send this"
 	// rather than silently maybe-doing nothing.
-	logger.GetLogger(requestCtx).Info("growthanalytics: sending feature-usage event to Moesif collector",
+	logger.GetLogger(requestCtx).Debug("growthanalytics: sending feature-usage event to Moesif collector",
 		"feature", featureCode,
 		"org_id", companyID,
 		"metadata", metadata,
 	)
 
+	// Same drop-when-full backstop as console sends (see
+	// maxInFlightConsoleSends): a slow collector must cost a fixed number of
+	// goroutines, not one per tracked request. Captured once so the goroutine
+	// releases the semaphore it acquired even if tests swap the variable.
+	slots := eventSendSlots
+	select {
+	case slots <- struct{}{}:
+	default:
+		slog.Warn("growthanalytics: event send pool is full, dropping event",
+			"feature", featureCode, "maxInFlight", maxInFlightEventSends)
+		return
+	}
+
 	sender := newSender(ga, token)
 	go func() {
+		defer func() { <-slots }()
 		defer func() {
 			if rec := recover(); rec != nil {
 				slog.Error("growthanalytics: recovered panic sending event", "panic", rec, "feature", featureCode)
@@ -300,6 +314,14 @@ func reportEvent(
 		}
 	}()
 }
+
+// maxInFlightEventSends caps concurrent feature-usage event sends. Events come
+// from API mutations and so outnumber console batches, hence a larger pool than
+// maxInFlightConsoleSends; a full pool drops the event rather than queueing it.
+const maxInFlightEventSends = 64
+
+// eventSendSlots is a counting semaphore; a token is held for one send.
+var eventSendSlots = make(chan struct{}, maxInFlightEventSends)
 
 // identifyUser resolves the event's user_id from the request's validated
 // JWT, mirroring the taxonomy's need to attribute usage to the acting user.
@@ -318,7 +340,7 @@ func snapshotRequest(r *http.Request) moesifcollector.EventRequest {
 		Time:      time.Now().UTC().Format(time.RFC3339),
 		URI:       requestURI(r),
 		Verb:      r.Method,
-		IPAddress: clientIP(r),
+		IPAddress: ClientIP(r),
 	}
 }
 
@@ -330,30 +352,39 @@ func requestURI(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto == "http" || proto == "https" {
 		scheme = proto
 	}
 	host := r.Host
 	if host == "" {
 		host = "unknown"
 	}
-	return scheme + "://" + host + r.URL.RequestURI()
+	// sanitizeURI drops the query string and fragment: search terms and
+	// filter values must not reach Moesif, the same rule the console path
+	// applies.
+	return sanitizeURI(scheme + "://" + host + r.URL.RequestURI())
 }
 
-// clientIP extracts the caller's address, preferring a proxy-supplied
-// X-Forwarded-For over the immediate TCP peer.
-func clientIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		if idx := strings.IndexByte(fwd, ','); idx >= 0 {
-			return strings.TrimSpace(fwd[:idx])
-		}
-		return strings.TrimSpace(fwd)
+// ClientIP extracts the caller's address, preferring the first
+// X-Forwarded-For entry over the immediate TCP peer. The forwarded value is
+// caller-controlled, so it is used only when it parses as an IP; anything else
+// falls back to the peer rather than reaching Moesif verbatim.
+func ClientIP(r *http.Request) string {
+	peer := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		peer = host
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+	fwd := r.Header.Get("X-Forwarded-For")
+	if fwd == "" {
+		return peer
 	}
-	return host
+	if idx := strings.IndexByte(fwd, ','); idx >= 0 {
+		fwd = fwd[:idx]
+	}
+	if ip := net.ParseIP(strings.TrimSpace(fwd)); ip != nil {
+		return ip.String()
+	}
+	return peer
 }
 
 // resolveDimensions substitutes DynamicOutcome (if present) with the real

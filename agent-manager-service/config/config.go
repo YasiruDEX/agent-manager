@@ -61,8 +61,8 @@ type Config struct {
 	ServerPublicURL          string
 
 	// GrowthAnalytics configures feature-usage telemetry export. A no-op
-	// unless MoesifCollectorBaseURL is set — this codebase has no separate
-	// on-prem build to guard against, so IsOnPremDeployment isn't consulted.
+	// unless GrowthAnalytics.Enabled is true and MoesifCollectorBaseURL is
+	// set (both off by default); IsOnPremDeployment isn't consulted.
 	GrowthAnalytics GrowthAnalyticsConfig
 
 	// ThunderHostBaseDomain is the domain suffix env-Thunder's developer-facing

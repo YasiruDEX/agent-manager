@@ -20,9 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -342,20 +340,5 @@ const maxUserAgentLength = 256
 // every action as its source address. Anything that is not an IP falls back to
 // the immediate peer, which the caller cannot forge.
 func consoleClientIP(r *http.Request) string {
-	peer := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		peer = host
-	}
-
-	fwd := r.Header.Get("X-Forwarded-For")
-	if fwd == "" {
-		return peer
-	}
-	if idx := strings.IndexByte(fwd, ','); idx >= 0 {
-		fwd = fwd[:idx]
-	}
-	if ip := net.ParseIP(strings.TrimSpace(fwd)); ip != nil {
-		return ip.String()
-	}
-	return peer
+	return growthanalytics.ClientIP(r)
 }

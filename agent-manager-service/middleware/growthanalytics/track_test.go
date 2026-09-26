@@ -236,10 +236,9 @@ func TestTrack_ReportsConfiguredEnvironment(t *testing.T) {
 }
 
 // TestTrack_ActivatesRegardlessOfIsOnPremDeployment locks in a deliberate
-// design choice: Track does not consult IsOnPremDeployment. This codebase is
-// only ever built and deployed for the SaaS/cloud environment — there's no
-// separate on-prem build of it to guard against — so MoesifCollectorBaseURL
-// being set is the only signal that matters.
+// design choice: Track does not consult IsOnPremDeployment. Enabled plus
+// MoesifCollectorBaseURL are the only gates (both off by default), and
+// deployment_model records whether the reporting install is on-prem or SaaS.
 func TestTrack_ActivatesRegardlessOfIsOnPremDeployment(t *testing.T) {
 	cfg := config.GetConfig()
 	origOnPrem := cfg.IsOnPremDeployment
@@ -657,6 +656,7 @@ func TestClientIP(t *testing.T) {
 		{"forwarded-for wins over remote addr", "203.0.113.9:44321", "198.51.100.4", "198.51.100.4"},
 		{"first entry of a comma-separated forwarded-for", "203.0.113.9:44321", "198.51.100.4, 10.0.0.1", "198.51.100.4"},
 		{"malformed remote addr falls back to raw value", "not-a-host-port", "", "not-a-host-port"},
+		{"non-IP forwarded-for falls back to the peer", "203.0.113.9:44321", "evil<script>", "203.0.113.9"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -665,9 +665,50 @@ func TestClientIP(t *testing.T) {
 			if tt.forwardFor != "" {
 				r.Header.Set("X-Forwarded-For", tt.forwardFor)
 			}
-			if got := clientIP(r); got != tt.want {
-				t.Errorf("clientIP() = %q, want %q", got, tt.want)
+			if got := ClientIP(r); got != tt.want {
+				t.Errorf("ClientIP() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestTrack_DropsEventWhenSendPoolFull: a slow collector must cost a fixed
+// number of goroutines. With every slot taken, the event is dropped before a
+// sender is built and the caller's response is untouched.
+func TestTrack_DropsEventWhenSendPoolFull(t *testing.T) {
+	withGrowthAnalyticsConfig(t, "http://localhost:18080/moesif-collector")
+
+	orig, origSlots := newSender, eventSendSlots
+	full := make(chan struct{}, 1)
+	full <- struct{}{}
+	eventSendSlots = full
+	newSender = func(config.GrowthAnalyticsConfig, string) eventSender {
+		t.Fatal("newSender must not be called when the send pool is full")
+		return nil
+	}
+	t.Cleanup(func() { newSender, eventSendSlots = orig, origSlots })
+
+	tracked := Track("amp.agent-development.create-agent", nil, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+	})
+	w := httptest.NewRecorder()
+	tracked(w, authedRequest(http.MethodPost, "/agents"))
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201", w.Code)
+	}
+}
+
+func TestRequestURI_StripsQueryAndIgnoresBogusProto(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "http://api.example.com/orgs/o1/agents?search=secret#frag", nil)
+	r.Header.Set("X-Forwarded-Proto", "javascript")
+
+	if got, want := requestURI(r), "http://api.example.com/orgs/o1/agents"; got != want {
+		t.Errorf("requestURI() = %q, want %q", got, want)
+	}
+
+	r.Header.Set("X-Forwarded-Proto", "https")
+	if got, want := requestURI(r), "https://api.example.com/orgs/o1/agents"; got != want {
+		t.Errorf("requestURI() = %q, want %q", got, want)
 	}
 }

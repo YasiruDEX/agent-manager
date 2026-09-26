@@ -136,7 +136,6 @@ var consoleActions = map[string]map[string]bool{
 	"amp.console.onboarding.first-session":      dims("referrer"),
 	"amp.console.onboarding.wizard-step-viewed": dims("wizard", "step", "step_index"),
 	"amp.console.onboarding.wizard-abandoned":   dims("wizard", "last_step"),
-	"amp.console.onboarding.sample-selected":    dims("sample_id", "kind"),
 
 	// Interactive surfaces. Mostly read paths, which track.go deliberately
 	// does not instrument, so usage of the observability and test tooling is

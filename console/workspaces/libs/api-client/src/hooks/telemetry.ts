@@ -70,7 +70,6 @@ export const ConsoleAction = {
   FirstSession: "amp.console.onboarding.first-session",
   WizardStepViewed: "amp.console.onboarding.wizard-step-viewed",
   WizardAbandoned: "amp.console.onboarding.wizard-abandoned",
-  SampleSelected: "amp.console.onboarding.sample-selected",
 
   // Interactive surfaces (read paths the API does not track)
   TestInvoke: "amp.console.playground.test-invoke",
