@@ -86,8 +86,23 @@ func NewAlertSender(cfg config.Config) AlertSender {
 	client := ssrf.NewClient(alertSendTimeout)
 	if allowPrivate {
 		client = &http.Client{Timeout: alertSendTimeout}
+	} else {
+		client.CheckRedirect = httpsOnlyRedirect(client.CheckRedirect)
 	}
 	return &httpAlertSender{client: client, allowPrivate: allowPrivate, now: time.Now}
+}
+
+// httpsOnlyRedirect refuses any redirect hop that leaves https before running
+// the SSRF check. Go keeps Authorization on a same-host redirect, so an https
+// endpoint redirecting to http would otherwise send the stored headers in
+// cleartext.
+func httpsOnlyRedirect(next func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if req.URL.Scheme != "https" {
+			return fmt.Errorf("%w: alert endpoint redirected to a non-https URL", utils.ErrInvalidURL)
+		}
+		return next(req, via)
+	}
 }
 
 func (s *httpAlertSender) ValidateURL(ctx context.Context, rawURL string) error {

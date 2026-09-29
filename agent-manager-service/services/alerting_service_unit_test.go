@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -365,4 +366,15 @@ func TestOnMonitorRunFinished_PastMonitorRerunIgnoresCooldown(t *testing.T) {
 	env.service().OnMonitorRunFinished(context.Background(), monitor, run, models.RunStatusFailed, "boom")
 
 	require.Len(t, env.enqueued, 1, "a past monitor's rerun alerts even inside the cooldown")
+}
+
+func TestAlertSender_RejectsNonHTTPSRedirect(t *testing.T) {
+	sender, ok := NewAlertSender(config.Config{}).(*httpAlertSender)
+	require.True(t, ok)
+	req, err := http.NewRequest(http.MethodPost, "http://alerts.example.com/hook", nil)
+	require.NoError(t, err)
+
+	err = sender.client.CheckRedirect(req, nil)
+
+	assert.ErrorIs(t, err, utils.ErrInvalidURL, "an https endpoint must not be followed to plain http")
 }
