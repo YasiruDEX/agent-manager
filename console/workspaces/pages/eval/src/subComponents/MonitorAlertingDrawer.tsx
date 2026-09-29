@@ -141,18 +141,30 @@ export function MonitorAlertingDrawer({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  // Build the draft once per opening. A background refetch (window focus, an
+  // invalidation elsewhere) must not overwrite edits the user has not saved,
+  // so later data only fills a draft that does not exist yet.
   useEffect(() => {
-    if (open && data) {
-      setDraft({
-        enabled: data.enabled,
-        alertOnRunFailure: data.alertOnRunFailure,
-        thresholds: data.thresholds.map(toDraft),
-        cooldownMinutes: String(data.cooldownMinutes),
-        consecutiveBreaches: String(data.consecutiveBreaches),
-      });
-      setSubmitted(false);
+    if (!open) {
+      setDraft(null);
+      return;
     }
+    if (!data) return;
+    setDraft(
+      (current) =>
+        current ?? {
+          enabled: data.enabled,
+          alertOnRunFailure: data.alertOnRunFailure,
+          thresholds: data.thresholds.map(toDraft),
+          cooldownMinutes: String(data.cooldownMinutes),
+          consecutiveBreaches: String(data.consecutiveBreaches),
+        },
+    );
   }, [open, data]);
+
+  useEffect(() => {
+    if (open) setSubmitted(false);
+  }, [open]);
 
   const errors = draft ? validate(draft) : {};
   const off = !draft?.enabled;
