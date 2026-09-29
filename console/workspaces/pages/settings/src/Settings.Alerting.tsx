@@ -38,6 +38,7 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import { Copy, Plus, RefreshCcw, Send, Trash2 } from "@wso2/oxygen-ui-icons-react";
+import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -97,14 +98,28 @@ export const SettingsAlerting: React.FC = () => {
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<AlertTestResponse | null>(null);
 
+  const { addConfirmation } = useConfirmationDialog();
+
+  // Reset the form to the stored endpoint, or to empty once it is deleted.
+  // Keyed on the stored values rather than the object, so a background refetch
+  // (e.g. after a test send) does not wipe what the user is editing.
+  const storedHeaderNames = endpoint?.headerNames.join(",");
   useEffect(() => {
-    if (endpoint) {
-      setUrl(endpoint.url);
-      setEnabled(endpoint.enabled);
-    }
+    setUrl(endpoint?.url ?? "");
+    setEnabled(endpoint?.enabled ?? true);
     setEditHeaders(!endpoint);
     setHeaders([]);
-  }, [endpoint]);
+    setSubmitted(false);
+    if (!endpoint) setTestResult(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!endpoint, endpoint?.url, endpoint?.enabled, storedHeaderNames]);
+
+  // Nothing to save until the form differs from what is stored. Opening the
+  // header editor counts as a change for an existing endpoint: saving it
+  // replaces the stored headers.
+  const isDirty = endpoint
+    ? url.trim() !== endpoint.url || enabled !== endpoint.enabled || editHeaders
+    : url.trim() !== "";
 
   const setHeaderField = (index: number, patch: Partial<HeaderRow>) =>
     setHeaders((rows) => rows.map((r, j) => (j === index ? { ...r, ...patch } : r)));
@@ -142,6 +157,22 @@ export const SettingsAlerting: React.FC = () => {
       },
     );
   };
+
+  const handleDelete = () =>
+    addConfirmation({
+      analytics: { entity: "alert-endpoint", action: "delete" },
+      title: "Delete alert endpoint",
+      description:
+        "Alerts for this organization will stop being sent, and alerts not yet " +
+        "delivered will be dropped. Monitor alert rules are kept.",
+      confirmButtonText: "Delete",
+      confirmButtonColor: "error",
+      confirmButtonIcon: <Trash2 size={16} />,
+      onConfirm: () =>
+        remove(params, {
+          onSuccess: () => setNewSecret(null),
+        }),
+    });
 
   const handleTest = () => {
     setTestResult(null);
@@ -295,7 +326,7 @@ export const SettingsAlerting: React.FC = () => {
           <Button
             variant="contained"
             onClick={() => save(false)}
-            disabled={saving}
+            disabled={saving || !isDirty}
             startIcon={saving ? <CircularProgress size={16} /> : undefined}
           >
             {endpoint ? "Save" : "Create endpoint"}
@@ -316,10 +347,11 @@ export const SettingsAlerting: React.FC = () => {
               <Button
                 variant="outlined"
                 color="error"
-                onClick={() => remove(params)}
+                onClick={handleDelete}
                 disabled={deleting}
+                startIcon={deleting ? <CircularProgress size={16} /> : undefined}
               >
-                Delete
+                {deleting ? "Deleting…" : "Delete"}
               </Button>
             </>
           )}

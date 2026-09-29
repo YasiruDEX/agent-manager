@@ -33,10 +33,12 @@ import {
   MenuItem,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
   useTheme,
 } from "@wso2/oxygen-ui";
 import {
+  BellOff,
   BellRing,
   ChevronDown,
   Clock,
@@ -69,6 +71,7 @@ import PerformanceByEvaluatorCard from "./subComponents/PerformanceByEvaluatorCa
 import ScoreBreakdownCard from "./subComponents/ScoreBreakdownCard";
 import {
   useGetMonitor,
+  useGetMonitorAlertConfig,
   useGroupedScores,
   useListMonitors,
   useMonitorScores,
@@ -179,6 +182,16 @@ export const ViewMonitorComponent: React.FC = () => {
     }),
     [monitorId, orgId, projectId, agentId],
   );
+
+  const { data: alertConfig } = useGetMonitorAlertConfig(commonParams);
+  // Alerts only go out when the monitor has alerting on and the org has an
+  // enabled endpoint; anything else is shown as off.
+  const alertingActive = !!alertConfig?.enabled && !!alertConfig?.orgEndpointConfigured;
+  const alertingTooltip = !alertConfig?.enabled
+    ? "Alerting is off for this monitor"
+    : !alertConfig.orgEndpointConfigured
+      ? "Alerting is on, but the organization has no enabled alert endpoint"
+      : "Alerts are sent for failed runs and score thresholds";
 
   const {
     data: monitorData,
@@ -464,14 +477,18 @@ export const ViewMonitorComponent: React.FC = () => {
                     onCustomRangeApply={handleCustomRangeApply}
                   />
                 )}
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<BellRing size={16} />}
-                  onClick={() => setAlertingOpen(true)}
-                >
-                  Alerting
-                </Button>
+                <Tooltip title={alertingTooltip}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color={alertingActive ? "primary" : "inherit"}
+                    startIcon={alertingActive ? <BellRing size={16} /> : <BellOff size={16} />}
+                    onClick={() => setAlertingOpen(true)}
+                    sx={alertingActive ? undefined : { color: "text.disabled", borderColor: "divider" }}
+                  >
+                    {alertingActive ? "Alerting on" : "Alerting off"}
+                  </Button>
+                </Tooltip>
                 <Button
                   size="small"
                   variant="outlined"

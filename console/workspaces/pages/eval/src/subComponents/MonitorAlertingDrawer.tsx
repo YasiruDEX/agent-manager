@@ -23,7 +23,6 @@ import {
   Button,
   Checkbox,
   CircularProgress,
-  Collapse,
   Form,
   FormControlLabel,
   IconButton,
@@ -156,6 +155,7 @@ export function MonitorAlertingDrawer({
   }, [open, data]);
 
   const errors = draft ? validate(draft) : {};
+  const off = !draft?.enabled;
   const shownErrors = submitted ? errors : {};
 
   const update = (patch: Partial<Draft>) =>
@@ -247,13 +247,17 @@ export function MonitorAlertingDrawer({
                   onChange={(_, enabled) => update({ enabled })}
                 />
               }
-              label="Enable alerting for this monitor"
+              label={draft.enabled ? "Alerting is on for this monitor" : "Alerting is off for this monitor"}
             />
-            <Collapse in={draft.enabled}>
+            <Box
+              aria-disabled={!draft.enabled}
+              sx={{ opacity: draft.enabled ? 1 : 0.5, transition: "opacity 150ms" }}
+            >
               <Form.Stack spacing={3}>
                 <FormControlLabel
                   control={
                     <Checkbox
+                      disabled={off}
                       checked={draft.alertOnRunFailure}
                       onChange={(_, alertOnRunFailure) => update({ alertOnRunFailure })}
                     />
@@ -272,6 +276,7 @@ export function MonitorAlertingDrawer({
                       <Box key={i} display="flex" gap={1} alignItems="flex-start">
                         <Box flex={2} minWidth={0}>
                           <Select
+                            disabled={off}
                             fullWidth
                             size="small"
                             value={t.evaluator}
@@ -293,6 +298,7 @@ export function MonitorAlertingDrawer({
                           )}
                         </Box>
                         <Select
+                          disabled={off}
                           size="small"
                           sx={{ flex: 1 }}
                           value={t.aggregation}
@@ -307,6 +313,7 @@ export function MonitorAlertingDrawer({
                           ))}
                         </Select>
                         <Select
+                          disabled={off}
                           size="small"
                           sx={{ width: 72 }}
                           value={t.operator}
@@ -318,6 +325,7 @@ export function MonitorAlertingDrawer({
                           <MenuItem value="lte">&le;</MenuItem>
                         </Select>
                         <TextField
+                          disabled={off}
                           size="small"
                           sx={{ width: 96 }}
                           type="number"
@@ -329,6 +337,7 @@ export function MonitorAlertingDrawer({
                         />
                         <IconButton
                           size="small"
+                          disabled={off}
                           aria-label="Remove threshold"
                           onClick={() =>
                             update({ thresholds: draft.thresholds.filter((_, j) => j !== i) })
@@ -344,7 +353,7 @@ export function MonitorAlertingDrawer({
                         variant="text"
                         startIcon={<Plus size={16} />}
                         onClick={handleAddThreshold}
-                        disabled={evaluators.length === 0}
+                        disabled={off || evaluators.length === 0}
                       >
                         Add threshold
                       </Button>
@@ -356,6 +365,7 @@ export function MonitorAlertingDrawer({
                   <Form.Header>Noise control</Form.Header>
                   <Box display="flex" gap={2}>
                     <TextField
+                      disabled={off}
                       label="Cooldown (minutes)"
                       size="small"
                       type="number"
@@ -365,6 +375,7 @@ export function MonitorAlertingDrawer({
                       helperText={shownErrors.cooldownMinutes ?? "Minimum time between alerts"}
                     />
                     <TextField
+                      disabled={off}
                       label="Consecutive breaches"
                       size="small"
                       type="number"
@@ -378,7 +389,7 @@ export function MonitorAlertingDrawer({
                   </Box>
                 </Form.Section>
               </Form.Stack>
-            </Collapse>
+            </Box>
 
             {shownErrors.form && <Alert severity="error">{shownErrors.form}</Alert>}
 

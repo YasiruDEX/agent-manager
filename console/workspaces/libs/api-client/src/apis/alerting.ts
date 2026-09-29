@@ -49,10 +49,15 @@ export async function getAlertEndpoint(
   getToken?: () => Promise<string>,
 ): Promise<AlertEndpointResponse | null> {
   const token = getToken ? await getToken() : undefined;
-  const res = await httpGET(`${alertingBase(params.orgName)}/endpoint`, { token });
-  if (res.status === 404) return null;
-  if (!res.ok) throw await res.json();
-  return res.json();
+  try {
+    const res = await httpGET(`${alertingBase(params.orgName)}/endpoint`, { token });
+    return await res.json();
+  } catch (err) {
+    // httpGET throws on any non-2xx. A 404 means the org has no endpoint,
+    // which is a valid state (never configured, or just deleted), not an error.
+    if ((err as { status?: number })?.status === 404) return null;
+    throw err;
+  }
 }
 
 /**
