@@ -70,6 +70,7 @@ func TestDomainActionsMatchRouteDerivedActions(t *testing.T) {
 		{"PUT /orgs/{orgName}/environments/{envID}/thunder-system-client", nil, ActionServiceAccountConfigure},
 		{"PUT /orgs/{orgName}/alerting/endpoint", []rbac.Permission{rbac.AlertingManage}, ActionAlertEndpointConfigure},
 		{"DELETE /orgs/{orgName}/alerting/endpoint", []rbac.Permission{rbac.AlertingManage}, ActionAlertEndpointDelete},
+		{"POST /orgs/{orgName}/alerting/endpoint/test", []rbac.Permission{rbac.AlertingManage}, ActionAlertEndpointTest},
 		{"DELETE /orgs/{orgName}/environments/{envID}/thunder-system-client", nil, ActionServiceAccountRemove},
 		{"POST /orgs/{orgName}/identities/roles/{roleID}/permissions/add", nil, ActionRoleGrantPermission},
 		{"POST /orgs/{orgName}/identities/roles/{roleID}/permissions/remove", nil, ActionRoleRevokePermission},
