@@ -357,6 +357,9 @@ The registry is the source of truth (`audit/actions.go`, `audit/actions_domain.g
 | `agent:deploy` | deployment | 2 notice | `agentName`, `environment`, `imageId`, `isProduction` |
 | `agent:promote` | deployment | 3 warning | `agentName`, `environment`, `isProduction`, `sourceEnv`, `targetEnv` |
 | `agent:read` | read | 1 info | — |
+| `alert-endpoint:configure` | credential | 4 critical | `endpointUrl`, `enabled`, `headerNames`, `secretRotated` |
+| `alert-endpoint:delete` | credential | 4 critical | — |
+| `alert-endpoint:test` | config | 2 notice | — (coverage tier only: records that a test alert was sent, not its outcome) |
 | `api-key:create` | credential | 4 critical | `expiresAt`, `gatewayConnected`, `gatewayCount`, `keyName`, `ownerName`, `ownerType` |
 | `api-key:issue-test` | credential | 2 notice | `expiresAt`, `keyName`, `ownerName`, `ownerType`, `rotated` |
 | `api-key:revoke` | credential | 4 critical | `gatewayCount`, `keyName`, `ownerName`, `ownerType` |
@@ -396,8 +399,6 @@ The registry is the source of truth (`audit/actions.go`, `audit/actions_domain.g
 | `role:revoke-permission` | identity | 4 critical | `permissionCount`, `permissions`, `resourceServerId`, `roleName` |
 | `role:unassign` | identity | 4 critical | `assigneeCount`, `assigneeTypes`, `assignees`, `roleName` |
 | `service-account:configure` | credential | 4 critical | `clientId`, `environment` |
-| `alert-endpoint:configure` | credential | 4 critical | `endpointUrl`, `enabled`, `headerNames`, `secretRotated` |
-| `alert-endpoint:delete` | credential | 4 critical | — |
 | `service-account:remove` | credential | 4 critical | `environment` |
 | `system:agent-identity-exhausted` | credential | 3 warning | `agentName`, `environment`, `reason` |
 | `system:agent-identity-provisioned` | credential | 2 notice | `agentName`, `clientId`, `environment` |
