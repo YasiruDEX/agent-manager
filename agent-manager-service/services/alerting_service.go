@@ -543,7 +543,7 @@ func (s *alertingService) OnMonitorTriggerFailed(ctx context.Context, monitor *m
 		return
 	}
 	now := s.now()
-	if inAlertCooldown(cfg, now) {
+	if inAlertCooldown(monitor, cfg, now) {
 		return
 	}
 	reason := "failed to start the evaluation run"
@@ -590,7 +590,7 @@ func (s *alertingService) alertRunFailed(ctx context.Context, monitor *models.Mo
 		return err
 	}
 	now := s.now()
-	if inAlertCooldown(cfg, now) {
+	if inAlertCooldown(monitor, cfg, now) {
 		s.logger.Debug("Monitor run-failure alert suppressed by cooldown", "monitor", monitor.Name, "runID", run.ID)
 		return nil
 	}
@@ -627,7 +627,7 @@ func (s *alertingService) evaluateThresholds(ctx context.Context, monitor *model
 
 	count := cfg.ConsecutiveBreachCount + 1
 	now := s.now()
-	if count < cfg.ConsecutiveBreaches || inAlertCooldown(cfg, now) {
+	if count < cfg.ConsecutiveBreaches || inAlertCooldown(monitor, cfg, now) {
 		return s.alertRepo.UpdateMonitorAlertState(ctx, monitor.ID, count, nil)
 	}
 
@@ -691,7 +691,14 @@ func aggregationValue(raw interface{}) (float64, bool) {
 	}
 }
 
-func inAlertCooldown(cfg *models.MonitorAlertConfig, now time.Time) bool {
+// inAlertCooldown reports whether an alert for this monitor is suppressed.
+// Only scheduled (future) monitors are throttled: they fail on every interval
+// until fixed. A past monitor runs only when someone asks, so each failed or
+// breached run, reruns included, alerts once.
+func inAlertCooldown(monitor *models.Monitor, cfg *models.MonitorAlertConfig, now time.Time) bool {
+	if monitor.Type != models.MonitorTypeFuture {
+		return false
+	}
 	if cfg.LastAlertedAt == nil || cfg.CooldownMinutes <= 0 {
 		return false
 	}

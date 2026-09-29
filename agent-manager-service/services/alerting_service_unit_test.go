@@ -100,7 +100,7 @@ func (e *alertTestEnv) service() *alertingService {
 
 func testMonitorAndRun() (*models.Monitor, *models.MonitorRun) {
 	monitor := &models.Monitor{
-		ID: uuid.New(), Name: "prod-quality", OUID: "org-1", ProjectName: "p", AgentName: "a", EnvironmentName: "prod",
+		ID: uuid.New(), Name: "prod-quality", Type: models.MonitorTypeFuture, OUID: "org-1", ProjectName: "p", AgentName: "a", EnvironmentName: "prod",
 		Evaluators: []models.MonitorEvaluator{{Identifier: "relevancy", DisplayName: "Relevancy"}},
 	}
 	return monitor, &models.MonitorRun{ID: uuid.New(), MonitorID: monitor.ID}
@@ -353,4 +353,16 @@ func TestAlertEndpointOriginChanged(t *testing.T) {
 	assert.True(t, alertEndpointOriginChanged("https://a.example.com/x", "https://b.example.com/x"))
 	assert.True(t, alertEndpointOriginChanged("https://a.example.com/x", "http://a.example.com/x"))
 	assert.True(t, alertEndpointOriginChanged("https://a.example.com/x", "https://a.example.com:8443/x"))
+}
+
+func TestOnMonitorRunFinished_PastMonitorRerunIgnoresCooldown(t *testing.T) {
+	monitor, run := testMonitorAndRun()
+	monitor.Type = models.MonitorTypePast
+	recent := time.Now().Add(-5 * time.Minute)
+	cfg := &models.MonitorAlertConfig{MonitorID: monitor.ID, Enabled: true, AlertOnRunFailure: true, CooldownMinutes: 60, LastAlertedAt: &recent}
+	env := newAlertTestEnv(cfg, true, nil)
+
+	env.service().OnMonitorRunFinished(context.Background(), monitor, run, models.RunStatusFailed, "boom")
+
+	require.Len(t, env.enqueued, 1, "a past monitor's rerun alerts even inside the cooldown")
 }

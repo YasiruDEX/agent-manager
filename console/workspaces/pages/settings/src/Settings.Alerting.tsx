@@ -403,7 +403,12 @@ export const SettingsAlerting: React.FC = () => {
               >
                 Send test alert
               </Button>
-              <Button variant="outlined" onClick={() => save(true)} disabled={!canManage || saving}>
+              <Button
+                variant="outlined"
+                onClick={() => save(true)}
+                // Regenerating saves the form too; only offer it with no pending edits.
+                disabled={!canManage || saving || isDirty}
+              >
                 Regenerate signing secret
               </Button>
               <Button
