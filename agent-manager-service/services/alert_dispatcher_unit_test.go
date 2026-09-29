@@ -122,3 +122,9 @@ func TestAlertDispatcher_EndpointRemoved(t *testing.T) {
 	assert.Equal(t, models.AlertDeliveryStatusDead, out.status)
 	assert.Empty(t, sender.sent, "nothing is sent without an endpoint")
 }
+
+func TestAlertDispatcher_LeaseCoversWholeBatch(t *testing.T) {
+	// Deliveries in a claimed batch are sent sequentially; the lease must not
+	// expire before the last one could be attempted.
+	assert.Greater(t, alertDispatchClaimLease, time.Duration(alertDispatchBatch)*alertSendTimeout)
+}

@@ -34,9 +34,11 @@ import (
 const (
 	alertDispatchTickInterval = 15 * time.Second
 	alertDispatchBatch        = 50
-	// alertDispatchClaimLease comfortably outlasts one send attempt, so a
-	// replica that dies mid-send leaves the delivery to be retried later.
-	alertDispatchClaimLease = 2 * time.Minute
+	// alertDispatchClaimLease must outlast sending the whole claimed batch
+	// one after another at the worst-case send time, or another worker could
+	// claim the unsent rest mid-batch and deliver them twice. A replica that
+	// dies mid-batch leaves its unsent claims to be retried once it expires.
+	alertDispatchClaimLease = alertDispatchBatch*alertSendTimeout + time.Minute
 )
 
 // alertRetryBackoff is the delay before each retry. Its length plus one is the
