@@ -129,7 +129,6 @@ var PredefinedRolePermissions = map[string][]Permission{
 		AgentEnvNonProduction, AgentEnvProduction,
 		MonitorCreate, MonitorRead, MonitorUpdate, MonitorDelete, MonitorExecute,
 		MonitorScoreRead,
-		AlertingRead, AlertingManage,
 		ObservabilityTraceRead, ObservabilityLogRead, ObservabilityBuildLogRead, ObservabilityMetricRead,
 		AgentIdentityRead, AgentIdentityCreate, AgentIdentityUpdate, AgentIdentityDelete,
 		CatalogRead,

@@ -37,9 +37,10 @@ import {
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Copy, Plus, RefreshCcw, Send, Trash2 } from "@wso2/oxygen-ui-icons-react";
+import { Copy, Lock, Plus, RefreshCcw, Send, Trash2 } from "@wso2/oxygen-ui-icons-react";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { useParams } from "react-router-dom";
+import { useAlertingAccess } from "./settingsRoutes";
 import { formatDistanceToNow } from "date-fns";
 import {
   useDeleteAlertEndpoint,
@@ -79,11 +80,15 @@ function relative(ts?: string): string {
 
 export const SettingsAlerting: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
+  const { canRead, canManage } = useAlertingAccess();
   const params = { orgName: orgId };
+  // Without read access nothing is fetched: the queries stay disabled and
+  // the page shows the access notice instead of an empty form.
+  const readParams = { orgName: canRead ? orgId : undefined };
 
-  const { data: endpoint, isLoading } = useGetAlertEndpoint(params);
+  const { data: endpoint, isLoading, error: endpointError } = useGetAlertEndpoint(readParams);
   const { data: deliveries, isLoading: deliveriesLoading, refetch } =
-    useListAlertDeliveries(params, { limit: 25 });
+    useListAlertDeliveries(readParams, { limit: 25 });
   const { mutate: upsert, isPending: saving } = useUpsertAlertEndpoint();
   const { mutate: remove, isPending: deleting } = useDeleteAlertEndpoint();
   const { mutate: sendTest, isPending: testing } = useTestAlertEndpoint();
@@ -184,6 +189,24 @@ export const SettingsAlerting: React.FC = () => {
     });
   };
 
+  // A 403 from the API also means no access, e.g. a token issued before the
+  // scope was granted or revoked.
+  const forbidden = (endpointError as { status?: number } | null)?.status === 403;
+  if (!canRead || forbidden) {
+    return (
+      <Stack alignItems="center" justifyContent="center" spacing={2} sx={{ py: 10, px: 4 }}>
+        <Box sx={{ color: "text.secondary", display: "flex" }}>
+          <Lock size={48} />
+        </Box>
+        <Typography variant="h6">You don&apos;t have access to alerting</Typography>
+        <Typography variant="body2" color="text.secondary" textAlign="center" maxWidth={440}>
+          Alerting settings are available to organization administrators only. Ask an
+          admin to configure the alert endpoint or to grant you access.
+        </Typography>
+      </Stack>
+    );
+  }
+
   if (isLoading) {
     return (
       <Stack spacing={2}>
@@ -231,12 +254,20 @@ export const SettingsAlerting: React.FC = () => {
         </Alert>
       )}
 
+      {!canManage && (
+        <Alert severity="info">
+          You can view the alert endpoint but not change it. Only organization
+          administrators can configure alerting.
+        </Alert>
+      )}
+
       <Form.Stack>
         <Form.Section>
           <Form.Header>Endpoint</Form.Header>
           <Form.ElementWrapper name="url" label="URL">
             <TextField
               id="url"
+              disabled={!canManage}
               fullWidth
               placeholder="https://alerts.example.com/hooks/amp"
               value={url}
@@ -246,14 +277,20 @@ export const SettingsAlerting: React.FC = () => {
             />
           </Form.ElementWrapper>
           <FormControlLabel
-            control={<Switch checked={enabled} onChange={(_, v) => setEnabled(v)} />}
+            control={
+              <Switch
+                checked={enabled}
+                disabled={!canManage}
+                onChange={(_, v) => setEnabled(v)}
+              />
+            }
             label="Send alerts to this endpoint"
           />
         </Form.Section>
 
         <Form.Section>
           <Form.Header>Request headers</Form.Header>
-          {!editHeaders ? (
+          {!editHeaders || !canManage ? (
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
               {(endpoint?.headerNames ?? []).length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
@@ -264,7 +301,7 @@ export const SettingsAlerting: React.FC = () => {
                   <Chip key={name} label={name} size="small" variant="outlined" />
                 ))
               )}
-              <Button size="small" onClick={() => setEditHeaders(true)}>
+              <Button size="small" disabled={!canManage} onClick={() => setEditHeaders(true)}>
                 Replace headers
               </Button>
             </Stack>
@@ -326,7 +363,7 @@ export const SettingsAlerting: React.FC = () => {
           <Button
             variant="contained"
             onClick={() => save(false)}
-            disabled={saving || !isDirty}
+            disabled={!canManage || saving || !isDirty}
             startIcon={saving ? <CircularProgress size={16} /> : undefined}
           >
             {endpoint ? "Save" : "Create endpoint"}
@@ -337,18 +374,18 @@ export const SettingsAlerting: React.FC = () => {
                 variant="outlined"
                 startIcon={testing ? <CircularProgress size={16} /> : <Send size={16} />}
                 onClick={handleTest}
-                disabled={testing}
+                disabled={!canManage || testing}
               >
                 Send test alert
               </Button>
-              <Button variant="outlined" onClick={() => save(true)} disabled={saving}>
+              <Button variant="outlined" onClick={() => save(true)} disabled={!canManage || saving}>
                 Regenerate signing secret
               </Button>
               <Button
                 variant="outlined"
                 color="error"
                 onClick={handleDelete}
-                disabled={deleting}
+                disabled={!canManage || deleting}
                 startIcon={deleting ? <CircularProgress size={16} /> : undefined}
               >
                 {deleting ? "Deleting…" : "Delete"}

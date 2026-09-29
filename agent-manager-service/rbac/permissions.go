@@ -216,8 +216,9 @@ const (
 	MonitorScorePublish Permission = "monitor:score-publish"
 )
 
-// Alerting permissions — the org-level alert endpoint. Per-monitor alert rules
-// are part of the monitor and use the monitor permissions.
+// Alerting permissions — the org-level alert endpoint, granted to Admin only.
+// Per-monitor alert rules are part of the monitor and use the monitor
+// permissions.
 const (
 	AlertingRead   Permission = "alerting:read"
 	AlertingManage Permission = "alerting:manage"

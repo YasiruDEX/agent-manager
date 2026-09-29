@@ -154,7 +154,7 @@ func TestPredefinedRoleSizes(t *testing.T) {
 		RoleAdmin:            105,
 		RoleDeveloper:        56,
 		RoleAILead:           51,
-		RolePlatformEngineer: 71,
+		RolePlatformEngineer: 69,
 	}
 	if len(PredefinedRolePermissions) != len(want) {
 		t.Fatalf("PredefinedRolePermissions has %d roles, want %d", len(PredefinedRolePermissions), len(want))

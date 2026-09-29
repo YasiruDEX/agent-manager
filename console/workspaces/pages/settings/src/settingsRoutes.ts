@@ -64,3 +64,25 @@ export function useIdentityVisibility(): IdentityVisibility {
     };
   }, [userInfo?.scope]);
 }
+
+export interface AlertingAccess {
+  canRead: boolean;
+  canManage: boolean;
+}
+
+/**
+ * Alerting scopes are granted to the Admin role only. Manage implies read:
+ * the manage-only routes (save, test, delete) are useless without seeing the
+ * endpoint.
+ */
+export function useAlertingAccess(): AlertingAccess {
+  const { userInfo } = useAuthHooks();
+  return useMemo(() => {
+    if (globalConfig.disableAuth) {
+      return { canRead: true, canManage: true };
+    }
+    const s = new Set((userInfo?.scope ?? "").split(" ").filter(Boolean));
+    const canManage = s.has("amp:alerting:manage");
+    return { canRead: canManage || s.has("amp:alerting:read"), canManage };
+  }, [userInfo?.scope]);
+}
