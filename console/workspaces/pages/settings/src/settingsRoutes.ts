@@ -30,6 +30,7 @@ export interface IdentityVisibility {
   users: boolean;
   roles: boolean;
   groups: boolean;
+  alerting: boolean;
 }
 
 /**
@@ -40,11 +41,11 @@ export function useIdentityVisibility(): IdentityVisibility {
   const { userInfo } = useAuthHooks();
   return useMemo(() => {
     if (globalConfig.disableAuth) {
-      return { users: true, roles: true, groups: true };
+      return { users: true, roles: true, groups: true, alerting: true };
     }
     const scopeStr = userInfo?.scope;
     if (!scopeStr) {
-      return { users: false, roles: false, groups: false };
+      return { users: false, roles: false, groups: false, alerting: false };
     }
     const s = new Set(scopeStr.split(" ").filter(Boolean));
     return {
@@ -59,6 +60,7 @@ export function useIdentityVisibility(): IdentityVisibility {
         s.has("amp:group:create") ||
         s.has("amp:group:update") ||
         s.has("amp:group:delete"),
+      alerting: s.has("amp:alerting:read") || s.has("amp:alerting:manage"),
     };
   }, [userInfo?.scope]);
 }

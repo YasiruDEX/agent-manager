@@ -315,6 +315,7 @@ The operations below emit a record describing what actually changed, not just th
 | Agent OAuth identity | `system:agent-identity-provisioned` / `system:agent-identity-exhausted` (reconciler, system actor) | Fail-open |
 | Env identity credential | `service-account:configure` / `:remove` | Fail-closed |
 | Env Thunder URL | `thunder-url:set` / `:delete` | Fail-closed |
+| Org alert endpoint | `alert-endpoint:configure` / `:delete` | Fail-closed |
 | Privilege | `role:grant-permission` / `:revoke-permission` / `role:assign` / `:unassign` | Fail-closed |
 | Membership | `group:add-member` / `:remove-member` | Fail-closed |
 | Users | `user:invite` / `:create` / `:delete` | Fail-closed |
@@ -395,6 +396,8 @@ The registry is the source of truth (`audit/actions.go`, `audit/actions_domain.g
 | `role:revoke-permission` | identity | 4 critical | `permissionCount`, `permissions`, `resourceServerId`, `roleName` |
 | `role:unassign` | identity | 4 critical | `assigneeCount`, `assigneeTypes`, `assignees`, `roleName` |
 | `service-account:configure` | credential | 4 critical | `clientId`, `environment` |
+| `alert-endpoint:configure` | credential | 4 critical | `endpointUrl`, `enabled`, `headerNames`, `secretRotated` |
+| `alert-endpoint:delete` | credential | 4 critical | — |
 | `service-account:remove` | credential | 4 critical | `environment` |
 | `system:agent-identity-exhausted` | credential | 3 warning | `agentName`, `environment`, `reason` |
 | `system:agent-identity-provisioned` | credential | 2 notice | `agentName`, `clientId`, `environment` |

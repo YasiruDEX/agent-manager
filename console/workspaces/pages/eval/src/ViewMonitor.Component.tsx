@@ -37,6 +37,7 @@ import {
   useTheme,
 } from "@wso2/oxygen-ui";
 import {
+  BellRing,
   ChevronDown,
   Clock,
   GitCompare,
@@ -74,6 +75,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import MonitorRunList from "./subComponents/MonitorRunList";
+import MonitorAlertingDrawer from "./subComponents/MonitorAlertingDrawer";
 import {
   computeAverageScore,
   computeLevelSummaries,
@@ -97,6 +99,7 @@ export const ViewMonitorComponent: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // ── Compare button / monitor picker ───────────────────────────────────
+  const [alertingOpen, setAlertingOpen] = useState(false);
   const [compareAnchorEl, setCompareAnchorEl] =
     useState<HTMLElement | null>(null);
   const { data: compareCandidates } = useListMonitors(
@@ -464,6 +467,14 @@ export const ViewMonitorComponent: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
+                  startIcon={<BellRing size={16} />}
+                  onClick={() => setAlertingOpen(true)}
+                >
+                  Alerting
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
                   startIcon={<GitCompare size={16} />}
                   endIcon={<ChevronDown size={14} />}
                   onClick={handleOpenCompareMenu}
@@ -505,6 +516,15 @@ export const ViewMonitorComponent: React.FC = () => {
               </Stack>
             }
           >
+            <MonitorAlertingDrawer
+              open={alertingOpen}
+              onClose={() => setAlertingOpen(false)}
+              orgName={orgId ?? ""}
+              projName={projectId ?? ""}
+              agentName={agentId ?? ""}
+              monitorName={monitorId ?? ""}
+              evaluators={monitorData?.evaluators ?? []}
+            />
             <Stack spacing={3}>
               {isLoading ? (
                 <>
