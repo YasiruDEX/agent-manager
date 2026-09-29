@@ -29,6 +29,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/wso2/agent-manager/agent-manager-service/audit"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -323,4 +324,14 @@ func TestSignAlertPayload(t *testing.T) {
 	assert.Equal(t, sig, SignAlertPayload("whsec_test", at, []byte(`{"a":1}`)))
 	assert.NotEqual(t, sig, SignAlertPayload("whsec_other", at, []byte(`{"a":1}`)))
 	assert.Contains(t, sig, "t=1700000000,v1=")
+}
+
+func TestAlertSender_ValidateURL_RequiresHTTPS(t *testing.T) {
+	strict := NewAlertSender(config.Config{})
+	err := strict.ValidateURL(context.Background(), "http://alerts.example.com/hook")
+	assert.ErrorIs(t, err, utils.ErrInvalidInput, "plain http is rejected when private endpoints are not allowed")
+
+	local := NewAlertSender(config.Config{Alerting: config.AlertingConfig{AllowPrivateEndpoints: true}})
+	assert.NoError(t, local.ValidateURL(context.Background(), "http://localhost:8787/hook"),
+		"local development keeps accepting http")
 }

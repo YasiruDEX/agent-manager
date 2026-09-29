@@ -92,6 +92,12 @@ func NewAlertSender(cfg config.Config) AlertSender {
 
 func (s *httpAlertSender) ValidateURL(ctx context.Context, rawURL string) error {
 	if !s.allowPrivate {
+		// Alerts carry the stored headers (often an Authorization token), so a
+		// public endpoint must use TLS. Checked before the SSRF lookup so a
+		// plain-http URL is rejected without resolving it.
+		if parsed, err := url.Parse(rawURL); err != nil || parsed.Scheme != "https" {
+			return fmt.Errorf("%w: alert endpoint must use https", utils.ErrInvalidInput)
+		}
 		if err := ssrf.ValidateURL(ctx, rawURL); err != nil {
 			return fmt.Errorf("%w: %w", utils.ErrInvalidInput, err)
 		}
