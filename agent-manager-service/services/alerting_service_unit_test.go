@@ -314,6 +314,18 @@ func TestUpsertEndpoint(t *testing.T) {
 	assert.Empty(t, secret2)
 	assert.Equal(t, []string{"Authorization"}, saved.HeaderNames)
 
+	// Moving to another host without re-entering headers is refused, so the
+	// stored Authorization value never reaches the new destination.
+	_, _, err = svc.UpsertEndpoint(ctx, "org-1", UpsertAlertEndpointInput{URL: "https://other.example.net/hook", Enabled: true})
+	require.ErrorIs(t, err, utils.ErrInvalidInput)
+	assert.Equal(t, "https://alerts.example.com/v2", saved.URL, "the rejected update is not saved")
+
+	// An explicit empty object clears the credentials and allows the move.
+	_, _, err = svc.UpsertEndpoint(ctx, "org-1", UpsertAlertEndpointInput{URL: "https://other.example.net/hook", Enabled: true, Headers: map[string]string{}})
+	require.NoError(t, err)
+	assert.Empty(t, saved.HeaderNames)
+	assert.Empty(t, saved.HeadersEncrypted)
+
 	_, _, err = svc.UpsertEndpoint(ctx, "org-1", UpsertAlertEndpointInput{URL: "https://x", Headers: map[string]string{"X-AMP-Signature": "forged"}})
 	assert.ErrorIs(t, err, utils.ErrInvalidInput, "reserved headers are rejected")
 }
@@ -334,4 +346,11 @@ func TestAlertSender_ValidateURL_RequiresHTTPS(t *testing.T) {
 	local := NewAlertSender(config.Config{Alerting: config.AlertingConfig{AllowPrivateEndpoints: true}})
 	assert.NoError(t, local.ValidateURL(context.Background(), "http://localhost:8787/hook"),
 		"local development keeps accepting http")
+}
+
+func TestAlertEndpointOriginChanged(t *testing.T) {
+	assert.False(t, alertEndpointOriginChanged("https://a.example.com/v1", "https://A.example.com/v2"), "path change keeps the origin")
+	assert.True(t, alertEndpointOriginChanged("https://a.example.com/x", "https://b.example.com/x"))
+	assert.True(t, alertEndpointOriginChanged("https://a.example.com/x", "http://a.example.com/x"))
+	assert.True(t, alertEndpointOriginChanged("https://a.example.com/x", "https://a.example.com:8443/x"))
 }

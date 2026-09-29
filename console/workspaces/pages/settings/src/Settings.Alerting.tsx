@@ -74,6 +74,17 @@ function isValidUrl(value: string): boolean {
   }
 }
 
+/** Whether two URLs differ in scheme or host (including port). */
+function originChanged(a: string, b: string): boolean {
+  try {
+    const x = new URL(a);
+    const y = new URL(b);
+    return x.protocol !== y.protocol || x.host.toLowerCase() !== y.host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 function relative(ts?: string): string {
   return ts ? formatDistanceToNow(new Date(ts), { addSuffix: true }) : "—";
 }
@@ -129,6 +140,14 @@ export const SettingsAlerting: React.FC = () => {
   const setHeaderField = (index: number, patch: Partial<HeaderRow>) =>
     setHeaders((rows) => rows.map((r, j) => (j === index ? { ...r, ...patch } : r)));
 
+  // Stored headers were entered for the old destination; the service refuses
+  // to carry them to a new host or scheme, so ask for them again up front.
+  const needsHeaderReentry =
+    !!endpoint &&
+    !editHeaders &&
+    endpoint.headerNames.length > 0 &&
+    isValidUrl(url) &&
+    originChanged(endpoint.url, url.trim());
   const urlError = submitted && !isValidUrl(url) ? "Enter an http(s) URL" : undefined;
   const headerError =
     submitted && editHeaders && headers.some((h) => !h.name.trim())
@@ -137,7 +156,8 @@ export const SettingsAlerting: React.FC = () => {
 
   const save = (regenerateSigningSecret = false) => {
     setSubmitted(true);
-    if (!isValidUrl(url) || (editHeaders && headers.some((h) => !h.name.trim()))) return;
+    if (!isValidUrl(url) || needsHeaderReentry) return;
+    if (editHeaders && headers.some((h) => !h.name.trim())) return;
     upsert(
       {
         params,
@@ -273,7 +293,12 @@ export const SettingsAlerting: React.FC = () => {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               error={!!urlError}
-              helperText={urlError}
+              helperText={
+                urlError ??
+                (needsHeaderReentry
+                  ? "The host changed: replace the request headers below before saving."
+                  : undefined)
+              }
             />
           </Form.ElementWrapper>
           <FormControlLabel
@@ -363,7 +388,7 @@ export const SettingsAlerting: React.FC = () => {
           <Button
             variant="contained"
             onClick={() => save(false)}
-            disabled={!canManage || saving || !isDirty}
+            disabled={!canManage || saving || !isDirty || needsHeaderReentry}
             startIcon={saving ? <CircularProgress size={16} /> : undefined}
           >
             {endpoint ? "Save" : "Create endpoint"}

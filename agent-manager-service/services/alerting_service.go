@@ -24,8 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -177,6 +179,13 @@ func (s *alertingService) UpsertEndpoint(ctx context.Context, ouID string, in Up
 		CreatedAt:   s.now(),
 	}
 	if existing != nil {
+		// Stored headers were entered for the old destination. Keeping them
+		// across a move to another scheme or host would send its credentials
+		// to a server they were never meant for, so they must be re-entered
+		// (or cleared with an empty object).
+		if in.Headers == nil && len(existing.HeaderNames) > 0 && alertEndpointOriginChanged(existing.URL, in.URL) {
+			return nil, "", fmt.Errorf("%w: re-enter the request headers when changing the endpoint's host or scheme", utils.ErrInvalidInput)
+		}
 		endpoint = existing
 		endpoint.URL = in.URL
 		endpoint.Enabled = in.Enabled
@@ -332,6 +341,17 @@ func resolveAlertTarget(endpoint *models.AlertEndpoint, key []byte) (AlertTarget
 		}
 	}
 	return target, nil
+}
+
+// alertEndpointOriginChanged reports whether two endpoint URLs differ in
+// scheme or host (including port). An unparsable URL counts as changed.
+func alertEndpointOriginChanged(oldURL, newURL string) bool {
+	o, oErr := url.Parse(oldURL)
+	n, nErr := url.Parse(newURL)
+	if oErr != nil || nErr != nil {
+		return true
+	}
+	return !strings.EqualFold(o.Scheme, n.Scheme) || !strings.EqualFold(o.Host, n.Host)
 }
 
 func generateAlertSigningSecret() (string, error) {
