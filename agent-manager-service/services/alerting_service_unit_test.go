@@ -378,3 +378,30 @@ func TestAlertSender_RejectsNonHTTPSRedirect(t *testing.T) {
 
 	assert.ErrorIs(t, err, utils.ErrInvalidURL, "an https endpoint must not be followed to plain http")
 }
+
+func TestAlertSender_RejectsCrossHostRedirect(t *testing.T) {
+	sender, ok := NewAlertSender(config.Config{}).(*httpAlertSender)
+	require.True(t, ok)
+	orig, err := http.NewRequest(http.MethodPost, "https://alerts.example.com/hook", nil)
+	require.NoError(t, err)
+	next, err := http.NewRequest(http.MethodPost, "https://attacker.example.net/collect", nil)
+	require.NoError(t, err)
+
+	err = sender.client.CheckRedirect(next, []*http.Request{orig})
+
+	assert.ErrorIs(t, err, utils.ErrInvalidURL, "custom headers must not follow a redirect to another host")
+}
+
+func TestAlertSender_SendErrorOmitsURL(t *testing.T) {
+	sender := &httpAlertSender{client: &http.Client{Timeout: time.Second}, now: time.Now}
+	// Nothing listens on port 1, so the request fails with a *url.Error.
+	_, err := sender.Send(context.Background(), AlertTarget{URL: "http://127.0.0.1:1/services/T000/B000/SECRETTOKEN"}, "e", "t", []byte("{}"))
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "SECRETTOKEN", "the webhook path must not reach logs or delivery rows")
+}
+
+func TestAlertEndpointOrigin(t *testing.T) {
+	assert.Equal(t, "https://hooks.example.com", alertEndpointOrigin("https://hooks.example.com/services/T/B/SECRET?x=1"))
+	assert.Empty(t, alertEndpointOrigin("::bad"))
+}

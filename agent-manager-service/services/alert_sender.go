@@ -22,6 +22,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -92,14 +93,18 @@ func NewAlertSender(cfg config.Config) AlertSender {
 	return &httpAlertSender{client: client, allowPrivate: allowPrivate, now: time.Now}
 }
 
-// httpsOnlyRedirect refuses any redirect hop that leaves https before running
-// the SSRF check. Go keeps Authorization on a same-host redirect, so an https
-// endpoint redirecting to http would otherwise send the stored headers in
-// cleartext.
+// httpsOnlyRedirect refuses any redirect hop that leaves https or leaves the
+// configured host, before running the SSRF check. Go keeps Authorization on a
+// same-host redirect and every custom header (an X-Api-Key, say) on any
+// redirect, so either hop would hand the stored headers to a destination they
+// were not entered for.
 func httpsOnlyRedirect(next func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
 		if req.URL.Scheme != "https" {
 			return fmt.Errorf("%w: alert endpoint redirected to a non-https URL", utils.ErrInvalidURL)
+		}
+		if len(via) > 0 && !strings.EqualFold(req.URL.Host, via[0].URL.Host) {
+			return fmt.Errorf("%w: alert endpoint redirected to another host", utils.ErrInvalidURL)
 		}
 		return next(req, via)
 	}
@@ -141,6 +146,13 @@ func (s *httpAlertSender) Send(ctx context.Context, target AlertTarget, eventID,
 
 	resp, err := s.client.Do(req)
 	if err != nil {
+		// A *url.Error prints the full request URL, and webhook URLs often
+		// carry their credential in the path (Slack, Teams). Keep only the
+		// cause, since this text is logged and stored on the delivery row.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
 		return 0, fmt.Errorf("alert request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()

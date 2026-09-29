@@ -218,7 +218,8 @@ func (s *alertingService) UpsertEndpoint(ctx context.Context, ouID string, in Up
 	attempt, err := audit.Begin(ctx, audit.ActionAlertEndpointConfigure,
 		audit.Org(ouID),
 		audit.Resource(audit.ResourceAlertEndpoint, ouID),
-		audit.Detail("endpointUrl", endpoint.URL),
+		// Scheme and host only: a webhook path can itself be the credential.
+		audit.Detail("endpointUrl", alertEndpointOrigin(endpoint.URL)),
 		audit.Detail("enabled", endpoint.Enabled),
 		audit.Detail("headerNames", endpoint.HeaderNames),
 		audit.Detail("secretRotated", newSecret != ""),
@@ -352,6 +353,16 @@ func alertEndpointOriginChanged(oldURL, newURL string) bool {
 		return true
 	}
 	return !strings.EqualFold(o.Scheme, n.Scheme) || !strings.EqualFold(o.Host, n.Host)
+}
+
+// alertEndpointOrigin returns scheme://host for a URL, dropping the path and
+// query where webhook providers often embed their secret.
+func alertEndpointOrigin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 func generateAlertSigningSecret() (string, error) {
