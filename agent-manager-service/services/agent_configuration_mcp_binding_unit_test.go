@@ -529,3 +529,38 @@ func TestMCPEnvsNeedingActivation_NoScopeMeansNoCandidates(t *testing.T) {
 
 	require.Empty(t, got)
 }
+
+// configMCPProxyUUID must resolve the same proxy mcpConfigTargetsProxy would accept. With a
+// stale reference and unanimous mappings on a new proxy, resolving the reference first loaded
+// the old proxy, the gate rejected it, and the promotion self-heal bound nothing.
+func TestConfigMCPProxyUUID_MatchesTargetsProxyPrecedence(t *testing.T) {
+	newProxyUUID, staleRefUUID := uuid.New(), uuid.New()
+	configUUID := uuid.New()
+	config := &models.AgentConfiguration{
+		UUID:        configUUID,
+		MCPProxyRef: mcpProxyRef(configUUID, staleRefUUID),
+		EnvMCPMappings: []models.EnvAgentMCPMapping{
+			{EnvironmentUUID: uuid.New(), MCPProxyUUID: newProxyUUID},
+			{EnvironmentUUID: uuid.New(), MCPProxyUUID: newProxyUUID},
+		},
+	}
+
+	got, ok := configMCPProxyUUID(config)
+
+	require.True(t, ok)
+	require.Equal(t, newProxyUUID, got, "unanimous mappings must win over a stale reference")
+	require.True(t, mcpConfigTargetsProxy(config, got), "the resolved proxy must pass the gate")
+}
+
+// With no mappings the reference is the only record of intent; with neither, nothing is known.
+func TestConfigMCPProxyUUID_FallsBackToReferenceThenNothing(t *testing.T) {
+	proxyUUID, configUUID := uuid.New(), uuid.New()
+
+	got, ok := configMCPProxyUUID(&models.AgentConfiguration{UUID: configUUID, MCPProxyRef: mcpProxyRef(configUUID, proxyUUID)})
+	require.True(t, ok)
+	require.Equal(t, proxyUUID, got)
+
+	got, ok = configMCPProxyUUID(&models.AgentConfiguration{UUID: configUUID})
+	require.False(t, ok)
+	require.Equal(t, uuid.Nil, got)
+}

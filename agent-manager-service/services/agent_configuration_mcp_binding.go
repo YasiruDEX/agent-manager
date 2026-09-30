@@ -404,14 +404,18 @@ func (s *agentConfigurationService) resolveConfigMCPProxy(
 }
 
 // configMCPProxyUUID returns the proxy this connection references and whether it records
-// one at all: its own environment-agnostic reference first, falling back to the mapping
-// rows when they unanimously agree (see mcpConfigTargetsProxy for why unanimity is
-// required).
+// one at all. Precedence must match mcpConfigTargetsProxy exactly: unanimous mapping rows
+// first, the recorded reference only when they don't agree. If the two disagreed, a stale
+// reference would load the old proxy here, the gate would reject it, and the promotion
+// self-heal would silently bind nothing.
 func configMCPProxyUUID(config *models.AgentConfiguration) (uuid.UUID, bool) {
+	if mapped, unanimous := soleMappingProxyUUID(config.EnvMCPMappings); unanimous {
+		return mapped, true
+	}
 	if ref := configMCPProxyRef(config); ref != nil {
 		return *ref, true
 	}
-	return soleMappingProxyUUID(config.EnvMCPMappings)
+	return uuid.Nil, false
 }
 
 // soleMappingProxyUUID returns the proxy every existing mapping names, and false when they
