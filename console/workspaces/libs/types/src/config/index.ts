@@ -16,11 +16,11 @@
  * under the License.
  */
 
-import type { AsgardeoProviderProps } from "@asgardeo/react";
+import type { ThunderIDProviderProps } from "@thunderid/react";
 import { TraceListTimeRange } from "../api/traces";
 import { type Duration, sub } from "date-fns";
 export interface AppConfig {
-  authConfig: AsgardeoProviderProps;
+  authConfig: ThunderIDProviderProps;
   apiBaseUrl: string;
   /**
    * Base URL for the unauthenticated GET /api/v1/config discovery request that
@@ -29,7 +29,7 @@ export interface AppConfig {
   configDiscoveryBaseUrl?: string;
   /** Gateway control plane URL (default: http://localhost:9243). Used for gateway setup commands. */
   gatewayControlPlaneUrl?: string;
-  /** Gateway version used in setup commands (default: v0.9.0). */
+  /** Gateway version used in setup commands (default: v2026.09.24). */
   gatewayVersion?: string;
   /**
    * Agent Manager release version (e.g. v0.15.0); pins the deployment-script
@@ -44,6 +44,13 @@ export interface AppConfig {
    * fail — to any host serving deployments/scripts, without a trailing slash.
    */
   scriptBaseUrl?: string;
+  /**
+   * Base URL the evaluator AI Copilot prompt links the writing guide from.
+   * Empty (the default) derives the public raw.githubusercontent.com URL for the
+   * release ref. Set it where external AI assistants cannot reach GitHub, to any
+   * public host serving the console's prompts/ directory.
+   */
+  promptsBaseUrl?: string;
   disableAuth: boolean;
   instrumentationUrl: string;
   /**
@@ -89,6 +96,19 @@ export interface AppConfig {
    * OOTB policies are always shown regardless of these flags.
    */
   guardrailCapabilities?: GuardrailCapabilities;
+  /**
+   * Largest request body, in bytes, the console will send on a write. Unset or
+   * "0" means no limit (the default). Set it on deployments behind a WAF that
+   * rejects bigger bodies with an opaque 403, so the console refuses first with
+   * a readable error. Arrives as a string from the runtime config template;
+   * read it via getMaxRequestBodyBytes().
+   */
+  maxRequestBodyBytes?: string | number;
+  /**
+   * Per-file cap, in bytes, on file-mount content. Should match the backend's
+   * FILE_MOUNT_MAX_FILE_BYTES. Read it via getFileMountMaxFileBytes().
+   */
+  fileMountMaxFileBytes?: string | number;
   /** URL for the product documentation. Shown as a "Docs" link in the footer. */
   docsUrl?: string;
   /** URLs rendered in the footer. */

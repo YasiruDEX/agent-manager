@@ -27,6 +27,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/audit"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/growthanalytics"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -169,6 +170,9 @@ func handleCommonErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 	case errors.Is(err, utils.ErrAgentIsKindSource):
 		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
 			"Agent is the source of an agent kind", err.Error(), utils.ErrCodeConflict)
+	case errors.Is(err, utils.ErrResourceBeingDeleted):
+		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
+			"A resource with this name is still being deleted", err.Error(), utils.ErrCodeConflict)
 	// Generic conflict catch-all: any unclassified conflict (e.g. a raw "already exists"
 	// from OpenChoreo) is a 409, never a 500. Keep this after the specific conflict cases
 	// above so they win; err.Error() carries the detail in the response reason.
@@ -337,6 +341,8 @@ func (c *agentController) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	growthanalytics.SetDimension(ctx, "creation_method", creationMethodFor(payload.Provisioning))
+
 	err := c.agentService.CreateAgent(ctx, ouID, projName, &payload)
 	if err != nil {
 		log.Error("CreateAgent: failed to create agent", "error", err)
@@ -360,6 +366,20 @@ func (c *agentController) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteSuccessResponse(w, http.StatusAccepted, response)
+}
+
+// creationMethodFor maps a create-agent request's provisioning block to the
+// amp.agent-development.create-agent taxonomy's creation_method dimension:
+// "external" for operator-hosted agents, "from-kind" when scaffolded from an
+// agent kind template, "platform-hosted" otherwise (built and run by us).
+func creationMethodFor(provisioning spec.Provisioning) string {
+	if provisioning.Type == string(utils.ExternalAgent) {
+		return "external"
+	}
+	if provisioning.AgentKind != nil {
+		return "from-kind"
+	}
+	return "platform-hosted"
 }
 
 func (c *agentController) UpdateAgentBasicInfo(w http.ResponseWriter, r *http.Request) {
@@ -564,6 +584,7 @@ func (c *agentController) DeployAgent(w http.ResponseWriter, r *http.Request) {
 		handleCommonErrors(w, err, "Failed to deploy agent")
 		return
 	}
+	growthanalytics.SetDimension(ctx, "environment_type", deployedEnv)
 
 	response := &spec.DeploymentResponse{
 		AgentName:   agentName,

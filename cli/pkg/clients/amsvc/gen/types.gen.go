@@ -65,6 +65,7 @@ func (e AgentKindResponseKind) Valid() bool {
 
 // Defines values for AgentKindVersionResponseAgentSubType.
 const (
+	A2aAgent  AgentKindVersionResponseAgentSubType = "a2a-agent"
 	ChatApi   AgentKindVersionResponseAgentSubType = "chat-api"
 	CustomApi AgentKindVersionResponseAgentSubType = "custom-api"
 )
@@ -72,6 +73,8 @@ const (
 // Valid indicates whether the value is a known member of the AgentKindVersionResponseAgentSubType enum.
 func (e AgentKindVersionResponseAgentSubType) Valid() bool {
 	switch e {
+	case A2aAgent:
+		return true
 	case ChatApi:
 		return true
 	case CustomApi:
@@ -1266,6 +1269,24 @@ type AgentBuildOptionsResponse struct {
 	Python          AgentBuildOptionsPython          `json:"python"`
 }
 
+// AgentCardCORSConfig CORS for the public Agent Card route (/.well-known/agent-card.json) of an A2A agent. The card route sits outside the agent-wide policy chain, so it has its own CORS. Methods are always GET and OPTIONS. Applies only to A2A agents.
+type AgentCardCORSConfig struct {
+	// AllowCredentials Whether credentials are allowed. Cannot be true when allowOrigin contains "*".
+	AllowCredentials *bool `json:"allowCredentials,omitempty"`
+
+	// AllowHeaders Allowed request headers.
+	AllowHeaders *[]string `json:"allowHeaders,omitempty"`
+
+	// AllowOrigin Allowed origins. Use ["*"] to allow all (incompatible with allowCredentials).
+	AllowOrigin *[]string `json:"allowOrigin,omitempty"`
+
+	// Enabled Enable CORS on the public Agent Card route. Required on a request when inherit is false.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Inherit When true the card follows the agent's CORS: enabled when agent CORS is, with the agent's origins and credentials setting and Content-Type as the only header. On a request, true clears any stored override and the other fields are ignored. On a response, the other fields hold the effective values.
+	Inherit *bool `json:"inherit,omitempty"`
+}
+
 // AgentCreatedBy The user who created this agent. Resolved from an audit-only
 // requester id captured at creation time, so it is best-effort and
 // omitted entirely when unknown (e.g. agents created before this was
@@ -1449,7 +1470,7 @@ type AgentKindResponseKind string
 
 // AgentKindVersionResponse defines model for AgentKindVersionResponse.
 type AgentKindVersionResponse struct {
-	// AgentSubType Agent sub-type (chat-api or custom-api)
+	// AgentSubType Agent sub-type (chat-api, custom-api or a2a-agent)
 	AgentSubType *AgentKindVersionResponseAgentSubType `json:"agentSubType,omitempty"`
 
 	// BuildName Build name from the source agent used to publish this version
@@ -1475,7 +1496,7 @@ type AgentKindVersionResponse struct {
 	Version string `json:"version"`
 }
 
-// AgentKindVersionResponseAgentSubType Agent sub-type (chat-api or custom-api)
+// AgentKindVersionResponseAgentSubType Agent sub-type (chat-api, custom-api or a2a-agent)
 type AgentKindVersionResponseAgentSubType string
 
 // AgentListResponse defines model for AgentListResponse.
@@ -2024,6 +2045,12 @@ type CommitAuthor struct {
 
 // ConfigResponse defines model for ConfigResponse.
 type ConfigResponse struct {
+	// ConsoleAnalyticsEnabled Whether this deployment accepts console usage analytics. The
+	// console buffers and sends nothing when false, so CONSOLE_ANALYTICS_ENABLED
+	// on the service is the single switch for the whole path rather than
+	// one half of it. Absent is treated as false.
+	ConsoleAnalyticsEnabled *bool `json:"consoleAnalyticsEnabled,omitempty"`
+
 	// ObserverBaseUrl Base URL for the agent-manager-observer service
 	ObserverBaseUrl string `json:"observerBaseUrl"`
 }
@@ -2048,6 +2075,9 @@ type ConfigurationItem struct {
 
 // ConfigurationResponse defines model for ConfigurationResponse.
 type ConfigurationResponse struct {
+	// AgentCardCorsConfig CORS for the public Agent Card route (/.well-known/agent-card.json) of an A2A agent. The card route sits outside the agent-wide policy chain, so it has its own CORS. Methods are always GET and OPTIONS. Applies only to A2A agents.
+	AgentCardCorsConfig *AgentCardCORSConfig `json:"agentCardCorsConfig,omitempty"`
+
 	// AgentName Name of the agent
 	AgentName string `json:"agentName"`
 
@@ -2118,6 +2148,56 @@ type Configurations struct {
 
 	// ResilienceTimeoutSeconds Max duration (seconds) the gateway keeps a response open between the agent and the client before cutting it off, for this agent's endpoint in this environment. Defaults to 30 seconds when unset.
 	ResilienceTimeoutSeconds *int `json:"resilienceTimeoutSeconds,omitempty"`
+}
+
+// ConsoleAction One thing a user did in the console UI.
+type ConsoleAction struct {
+	// Action Action name from the console taxonomy, e.g.
+	// "amp.console.navigation.page-view". Validated against a
+	// server-side allowlist; an unrecognized name is dropped.
+	Action string `json:"action"`
+
+	// Dimensions Taxonomy dimensions for this action, e.g. {"entity": "agent"}.
+	// Keys are validated per action against the server-side allowlist;
+	// unknown keys are dropped. Values must be scalars — never request
+	// bodies, secrets, or free-form user input.
+	Dimensions *map[string]interface{} `json:"dimensions,omitempty"`
+
+	// OccurredAt When the user did this, per the browser clock. The server uses it
+	// as-is so the ordering within a buffered flush survives, and falls
+	// back to receipt time when it is absent. A value present but not
+	// RFC 3339 fails decoding and makes the whole batch malformed (400)
+	// — the client controls this field, so a bad value is a client bug
+	// worth surfacing rather than silently rewriting.
+	OccurredAt *time.Time `json:"occurredAt,omitempty"`
+
+	// Page The console route the action happened on, e.g.
+	// "/orgs/acme/projects/p1/agents/a1/deploy". Path only — the client
+	// must not send query strings, which can carry identifiers.
+	Page *string `json:"page,omitempty"`
+
+	// SessionId Opaque per-tab identifier generated by the console, used to group
+	// an individual browsing session. Not a credential and not derived
+	// from one.
+	SessionId *string `json:"sessionId,omitempty"`
+}
+
+// ConsoleActionBatchRequest A flush of console actions buffered by the browser.
+type ConsoleActionBatchRequest struct {
+	// Actions The buffered actions, oldest first. Capped so a single flush cannot
+	// be used to push an unbounded payload through to the collector.
+	Actions []ConsoleAction `json:"actions"`
+}
+
+// ConsoleActionBatchResponse How much of the submitted batch survived validation.
+type ConsoleActionBatchResponse struct {
+	// Accepted Number of actions forwarded to the collector.
+	Accepted int `json:"accepted"`
+
+	// Dropped Number of actions discarded for failing the allowlist. Reported so
+	// a console release that starts emitting an unregistered action is
+	// visible without reading service logs.
+	Dropped int `json:"dropped"`
 }
 
 // CostRateLimit defines model for CostRateLimit.
@@ -2515,7 +2595,9 @@ type DataPlaneListResponse = []DataPlane
 
 // DeployAgentRequest defines model for DeployAgentRequest.
 type DeployAgentRequest struct {
-	CorsConfig *CORSConfig `json:"corsConfig,omitempty"`
+	// AgentCardCorsConfig CORS for the public Agent Card route (/.well-known/agent-card.json) of an A2A agent. The card route sits outside the agent-wide policy chain, so it has its own CORS. Methods are always GET and OPTIONS. Applies only to A2A agents.
+	AgentCardCorsConfig *AgentCardCORSConfig `json:"agentCardCorsConfig,omitempty"`
+	CorsConfig          *CORSConfig          `json:"corsConfig,omitempty"`
 
 	// EnableApiKeySecurity Enable API key security for the agent endpoint
 	EnableApiKeySecurity *bool `json:"enableApiKeySecurity,omitempty"`
@@ -4377,7 +4459,9 @@ type ProjectResponse struct {
 
 // PromoteAgentRequest defines model for PromoteAgentRequest.
 type PromoteAgentRequest struct {
-	CorsConfig *CORSConfig `json:"corsConfig,omitempty"`
+	// AgentCardCorsConfig CORS for the public Agent Card route (/.well-known/agent-card.json) of an A2A agent. The card route sits outside the agent-wide policy chain, so it has its own CORS. Methods are always GET and OPTIONS. Applies only to A2A agents.
+	AgentCardCorsConfig *AgentCardCORSConfig `json:"agentCardCorsConfig,omitempty"`
+	CorsConfig          *CORSConfig          `json:"corsConfig,omitempty"`
 
 	// EnableApiKeySecurity Enable API key security for the agent endpoint in the target environment
 	EnableApiKeySecurity *bool `json:"enableApiKeySecurity,omitempty"`
@@ -5074,7 +5158,9 @@ type UpdateAgentConfigurationsRequest struct {
 
 // UpdateAgentDeploySettingsRequest defines model for UpdateAgentDeploySettingsRequest.
 type UpdateAgentDeploySettingsRequest struct {
-	CorsConfig *CORSConfig `json:"corsConfig,omitempty"`
+	// AgentCardCorsConfig CORS for the public Agent Card route (/.well-known/agent-card.json) of an A2A agent. The card route sits outside the agent-wide policy chain, so it has its own CORS. Methods are always GET and OPTIONS. Applies only to A2A agents.
+	AgentCardCorsConfig *AgentCardCORSConfig `json:"agentCardCorsConfig,omitempty"`
+	CorsConfig          *CORSConfig          `json:"corsConfig,omitempty"`
 
 	// EnableApiKeySecurity Enable API key security for the agent endpoint in this environment. Omit to keep the current value.
 	EnableApiKeySecurity *bool `json:"enableApiKeySecurity,omitempty"`
@@ -6139,6 +6225,9 @@ type ListRepositoryCommitsJSONRequestBody = ListCommitsRequest
 
 // GetNameByDisplayNameJSONRequestBody defines body for GetNameByDisplayName for application/json ContentType.
 type GetNameByDisplayNameJSONRequestBody = ResourceNameRequest
+
+// ReportConsoleActionsJSONRequestBody defines body for ReportConsoleActions for application/json ContentType.
+type ReportConsoleActionsJSONRequestBody = ConsoleActionBatchRequest
 
 // AsBuildpackBuild returns the union data inside the Build as a BuildpackBuild
 func (t Build) AsBuildpackBuild() (BuildpackBuild, error) {

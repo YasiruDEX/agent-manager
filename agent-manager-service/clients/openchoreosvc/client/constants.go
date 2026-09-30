@@ -27,6 +27,7 @@ const (
 	TraitEnvInjection                 TraitType = "instrumentation-trait-env-injection"
 	TraitBallerinaOTELInstrumentation TraitType = "ballerina-otel-instrumentation-trait"
 	TraitAPIManagement                TraitType = "api-configuration"
+	TraitA2AGatewayRoute              TraitType = "a2a-gateway-route"
 	TraitAutoscaling                  TraitType = "horizontal-pod-autoscaler"
 )
 
@@ -214,6 +215,13 @@ const (
 type LabelKeys string
 
 const (
+	// LabelKeyOrgUUID carries the organization's UUID. Unlike the keys below it
+	// is not an openchoreo.dev key: it belongs to the platform that provisions
+	// the organization, and it is a UUID rather than a name because the systems
+	// that consume it key on one. It is stamped onto the cell namespace so usage
+	// measured from pod metrics can be attributed to an organization.
+	LabelKeyOrgUUID LabelKeys = "cloud.wso2.com/orguuid"
+
 	LabelKeyOrganizationName     LabelKeys = "openchoreo.dev/organization"
 	LabelKeyProjectName          LabelKeys = "openchoreo.dev/project"
 	LabelKeyComponentName        LabelKeys = "openchoreo.dev/component"
@@ -339,3 +347,7 @@ var (
 
 // defaultListLimit is the default maximum number of items to return per page for OpenChoreo list API calls
 var defaultListLimit = 100
+
+// maxListPages bounds the number of pages fetched when paging through an OpenChoreo list API,
+// guarding against an unbounded loop if the server keeps returning a next cursor.
+const maxListPages = 100

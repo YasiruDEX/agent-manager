@@ -23,8 +23,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"slices"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/requests"
@@ -45,6 +49,11 @@ type Config struct {
 	// calls are scoped to. The deployment runs single-namespace, so every
 	// method overrides its namespace/org argument with this value.
 	DefaultNamespace string
+	// ResourceLabels are stamped on every Component and ReleaseBinding the
+	// client writes, overwriting any existing value for the same key. Empty by
+	// default; a deployment injects its own (e.g. WSO2 Cloud's product label,
+	// which product-scoped suspension selects ReleaseBindings by).
+	ResourceLabels map[string]string
 }
 
 // OpenChoreoClient defines the interface for OpenChoreo operations
@@ -96,6 +105,12 @@ type OpenChoreoClient interface {
 	ReplaceReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, keysToRemove []string, envVarsToAdd []EnvVar) error
 	RemoveWorkloadEnvVars(ctx context.Context, ouID, componentName string, envVarKeys []string) error
 	GetComponentEndpoints(ctx context.Context, ouID, projectName, componentName, environment string) (map[string]models.EndpointsResponse, error)
+
+	// GetReleaseBindingServiceURL returns the in-cluster address of the
+	// component's endpoint in one environment, as the release binding's status
+	// reports it. Empty string with a nil error means the binding has not
+	// published one yet.
+	GetReleaseBindingServiceURL(ctx context.Context, ouID, componentName, environment string) (string, error)
 	GetComponentConfigurations(ctx context.Context, ouID, projectName, componentName, environment string) ([]models.EnvVars, error)
 	GetComponentFileMounts(ctx context.Context, ouID, projectName, componentName, environment string) ([]models.FileMountEntry, error)
 
@@ -109,11 +124,15 @@ type OpenChoreoClient interface {
 	Deploy(ctx context.Context, ouID, projectName, componentName string, req DeployRequest) error
 	CreateInternalAgentFromKindWorkload(ctx context.Context, ouID, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error
 	// EnsureReleaseAndBinding cuts a ComponentRelease from the component's current state and
-	// binds it to the environment, carrying that environment's configuration as workloadOverrides.
+	// binds it to the environment, carrying that environment's configuration as workloadOverrides,
+	// plus (when non-nil) traitEnvConfigs/componentTypeConfigs in the same Get→mutate→Update cycle.
 	// Components are created with autoDeploy off, so this is the only thing that advances what an
 	// environment runs outside the build workflow: every deploy and every kind-sourced agent
-	// creation goes through it.
-	EnsureReleaseAndBinding(ctx context.Context, ouID, projectName, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error
+	// creation goes through it. Trait/component-type configs must land in this same write, not a
+	// follow-up call: a second write to the same binding races this one's resourceVersion and can
+	// let OpenChoreo's controllers observe (and successfully apply) two different renders for what
+	// is logically one deploy, each standing up its own pod.
+	EnsureReleaseAndBinding(ctx context.Context, ouID, projectName, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error
 	GetDeployments(ctx context.Context, ouID, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error)
 	UpdateDeploymentState(ctx context.Context, ouID, projectName, componentName, environment string, state gen.ReleaseBindingSpecState) error
 	IsDeploymentInProgress(ctx context.Context, ouID, componentName, environment string) (bool, error)
@@ -185,6 +204,41 @@ type openChoreoClient struct {
 	// defaultNamespace is the OpenChoreo namespace all API calls resolve to;
 	// see NamespaceFor.
 	defaultNamespace string
+	// resourceLabels are stamped on every Component and ReleaseBinding write;
+	// see Config.ResourceLabels and withResourceLabels.
+	resourceLabels map[string]string
+}
+
+// withResourceLabels returns labels with every configured resource label set,
+// allocating the map only when there is something to add. Every Component
+// create and ReleaseBinding write goes through it, so a full-object update of
+// a binding the OpenChoreo controller created without them still gains them.
+func (c *openChoreoClient) withResourceLabels(labels *map[string]string) *map[string]string {
+	if len(c.resourceLabels) == 0 {
+		return labels
+	}
+	if labels == nil {
+		labels = &map[string]string{}
+	}
+	if *labels == nil {
+		*labels = make(map[string]string, len(c.resourceLabels))
+	}
+	maps.Copy(*labels, c.resourceLabels)
+	return labels
+}
+
+// validateResourceLabels rejects keys and values the API server would refuse,
+// so a bad deployment config fails at startup rather than on every write.
+func validateResourceLabels(labels map[string]string) error {
+	for key, value := range labels {
+		if errs := validation.IsQualifiedName(key); len(errs) > 0 {
+			return fmt.Errorf("invalid resource label key %q: %s", key, strings.Join(errs, "; "))
+		}
+		if errs := validation.IsValidLabelValue(value); len(errs) > 0 {
+			return fmt.Errorf("invalid value %q for resource label %q: %s", value, key, strings.Join(errs, "; "))
+		}
+	}
+	return nil
 }
 
 // NamespaceFor resolves the OpenChoreo namespace an OU's workloads run in.
@@ -210,6 +264,9 @@ func NewOpenChoreoClient(cfg *Config) (OpenChoreoClient, error) {
 	}
 	if cfg.AuthProvider == nil {
 		return nil, fmt.Errorf("auth provider is required")
+	}
+	if err := validateResourceLabels(cfg.ResourceLabels); err != nil {
+		return nil, err
 	}
 
 	// Configure retry behavior to handle 401 Unauthorized by invalidating the token
@@ -267,5 +324,6 @@ func NewOpenChoreoClient(cfg *Config) (OpenChoreoClient, error) {
 	return &openChoreoClient{
 		ocClient:         ocClient,
 		defaultNamespace: cfg.DefaultNamespace,
+		resourceLabels:   maps.Clone(cfg.ResourceLabels),
 	}, nil
 }

@@ -159,12 +159,18 @@ func (c *openChoreoClient) CreateEnvironment(ctx context.Context, ouID string, r
 	}
 
 	if resp.StatusCode() != http.StatusCreated {
-		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+		return nil, terminatingConflict(handleErrorResponse(resp.StatusCode(), ErrorResponses{
 			JSON400: resp.JSON400,
 			JSON401: resp.JSON401,
 			JSON403: resp.JSON403,
 			JSON409: resp.JSON409,
 			JSON500: resp.JSON500,
+		}), "environment", req.Name, func() (*ocapi.ObjectMeta, error) {
+			getResp, getErr := c.ocClient.GetEnvironmentWithResponse(ctx, namespaceName, req.Name)
+			if getErr != nil || getResp.JSON200 == nil {
+				return nil, getErr
+			}
+			return &getResp.JSON200.Metadata, nil
 		})
 	}
 
@@ -320,9 +326,13 @@ func (c *openChoreoClient) ListEnvironments(ctx context.Context, ouID string) ([
 		return []*models.EnvironmentResponse{}, nil
 	}
 
-	envs := make([]*models.EnvironmentResponse, len(resp.JSON200.Items))
+	envs := make([]*models.EnvironmentResponse, 0, len(resp.JSON200.Items))
 	for i := range resp.JSON200.Items {
-		envs[i] = convertEnvironmentToResponse(&resp.JSON200.Items[i])
+		if isTerminating(resp.JSON200.Items[i].Metadata) {
+			// Deleted but not yet finalized — see isTerminating.
+			continue
+		}
+		envs = append(envs, convertEnvironmentToResponse(&resp.JSON200.Items[i]))
 	}
 	return envs, nil
 }
@@ -479,12 +489,18 @@ func (c *openChoreoClient) CreateDeploymentPipeline(ctx context.Context, ouID, p
 	}
 
 	if resp.StatusCode() != http.StatusCreated {
-		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+		return nil, terminatingConflict(handleErrorResponse(resp.StatusCode(), ErrorResponses{
 			JSON400: resp.JSON400,
 			JSON401: resp.JSON401,
 			JSON403: resp.JSON403,
 			JSON409: resp.JSON409,
 			JSON500: resp.JSON500,
+		}), "deployment pipeline", pipelineName, func() (*ocapi.ObjectMeta, error) {
+			getResp, getErr := c.ocClient.GetDeploymentPipelineWithResponse(ctx, namespaceName, pipelineName)
+			if getErr != nil || getResp.JSON200 == nil {
+				return nil, getErr
+			}
+			return &getResp.JSON200.Metadata, nil
 		})
 	}
 
@@ -596,9 +612,13 @@ func (c *openChoreoClient) ListDeploymentPipelines(ctx context.Context, ouID str
 		return []*models.DeploymentPipelineResponse{}, nil
 	}
 
-	pipelines := make([]*models.DeploymentPipelineResponse, len(resp.JSON200.Items))
-	for i, p := range resp.JSON200.Items {
-		pipelines[i] = convertDeploymentPipeline(&p, namespaceName)
+	pipelines := make([]*models.DeploymentPipelineResponse, 0, len(resp.JSON200.Items))
+	for i := range resp.JSON200.Items {
+		if isTerminating(resp.JSON200.Items[i].Metadata) {
+			// Deleted but not yet finalized — see isTerminating.
+			continue
+		}
+		pipelines = append(pipelines, convertDeploymentPipeline(&resp.JSON200.Items[i], namespaceName))
 	}
 	return pipelines, nil
 }

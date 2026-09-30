@@ -39,7 +39,28 @@ from main import (
     TRACE_FETCH_PAGE_SIZE,
     _eval_template,
     _load_custom_code_evaluator,
+    _create_custom_llm_judge,
+    _apply_monitor_parameter_policy,
 )
+
+
+@pytest.mark.parametrize("model", ["anthropic/claude-sonnet-4-5", "anthropic:claude-opus-4-7"])
+def test_monitor_parameter_policy_for_custom_judges(model, caplog):
+    config = {"model": model, "temperature": 0.7}
+    instance = _create_custom_llm_judge("custom-judge", "Evaluate {trace.output}", "trace", config)
+    _apply_monitor_parameter_policy(instance, "llm_judge")
+    assert instance._monitor_omit_temperature
+    assert instance.temperature == 0.7
+    assert config["temperature"] == 0.7
+    assert "Temperature is not applied" in caplog.text
+
+
+@pytest.mark.parametrize("eval_type,model", [("code", "anthropic/claude-sonnet-4-5"), ("llm_judge", "openai/gpt-4o")])
+def test_monitor_parameter_policy_leaves_other_evaluators_unchanged(eval_type, model, caplog):
+    instance = _create_custom_llm_judge("custom-judge", "Evaluate {trace.output}", "trace", {"model": model})
+    _apply_monitor_parameter_policy(instance, eval_type)
+    assert not instance._monitor_omit_temperature
+    assert "Temperature is not applied" not in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -626,6 +647,39 @@ class TestPublishScores:
         # Aggregated should reflect skipped count
         agg = payload["aggregatedScores"]
         assert agg[0]["skippedCount"] == 1
+
+    @pytest.mark.parametrize("include_success", [False, True])
+    @patch("main.requests.post")
+    def test_monitor_eligibility_skips_are_published(self, mock_post, include_success):
+        mock_post.return_value = MagicMock(status_code=200)
+        scores = [
+            _make_evaluator_score("init", None, error="Agent initialization"),
+            _make_evaluator_score("failed", None, error="Request failed"),
+        ]
+        if include_success:
+            scores.append(_make_evaluator_score("success", 0.25))
+        summary = _make_evaluator_summary(
+            "Quality",
+            "trace",
+            scores=scores,
+            aggregated_scores={"mean": 0.25} if include_success else {},
+        )
+        assert publish_scores(
+            self.MONITOR_ID,
+            self.RUN_ID,
+            {"Quality": summary},
+            {"Quality": "quality"},
+            self.API_ENDPOINT,
+            self._make_token_manager(),
+        )
+        payload = mock_post.call_args.kwargs["json"]
+        individual = payload["individualScores"]
+        assert [item["skipReason"] for item in individual[:2]] == ["Agent initialization", "Request failed"]
+        assert all("score" not in item for item in individual[:2])
+        aggregate = payload["aggregatedScores"][0]
+        assert aggregate["skippedCount"] == 2
+        assert aggregate["count"] == 2 + int(include_success)
+        assert aggregate["aggregations"] == ({"mean": 0.25} if include_success else {})
 
     @patch("main.requests.post")
     def test_timestamp_serialized_as_iso8601(self, mock_post):

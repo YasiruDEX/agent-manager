@@ -128,6 +128,11 @@ var (
 	ErrForbidden    = errors.New("forbidden")
 	ErrNotFound     = errors.New("not found")
 	ErrConflict     = errors.New("conflict")
+	// ErrResourceBeingDeleted is returned when a create collides with a same-named
+	// resource that has been deleted but is still waiting on its cleanup finalizer.
+	// It deliberately does not wrap ErrConflict: callers that recover from a conflict
+	// by updating the existing object must not do so against one that is going away.
+	ErrResourceBeingDeleted = errors.New("a resource with this name is still being deleted")
 
 	// Server errors
 	ErrInternalServerError = errors.New("internal server error")
@@ -202,6 +207,9 @@ var (
 	ErrLLMProxyNotFound            = errors.New("LLM proxy not found")
 	ErrLLMProxyExists              = errors.New("LLM proxy already exists")
 	ErrMCPProxyNotFound            = errors.New("MCP proxy not found")
+	// ErrAgentArtifactNotFound means no active Agent deployment exists for this
+	// artifact on this gateway.
+	ErrAgentArtifactNotFound       = errors.New("agent artifact not found")
 	ErrMCPProxyExists              = errors.New("MCP proxy already exists")
 	ErrMCPProxyHasMappings         = errors.New("cannot delete MCP proxy: it has associated MCP proxy mappings. Please delete all mappings before deleting the proxy")
 	ErrMCPEnvAlreadyBound          = errors.New("environment is already assigned to another endpoint in this MCP proxy")

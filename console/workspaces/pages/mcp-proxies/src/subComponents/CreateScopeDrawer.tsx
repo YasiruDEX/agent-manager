@@ -38,15 +38,22 @@ import {
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import {
+  useConfirmIfUnsaved,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
+import {
   listAgentIdentityRoles,
   useCreateMCPProxyScope,
   useUpdateAgentIdentityRole,
+  useDialogAnalytics,
+  useValidationErrorTracking,
 } from "@agent-management-platform/api-client";
-import type {
-  AgentIdentityRoleListResponse,
-  Environment,
-  MCPProxyScopeResponse,
-  ThunderRole,
+import {
+  type AgentIdentityRoleListResponse,
+  type Environment,
+  type MCPProxyScopeResponse,
+  type ThunderRole,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import { z } from "zod";
 
@@ -129,6 +136,11 @@ export function CreateScopeDrawer({
 
   const { getToken } = useAuthHooks();
   const createScope = useCreateMCPProxyScope();
+  // Opening reports intent; closing without markCompleted reports an
+  // abandonment. Pair with amp.connections.manage-mcp-scope (the backend's own
+  // success event) for the conversion rate.
+  const { markCompleted } = useDialogAnalytics("mcp-scope", open);
+  const trackValidationError = useValidationErrorTracking("mcp-scope");
   const { reset: resetCreateScope } = createScope;
   const updateRole = useUpdateAgentIdentityRole();
 
@@ -141,6 +153,17 @@ export function CreateScopeDrawer({
     clearErrors();
     resetCreateScope();
   }, [open, clearErrors, resetCreateScope]);
+
+  const isDirty =
+    open &&
+    (JSON.stringify(formData) !== JSON.stringify(DEFAULT_FORM) ||
+      selectedTools.length > 0 ||
+      Object.values(selectedRolesByEnv).some((roles) => roles.length > 0));
+  useUnsavedChangesGuard(isDirty);
+  const confirmIfUnsaved = useConfirmIfUnsaved();
+  // Backdrop and header X discard edits, so confirm first; Cancel and the
+  // post-save close stay direct.
+  const handleGuardedClose = () => confirmIfUnsaved(onClose, isDirty);
 
   const roleQueries = useQueries({
     queries: environments.map(
@@ -181,10 +204,14 @@ export function CreateScopeDrawer({
   const handleFieldChange = useCallback(
     (field: keyof CreateScopeFormValues, value: string) => {
       const error = validateField(field, value);
+      if (error) {
+        // The field name only — never the value, which is the user's own input.
+        trackValidationError(String(field));
+      }
       setFieldError(field, error);
       setFormData((prev) => ({ ...prev, [field]: value }));
     },
-    [validateField, setFieldError],
+    [validateField, setFieldError, trackValidationError],
   );
 
   const handleSubmit = useCallback(
@@ -208,6 +235,8 @@ export function CreateScopeDrawer({
         setSubmitError("Failed to create scope. Please try again.");
         return;
       }
+
+      markCompleted();
 
       // Scope creation succeeded — close now rather than waiting on role
       // assignment below. A role-assignment failure is a separate, partial
@@ -266,8 +295,8 @@ export function CreateScopeDrawer({
   const isValid = !errors.name && formData.name.trim().length > 0;
 
   return (
-    <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Plus size={24} />} title="Create Scope" onClose={onClose} />
+    <DrawerWrapper open={open} onClose={handleGuardedClose}>
+      <DrawerHeader icon={<Plus size={24} />} title="Create Scope" onClose={handleGuardedClose} />
       <DrawerContent>
         <form onSubmit={handleSubmit}>
           <Stack spacing={3}>
@@ -287,6 +316,7 @@ export function CreateScopeDrawer({
             <FormControl fullWidth error={Boolean(errors.name)}>
               <FormLabel required>Name</FormLabel>
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.NAME } }}
                 fullWidth
                 size="small"
                 value={formData.name}
@@ -301,6 +331,7 @@ export function CreateScopeDrawer({
             <FormControl fullWidth error={Boolean(errors.description)}>
               <FormLabel>Description</FormLabel>
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
                 fullWidth
                 size="small"
                 multiline

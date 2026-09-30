@@ -16,7 +16,11 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  getPromptGuideUrl,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import {
   Alert,
   Autocomplete,
@@ -48,9 +52,10 @@ import {
   X as CloseIcon,
 } from "@wso2/oxygen-ui-icons-react";
 import Editor, { type Monaco } from "@monaco-editor/react";
-import type {
-  EvaluatorConfigParam,
-  EvaluatorLevel,
+import {
+  type EvaluatorConfigParam,
+  type EvaluatorLevel,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import {
   DataModelReferenceDrawer,
@@ -89,7 +94,7 @@ function resolveAiPrompt(
   displayName: string,
   description: string,
 ): string {
-  const guideUrl = `${window.location.origin}/prompts/writing-evaluators.md`;
+  const guideUrl = getPromptGuideUrl("writing-evaluators.md");
   return AI_COPILOT_PROMPT_TEMPLATE.replace(
     "{{TYPE}}",
     _TYPE_LABELS[type] ?? type,
@@ -658,6 +663,41 @@ export interface EvaluatorFormValues {
   tags: string[];
 }
 
+/**
+ * Negative bounds are valid when the evaluator schema permits them. This only
+ * rejects malformed numeric constraints, not negative values themselves.
+ */
+export function validateNumericParamConstraints(
+  configSchema: EvaluatorConfigParam[],
+): string | undefined {
+  for (const param of configSchema) {
+    if (param.type !== "integer" && param.type !== "float") continue;
+
+    const label = param.key.trim() || "Configuration parameter";
+    for (const [name, value] of [
+      ["Minimum", param.min],
+      ["Maximum", param.max],
+    ] as const) {
+      if (value === undefined) continue;
+      if (!Number.isFinite(value)) {
+        return `${name} for ${label} must be a finite number`;
+      }
+      if (param.type === "integer" && !Number.isInteger(value)) {
+        return `${name} for ${label} must be an integer`;
+      }
+    }
+    if (
+      param.min !== undefined &&
+      param.max !== undefined &&
+      param.min > param.max
+    ) {
+      return `Minimum for ${label} cannot be greater than its maximum`;
+    }
+  }
+
+  return undefined;
+}
+
 const defaultValues: EvaluatorFormValues = {
   displayName: "",
   description: "",
@@ -731,7 +771,10 @@ const emptyParam = (): EvaluatorConfigParam => ({
 });
 
 interface EvaluatorFormProps {
-  onSubmit: (values: EvaluatorFormValues) => void;
+  onSubmit: (
+    values: EvaluatorFormValues,
+    allowNavigation: (action: () => void) => void,
+  ) => void;
   isSubmitting: boolean;
   serverError?: unknown;
   submitLabel: string;
@@ -755,6 +798,12 @@ export function EvaluatorForm({
   const [errors, setErrors] = useState<
     Partial<Record<keyof EvaluatorFormValues, string>>
   >({});
+  const isDirty = useMemo(
+    () =>
+      JSON.stringify(values) !== JSON.stringify(initialValues ?? defaultValues),
+    [values, initialValues],
+  );
+  const { allowNavigation } = useUnsavedChangesGuard(isDirty);
   const [page, setPage] = useState<1 | 2>(1);
   const [referenceTypeKey, setReferenceTypeKey] =
     useState<ReferenceTypeKey | null>(null);
@@ -980,15 +1029,21 @@ export function EvaluatorForm({
         newErrors.configSchema = paramError;
       }
     }
+    const numericConstraintError = validateNumericParamConstraints(
+      values.configSchema,
+    );
+    if (numericConstraintError) {
+      newErrors.configSchema = numericConstraintError;
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }, [values]);
 
   const handleSubmit = useCallback(() => {
     if (validate()) {
-      onSubmit(values);
+      onSubmit(values, allowNavigation);
     }
-  }, [validate, onSubmit, values]);
+  }, [validate, onSubmit, values, allowNavigation]);
 
   const canAdvance = values.displayName.trim().length > 0;
 
@@ -1042,6 +1097,7 @@ export function EvaluatorForm({
             <Form.Header>Basic Details</Form.Header>
             <Form.ElementWrapper name="displayName" label="Name">
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.NAME } }}
                 id="displayName"
                 placeholder="Enter evaluator name"
                 value={values.displayName}
@@ -1057,6 +1113,7 @@ export function EvaluatorForm({
             </Form.ElementWrapper>
             <Form.ElementWrapper name="description" label="Description">
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
                 id="description"
                 placeholder="Describe what this evaluator checks"
                 value={values.description}
@@ -1510,6 +1567,7 @@ export function EvaluatorForm({
                         useFlexGap
                       >
                         <TextField
+                          slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.KEY } }}
                           placeholder="Key"
                           size="small"
                           value={param.key}
@@ -1518,6 +1576,7 @@ export function EvaluatorForm({
                           InputProps={{ sx: { fontFamily: "monospace" } }}
                         />
                         <TextField
+                          slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.SHORT_TEXT } }}
                           placeholder="Type"
                           size="small"
                           value={param.type}
@@ -1525,6 +1584,7 @@ export function EvaluatorForm({
                           sx={{ flex: 1, minWidth: 80 }}
                         />
                         <TextField
+                          slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
                           placeholder="Default"
                           size="small"
                           value={
@@ -1536,6 +1596,7 @@ export function EvaluatorForm({
                           sx={{ flex: 1.5, minWidth: 100 }}
                         />
                         <TextField
+                          slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
                           placeholder="Description"
                           size="small"
                           value={param.description}
@@ -1579,6 +1640,7 @@ export function EvaluatorForm({
                           useFlexGap
                         >
                           <TextField
+                            slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.KEY } }}
                             placeholder="Key"
                             size="small"
                             value={param.key}
@@ -1589,6 +1651,7 @@ export function EvaluatorForm({
                             InputProps={{ sx: { fontFamily: "monospace" } }}
                           />
                           <TextField
+                            slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.SHORT_TEXT } }}
                             select
                             placeholder="Type"
                             size="small"
@@ -1614,6 +1677,7 @@ export function EvaluatorForm({
                             ))}
                           </TextField>
                           <TextField
+                            slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
                             placeholder="Default"
                             size="small"
                             value={
@@ -1632,6 +1696,7 @@ export function EvaluatorForm({
                             sx={{ flex: 1.5, minWidth: 100 }}
                           />
                           <TextField
+                            slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.DESCRIPTION } }}
                             placeholder="Description"
                             size="small"
                             value={param.description}
@@ -1674,6 +1739,13 @@ export function EvaluatorForm({
                                       : Number(e.target.value),
                                 })
                               }
+                              slotProps={{
+                                input: {
+                                  inputProps: {
+                                    onWheel: (event) => event.currentTarget.blur(),
+                                  },
+                                },
+                              }}
                               sx={{ flex: 1 }}
                             />
                             <TextField
@@ -1689,6 +1761,13 @@ export function EvaluatorForm({
                                       : Number(e.target.value),
                                 })
                               }
+                              slotProps={{
+                                input: {
+                                  inputProps: {
+                                    onWheel: (event) => event.currentTarget.blur(),
+                                  },
+                                },
+                              }}
                               sx={{ flex: 1 }}
                             />
                           </Stack>
@@ -1696,6 +1775,7 @@ export function EvaluatorForm({
 
                         {param.type === "enum" && (
                           <TextField
+                            slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
                             placeholder="value1, value2, value3"
                             size="small"
                             value={(param.enumValues ?? []).join(", ")}
@@ -1740,7 +1820,11 @@ export function EvaluatorForm({
                 ))
               }
               renderInput={(params) => (
-                <TextField {...params} placeholder="Add tags and press Enter" />
+                <TextField {...params} placeholder="Add tags and press Enter"
+                  slotProps={{
+                    htmlInput: { ...params.inputProps, maxLength: INPUT_LIMITS.SHORT_TEXT },
+                  }}
+                />
               )}
             />
           </Form.Section>

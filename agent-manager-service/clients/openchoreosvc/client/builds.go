@@ -31,6 +31,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
@@ -155,27 +156,61 @@ func (c *openChoreoClient) ListBuilds(ctx context.Context, ouID, projectName, co
 	namespaceName := c.NamespaceFor(ouID)
 	// Use label selector to filter workflow runs by component
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", LabelKeyComponentName, componentName, LabelKeyProjectName, projectName)
-	resp, err := c.ocClient.ListWorkflowRunsWithResponse(ctx, namespaceName, &gen.ListWorkflowRunsParams{
-		LabelSelector: &labelSelector,
-		Limit:         &defaultListLimit,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list builds: %w", err)
-	}
 
-	if resp.StatusCode() != http.StatusOK {
-		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
-			JSON401: resp.JSON401,
-			JSON403: resp.JSON403,
-			JSON500: resp.JSON500,
+	// The OpenChoreo list API caps each response at a single page, and Kubernetes returns
+	// items in name-ascending (i.e. chronologically ascending) order. Fetching only the
+	// first page would therefore return the OLDEST builds and hide every recent one once a
+	// component accumulates more builds than the page size. Page through with the cursor so
+	// callers always see the complete set.
+	var workflowRuns []gen.WorkflowRun
+	var cursor *string
+	for page := 0; page < maxListPages; page++ {
+		resp, err := c.ocClient.ListWorkflowRunsWithResponse(ctx, namespaceName, &gen.ListWorkflowRunsParams{
+			LabelSelector: &labelSelector,
+			Limit:         &defaultListLimit,
+			Cursor:        cursor,
 		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list builds: %w", err)
+		}
+
+		if resp.StatusCode() != http.StatusOK {
+			return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+				JSON401: resp.JSON401,
+				JSON403: resp.JSON403,
+				JSON500: resp.JSON500,
+			})
+		}
+
+		if resp.JSON200 == nil {
+			// Nothing more to read, so this is a clean end of the list rather than
+			// a truncation. Clear the cursor or the check below reports the build
+			// list as truncated on the strength of the PREVIOUS page's cursor.
+			cursor = nil
+			break
+		}
+
+		workflowRuns = append(workflowRuns, resp.JSON200.Items...)
+
+		nextCursor := resp.JSON200.Pagination.NextCursor
+		if nextCursor == nil || *nextCursor == "" {
+			cursor = nil
+			break
+		}
+		// A cursor that points back at the page just fetched is a broken pagination
+		// response: continuing would append the same builds again until the page cap,
+		// returning duplicates and a wrong count. Fail loudly instead — a silently
+		// wrong build list is the bug this pagination exists to fix.
+		if cursor != nil && *nextCursor == *cursor {
+			return nil, fmt.Errorf("failed to list builds: pagination cursor did not advance past %q", *cursor)
+		}
+		cursor = nextCursor
+	}
+	if cursor != nil {
+		logger.GetLogger(ctx).Warn("build list truncated after reaching the maximum number of pages",
+			"ouID", ouID, "componentName", componentName, "projectName", projectName, "maxPages", maxListPages)
 	}
 
-	if resp.JSON200 == nil || len(resp.JSON200.Items) == 0 {
-		return []*models.BuildResponse{}, nil
-	}
-
-	workflowRuns := resp.JSON200.Items
 	buildResponses := make([]*models.BuildResponse, 0, len(workflowRuns))
 	for _, workflowRun := range workflowRuns {
 		build, err := toWorkflowRunBuild(&workflowRun, componentName, projectName)
@@ -185,7 +220,7 @@ func (c *openChoreoClient) ListBuilds(ctx context.Context, ouID, projectName, co
 		}
 		buildResponses = append(buildResponses, build)
 	}
-	// Sort by creation timestamp to ensure consistent ordering for pagination
+	// Sort newest first so that callers paginating this slice see recent builds at the top.
 	sort.Slice(buildResponses, func(i, j int) bool {
 		return buildResponses[i].StartedAt.After(buildResponses[j].StartedAt)
 	})
@@ -263,10 +298,10 @@ func (c *openChoreoClient) UpdateComponentBuildParameters(ctx context.Context, o
 			parameters["port"] = req.InputInterface.Port
 		}
 
-		// Update api-configuration trait if attached
+		// Update the gateway-routing trait if attached
 		if component.Spec.Traits != nil {
 			for i, trait := range *component.Spec.Traits {
-				if trait.Name == string(TraitAPIManagement) {
+				if trait.Name == string(TraitAPIManagement) || trait.Name == string(TraitA2AGatewayRoute) {
 					if trait.Parameters == nil {
 						params := make(map[string]interface{})
 						trait.Parameters = &params
@@ -275,7 +310,7 @@ func (c *openChoreoClient) UpdateComponentBuildParameters(ctx context.Context, o
 					if req.InputInterface.Port > 0 {
 						traitParams["upstreamPort"] = req.InputInterface.Port
 					}
-					if req.InputInterface.BasePath != "" {
+					if req.InputInterface.BasePath != "" && trait.Name == string(TraitAPIManagement) {
 						traitParams["upstreamBasePath"] = req.InputInterface.BasePath
 					}
 					(*component.Spec.Traits)[i] = trait
@@ -374,7 +409,8 @@ func buildEndpointsFromInputInterface(componentName string, inputInterface *Inpu
 	var port int32
 	var basePath string
 
-	// Use default port and basePath for chat-api agents, similar to buildEndpoints in components.go
+	// Use default port and basePath for chat-api agents, similar to buildEndpoints in components.go.
+	// custom-api and a2a-agent both carry their own port and base path.
 	if agentType.Type == string(utils.AgentTypeAPI) && agentType.SubType == string(utils.AgentSubTypeChatAPI) {
 		port = int32(config.GetConfig().DefaultChatAPI.DefaultHTTPPort)
 		basePath = config.GetConfig().DefaultChatAPI.DefaultBasePath

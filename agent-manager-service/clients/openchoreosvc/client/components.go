@@ -42,6 +42,7 @@ func (c *openChoreoClient) CreateComponent(ctx context.Context, ouID, projectNam
 	if err != nil {
 		return fmt.Errorf("failed to build component request: %w", err)
 	}
+	createComponentReqBody.Metadata.Labels = c.withResourceLabels(createComponentReqBody.Metadata.Labels)
 
 	resp, err := c.ocClient.CreateComponentWithResponse(ctx, namespaceName, createComponentReqBody)
 	if err != nil {
@@ -49,12 +50,18 @@ func (c *openChoreoClient) CreateComponent(ctx context.Context, ouID, projectNam
 	}
 
 	if resp.StatusCode() != http.StatusCreated {
-		return handleErrorResponse(resp.StatusCode(), ErrorResponses{
+		return terminatingConflict(handleErrorResponse(resp.StatusCode(), ErrorResponses{
 			JSON400: resp.JSON400,
 			JSON401: resp.JSON401,
 			JSON403: resp.JSON403,
 			JSON409: resp.JSON409,
 			JSON500: resp.JSON500,
+		}), "component", req.Name, func() (*gen.ObjectMeta, error) {
+			getResp, getErr := c.ocClient.GetComponentWithResponse(ctx, namespaceName, req.Name)
+			if getErr != nil || getResp.JSON200 == nil {
+				return nil, getErr
+			}
+			return &getResp.JSON200.Metadata, nil
 		})
 	}
 	return nil
@@ -521,6 +528,25 @@ func buildEndpoints(req CreateComponentRequest) ([]map[string]any, error) {
 		})
 	}
 
+	// An A2A agent declares an endpoint but no OpenAPI document — it serves its
+	// own Agent Card, and the platform stores no copy. The endpoint is still
+	// mandatory: the agent-api ComponentType validates that at least one exists
+	// and renders the component's Service and HTTPRoutes from it.
+	if req.AgentType.Type == string(utils.AgentTypeAPI) &&
+		utils.IsA2AAgentSubType(req.AgentType.SubType) && req.InputInterface != nil {
+		basePath := req.InputInterface.BasePath
+		if basePath == "" {
+			basePath = "/"
+		}
+		endpoints = append(endpoints, map[string]any{
+			"name":       fmt.Sprintf("%s-endpoint", req.Name),
+			"port":       req.InputInterface.Port,
+			"type":       req.InputInterface.Type,
+			"basePath":   basePath,
+			"visibility": DefaultEndpointVisibility,
+		})
+	}
+
 	return endpoints, nil
 }
 
@@ -776,6 +802,7 @@ func (c *openChoreoClient) UpdateEnvResourceConfigs(ctx context.Context, ouID, p
 	}
 
 	// Update the release binding
+	releaseBinding.Metadata.Labels = c.withResourceLabels(releaseBinding.Metadata.Labels)
 	updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, bindingName, *releaseBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update release binding: %w", err)
@@ -1255,6 +1282,10 @@ func (c *openChoreoClient) ListComponents(ctx context.Context, ouID, projectName
 	components := make([]*models.AgentResponse, 0, len(resp.JSON200.Items))
 	for i := range resp.JSON200.Items {
 		item := &resp.JSON200.Items[i]
+		if isTerminating(item.Metadata) {
+			// Already deleted and waiting on its cleanup finalizer — see isTerminating.
+			continue
+		}
 		if item.Spec == nil || !isAgentComponentType(item.Spec.ComponentType.Name) {
 			// Projects are shared across WSO2 Cloud products, so a project can contain
 			// components other products created (e.g. a plain "deployment/service").
@@ -1302,7 +1333,13 @@ func (c *openChoreoClient) CountProjectComponents(ctx context.Context, ouID, pro
 			return total, nil
 		}
 
-		total += len(resp.JSON200.Items)
+		for i := range resp.JSON200.Items {
+			// A component that is already terminating does not make the project non-empty;
+			// counting it would refuse a project delete that follows an agent delete.
+			if !isTerminating(resp.JSON200.Items[i].Metadata) {
+				total++
+			}
+		}
 		nextCursor := resp.JSON200.Pagination.NextCursor
 		if nextCursor == nil || *nextCursor == "" {
 			return total, nil
@@ -1350,6 +1387,10 @@ func (c *openChoreoClient) ListComponentsByKind(ctx context.Context, ouID, proje
 
 	components := make([]*models.AgentResponse, 0, len(resp.JSON200.Items))
 	for i := range resp.JSON200.Items {
+		if isTerminating(resp.JSON200.Items[i].Metadata) {
+			// Terminating instances must not block DeleteKind — see isTerminating.
+			continue
+		}
 		comp, err := convertComponentFromTyped(&resp.JSON200.Items[i])
 		if err != nil {
 			slog.Error("failed to convert component", "component", resp.JSON200.Items[i].Metadata.Name, "error", err)
@@ -1938,6 +1979,7 @@ func (c *openChoreoClient) UpdateReleaseBindingEnvVars(ctx context.Context, ouID
 	// If pods are not restarted after env var updates, revisit the OpenChoreo API spec.
 	(*releaseBinding.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
 
+	releaseBinding.Metadata.Labels = c.withResourceLabels(releaseBinding.Metadata.Labels)
 	updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, bindingName, *releaseBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update release binding: %w", err)
@@ -2116,6 +2158,7 @@ func (c *openChoreoClient) RemoveReleaseBindingEnvVars(ctx context.Context, ouID
 	}
 	(*releaseBinding.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
 
+	releaseBinding.Metadata.Labels = c.withResourceLabels(releaseBinding.Metadata.Labels)
 	updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, bindingName, *releaseBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update release binding: %w", err)
@@ -2228,6 +2271,7 @@ func (c *openChoreoClient) ReplaceReleaseBindingEnvVars(ctx context.Context, ouI
 	}
 	(*releaseBinding.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
 
+	releaseBinding.Metadata.Labels = c.withResourceLabels(releaseBinding.Metadata.Labels)
 	updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, bindingName, *releaseBinding)
 	if err != nil {
 		return fmt.Errorf("failed to update release binding: %w", err)
@@ -2536,6 +2580,9 @@ func (c *openChoreoClient) buildTrait(ctx context.Context, namespaceName, projec
 			return gen.ComponentTrait{}, err
 		}
 		trait.Parameters = &params
+	case TraitA2AGatewayRoute:
+		params := buildA2AGatewayRouteTraitParameters(req.Opts...)
+		trait.Parameters = &params
 	default:
 		return gen.ComponentTrait{}, fmt.Errorf("unsupported trait type: %s", req.TraitType)
 	}
@@ -2555,6 +2602,19 @@ func (c *openChoreoClient) buildAPIConfigurationTraitParameters(componentName st
 		opt(params)
 	}
 	return params, nil
+}
+
+// buildA2AGatewayRouteTraitParameters takes only the upstream port: the trait
+// routes to the gateway's Agent resource, whose context is fixed by the
+// component name, so nothing else is per-agent.
+func buildA2AGatewayRouteTraitParameters(opts ...TraitOption) map[string]interface{} {
+	params := map[string]interface{}{
+		"upstreamPort": config.GetConfig().DefaultChatAPI.DefaultHTTPPort,
+	}
+	for _, opt := range opts {
+		opt(params)
+	}
+	return params
 }
 
 func (c *openChoreoClient) buildOTELTraitParameters(ctx context.Context, namespaceName, projectName, componentName string, opts ...TraitOption) (map[string]interface{}, error) {

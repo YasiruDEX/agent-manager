@@ -16,9 +16,10 @@
  * under the License.
  */
 
-import type {
-  EvaluatorConfigParam,
-  EvaluatorResponse,
+import {
+  type EvaluatorConfigParam,
+  type EvaluatorResponse,
+  INPUT_LIMITS,
 } from "@agent-management-platform/types";
 import {
   DrawerWrapper,
@@ -41,7 +42,10 @@ import {
 } from "@wso2/oxygen-ui";
 import { Plus, Trash, Book } from "@wso2/oxygen-ui-icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import {
+  useConfirmationDialog,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 
 interface EvaluatorDetailsDrawerProps {
   evaluator: EvaluatorResponse | null;
@@ -51,6 +55,7 @@ interface EvaluatorDetailsDrawerProps {
   onAdd: (config: Record<string, unknown>) => void;
   onRemove: () => void;
   initialConfig?: Record<string, unknown>;
+  providerTemplate?: string;
 }
 
 function keyToDisplay(key: string): string {
@@ -66,7 +71,8 @@ interface ConfigParamFieldProps {
   param: EvaluatorConfigParam;
   value: unknown;
   onChange: (value: unknown) => void;
-  error?: boolean;
+  error?: string;
+  disabledReason?: string;
 }
 
 function ConfigParamField({
@@ -74,13 +80,39 @@ function ConfigParamField({
   value,
   onChange,
   error,
+  disabledReason,
 }: ConfigParamFieldProps) {
   const { description, key, required, type, enumValues, max, min } = param;
-  const helperText = error
-    ? `${keyToDisplay(key)} is required`
-    : description || "No description provided.";
+  const helperText = error ? error : description || "No description provided.";
   const label = keyToDisplay(key);
   const labelWithRequired = required ? `* ${label}` : label;
+
+  if (disabledReason) {
+    return (
+      <Tooltip title={disabledReason} describeChild>
+        <Box
+          tabIndex={0}
+          role="group"
+          aria-label={`${label} setting unavailable`}
+        >
+          <Form.ElementWrapper label={label} name={key}>
+            <TextField
+              fullWidth
+              disabled
+              value={value ?? ""}
+              type={
+                type === "float" || type === "number" || type === "integer"
+                  ? "number"
+                  : "text"
+              }
+              helperText="Uses the provider’s default sampling behavior."
+              sx={{ pointerEvents: "none" }}
+            />
+          </Form.ElementWrapper>
+        </Box>
+      </Tooltip>
+    );
+  }
 
   if (type === "enum" || (enumValues?.length ?? 0) > 0) {
     const selectValue = typeof value === "string" ? value : "";
@@ -90,7 +122,7 @@ function ConfigParamField({
           select
           value={selectValue}
           required={required}
-          error={error}
+          error={!!error}
           helperText={helperText}
           onChange={(event) => onChange(event.target.value)}
         >
@@ -165,13 +197,20 @@ function ConfigParamField({
             },
           }}
           required={required}
-          error={error}
+          error={!!error}
           helperText={helperText}
           onChange={(event) => {
-            const nextValue =
-              event.target.value === ""
-                ? undefined
-                : Number(event.target.value);
+            const raw = event.target.value;
+            if (raw === "") {
+              onChange(undefined);
+              return;
+            }
+            const nextValue = Number(raw);
+            // A schema that forbids negatives should not let one be typed at
+            // all. The confirm-time check still covers paste and stored values.
+            if (min !== undefined && min >= 0 && nextValue < 0) {
+              return;
+            }
             onChange(nextValue);
           }}
         />
@@ -224,13 +263,20 @@ function ConfigParamField({
             },
           }}
           required={required}
-          error={error}
+          error={!!error}
           helperText={helperText}
           onChange={(event) => {
-            const nextValue =
-              event.target.value === ""
-                ? undefined
-                : Number(event.target.value);
+            const raw = event.target.value;
+            if (raw === "") {
+              onChange(undefined);
+              return;
+            }
+            const nextValue = Number(raw);
+            // A schema that forbids negatives should not let one be typed at
+            // all. The confirm-time check still covers paste and stored values.
+            if (min !== undefined && min >= 0 && nextValue < 0) {
+              return;
+            }
             onChange(nextValue);
           }}
         />
@@ -255,6 +301,7 @@ function ConfigParamField({
               alignItems="center"
             >
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
                 fullWidth
                 value={entryValue}
                 placeholder={`Value ${index + 1}`}
@@ -318,9 +365,10 @@ function ConfigParamField({
     return (
       <Form.ElementWrapper label={labelWithRequired} name={key}>
         <TextField
+          slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.VALUE } }}
           value={textValue}
           required={required}
-          error={error}
+          error={!!error}
           helperText={helperText}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -383,21 +431,23 @@ export function EvaluatorDetailsDrawer({
   onAdd,
   onRemove,
   initialConfig,
+  providerTemplate,
 }: EvaluatorDetailsDrawerProps) {
   const [configValues, setConfigValues] = useState<Record<string, unknown>>({});
   const [savedConfig, setSavedConfig] = useState<Record<string, unknown>>({});
-  const [validationErrors, setValidationErrors] = useState<Set<string>>(
-    new Set(),
-  );
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
   const { addConfirmation } = useConfirmationDialog();
 
   const isLlmJudge = evaluator?.type === "llm_judge";
+  const omitTemperature = isLlmJudge && providerTemplate === "anthropic";
 
   useEffect(() => {
     if (!evaluator) {
       setConfigValues({});
       setSavedConfig({});
-      setValidationErrors(new Set());
+      setValidationErrors({});
       return;
     }
     const nextConfig: Record<string, unknown> = {};
@@ -409,13 +459,14 @@ export function EvaluatorDetailsDrawer({
     });
     setConfigValues(nextConfig);
     setSavedConfig(nextConfig);
-    setValidationErrors(new Set());
+    setValidationErrors({});
   }, [open, initialConfig, evaluator]);
 
   const isDirty = useMemo(
     () => JSON.stringify(configValues) !== JSON.stringify(savedConfig),
     [configValues, savedConfig],
   );
+  useUnsavedChangesGuard(open && isDirty);
 
   const handleRequestClose = useCallback(() => {
     if (!isDirty) {
@@ -423,6 +474,7 @@ export function EvaluatorDetailsDrawer({
       return;
     }
     addConfirmation({
+      analytics: { entity: "evaluator", action: "discard-changes" },
       title: "Discard unsaved changes?",
       description:
         "You have unsaved changes in this evaluator's configuration. Closing now will discard them.",
@@ -435,34 +487,56 @@ export function EvaluatorDetailsDrawer({
   const handleConfigChange = useCallback((key: string, value: unknown) => {
     setConfigValues((prev) => ({ ...prev, [key]: value }));
     setValidationErrors((prev) => {
-      if (!prev.has(key)) return prev;
-      const next = new Set(prev);
-      next.delete(key);
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
       return next;
     });
   }, []);
 
   const handleConfirmSelection = useCallback(() => {
-    const missing = (evaluator?.configSchema ?? [])
-      .filter((p) => {
-        const val = configValues[p.key];
-        const isEmpty =
-          val === undefined ||
-          val === null ||
-          (typeof val === "string" && val.trim() === "") ||
-          (Array.isArray(val) &&
-            (val.length === 0 ||
-              val.every(
-                (v: unknown) => typeof v === "string" && v.trim() === "",
-              )));
-        return p.required && isEmpty;
-      })
-      .map((p) => p.key);
-    if (missing.length > 0) {
-      setValidationErrors(new Set(missing));
+    const errors: Record<string, string> = {};
+    (evaluator?.configSchema ?? []).forEach((param) => {
+      const value = configValues[param.key];
+      if (omitTemperature && param.key === "temperature") return;
+      const isEmpty =
+        value === undefined ||
+        value === null ||
+        (typeof value === "string" && value.trim() === "") ||
+        (Array.isArray(value) &&
+          (value.length === 0 ||
+            value.every(
+              (item: unknown) => typeof item === "string" && item.trim() === "",
+            )));
+      if (param.required && isEmpty) {
+        errors[param.key] = `${keyToDisplay(param.key)} is required`;
+        return;
+      }
+      if (
+        !isEmpty &&
+        (param.type === "integer" ||
+          param.type === "float" ||
+          param.type === "number")
+      ) {
+        const numberValue = typeof value === "number" ? value : Number(value);
+        if (!Number.isFinite(numberValue)) {
+          errors[param.key] = `${keyToDisplay(param.key)} must be a number`;
+        } else if (param.type === "integer" && !Number.isInteger(numberValue)) {
+          errors[param.key] = `${keyToDisplay(param.key)} must be an integer`;
+        } else if (param.min !== undefined && numberValue < param.min) {
+          errors[param.key] =
+            `${keyToDisplay(param.key)} must be at least ${param.min}`;
+        } else if (param.max !== undefined && numberValue > param.max) {
+          errors[param.key] =
+            `${keyToDisplay(param.key)} must be at most ${param.max}`;
+        }
+      }
+    });
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
-    setValidationErrors(new Set());
+    setValidationErrors({});
     const filteredConfig = Object.fromEntries(
       Object.entries(configValues).map(([key, value]) => [
         key,
@@ -476,7 +550,7 @@ export function EvaluatorDetailsDrawer({
     onAdd(filteredConfig);
     setConfigValues(filteredConfig);
     setSavedConfig(filteredConfig);
-  }, [configValues, evaluator, onAdd]);
+  }, [configValues, evaluator, onAdd, omitTemperature]);
 
   // Sort config params: "model" always first, rest in original order
   const configSchema = useMemo(() => {
@@ -532,12 +606,20 @@ export function EvaluatorDetailsDrawer({
                     {configSchema.map((param) => (
                       <Form.Section key={param.key}>
                         <ConfigParamField
+                          disabledReason={
+                            omitTemperature && param.key === "temperature"
+                              ? "Temperature settings aren’t supported by the Anthropic provider. Anthropic’s default sampling behavior will be used instead." +
+                                (evaluator.isBuiltin === false
+                                  ? " Your saved temperature value is retained for providers that support it."
+                                  : "")
+                              : undefined
+                          }
                           param={param}
                           value={configValues[param.key]}
                           onChange={(nextValue) =>
                             handleConfigChange(param.key, nextValue)
                           }
-                          error={validationErrors.has(param.key)}
+                          error={validationErrors[param.key]}
                         />
                       </Form.Section>
                     ))}

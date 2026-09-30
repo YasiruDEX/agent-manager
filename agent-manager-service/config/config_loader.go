@@ -160,6 +160,15 @@ func loadEnvs() {
 	}
 	config.IsOnPremDeployment = r.readOptionalBool("IS_ON_PREM_DEPLOYMENT", true)
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
+	config.GrowthAnalytics = GrowthAnalyticsConfig{
+		Enabled:                   r.readOptionalBool("MOESIF_ENABLED", false),
+		ConsoleEnabled:            r.readOptionalBool("CONSOLE_ANALYTICS_ENABLED", false),
+		MoesifCollectorBaseURL:    r.readOptionalString("MOESIF_COLLECTOR_BASE_URL", ""),
+		MoesifCollectorHostHeader: r.readOptionalString("MOESIF_COLLECTOR_HOST_HEADER", ""),
+		MoesifApplicationID:       strings.TrimSpace(r.readOptionalString("MOESIF_APPLICATION_ID", "")),
+		DeploymentModel:           r.readOptionalString("AMP_DEPLOYMENT_MODEL", "on-prem"),
+		Environment:               r.readOptionalString("AMP_ENVIRONMENT", ""),
+	}
 	config.ThunderHostBaseDomain = r.readOptionalString("IDP_HOST_BASE_DOMAIN", "amp.localhost")
 	config.ThunderAskSecret = r.readOptionalString("THUNDER_ASK_SECRET", "")
 	config.OAuthAuthorizationServers = r.readOptionalStringList("OAUTH_AUTHORIZATION_SERVERS", "")
@@ -292,6 +301,14 @@ func loadEnvs() {
 		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "1Gi"),
 	}
 
+	// File mount size caps. The defaults are 1 MB (decimal) rather than 1 MiB so
+	// a mount at the per-file cap still leaves room for the ConfigMap/Secret's
+	// own metadata under Kubernetes' 1 MiB object limit.
+	config.FileMountLimits = FileMountLimitsConfig{
+		MaxFileBytes:  int(r.readOptionalInt64("FILE_MOUNT_MAX_FILE_BYTES", 1000000)),
+		MaxTotalBytes: int(r.readOptionalInt64("FILE_MOUNT_MAX_TOTAL_BYTES", 1000000)),
+	}
+
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key)
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key).
 	// Validated at runtime in wiring.ProvideEncryptionKey() so that
@@ -308,7 +325,9 @@ func loadEnvs() {
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
 	validateObserverURLs(config, r)
+	validateGrowthAnalyticsConfig(config)
 	validateResourceLimitsConfig(config, r)
+	validateFileMountLimitsConfig(config, r)
 	validatePostgresTLSConfig(config, r)
 	validateSecretManagerConfig(config, r)
 	validateAgentWorkloadCORSConfig(agentWorkloadConfig, r)
@@ -486,6 +505,122 @@ func validateObserverURLs(cfg *Config, r *configReader) {
 	validate("AM_OBSERVER_PUBLIC_URL", cfg.Observer.PublicURL)
 }
 
+// validateGrowthAnalyticsConfig checks the feature-usage telemetry settings.
+//
+// Unlike every other validator here it never fails config load. Telemetry is
+// non-essential: a bad MOESIF_* value must not hold the whole API hostage, so
+// a misconfiguration disables only the tracking and the service starts
+// normally. Each problem is logged at WARN — loud enough to find, since the
+// alternative symptom is events silently never arriving — and the collector
+// URL is then cleared, which is what makes middleware/growthanalytics no-op.
+//
+// Clearing rather than merely warning matters for a malformed URL: leaving it
+// in place would let Track install its wrapper and fail per request, turning
+// one startup warning into an error line on every tracked call.
+//
+// MOESIF_COLLECTOR_HOST_HEADER only ever applies to a configured collector
+// URL, so setting it alone is a misconfiguration worth naming rather than
+// ignoring.
+//
+// It also reports the resolved on/off state once at startup. Without that
+// line, tracking being off is indistinguishable from tracking being broken:
+// Track no-ops at route-registration time, so a disabled deployment produces
+// no events and no log entries at all, and "why is Moesif empty" can only be
+// answered by reading the pod's environment. One INFO line at boot answers it
+// from the logs instead.
+func validateGrowthAnalyticsConfig(cfg *Config) {
+	warned := false
+	disable := func(msg string, args ...any) {
+		slog.Warn("configReader: "+msg+"; feature-usage tracking is disabled, the service is unaffected", args...)
+		cfg.GrowthAnalytics.MoesifCollectorBaseURL = ""
+		warned = true
+	}
+
+	// With an Application ID the obvious target is Moesif itself, so an
+	// unset URL means "send straight to Moesif" rather than "disabled".
+	if cfg.GrowthAnalytics.MoesifApplicationID != "" && cfg.GrowthAnalytics.MoesifCollectorBaseURL == "" {
+		cfg.GrowthAnalytics.MoesifCollectorBaseURL = defaultMoesifAPIBaseURL
+	}
+
+	switch cfg.GrowthAnalytics.MoesifCollectorBaseURL {
+	case "":
+		if cfg.GrowthAnalytics.MoesifCollectorHostHeader != "" {
+			disable("MOESIF_COLLECTOR_HOST_HEADER is set but MOESIF_COLLECTOR_BASE_URL is empty, "+
+				"and the host header only applies to a configured collector URL",
+				"hostHeader", cfg.GrowthAnalytics.MoesifCollectorHostHeader)
+		}
+	default:
+		u, err := url.Parse(cfg.GrowthAnalytics.MoesifCollectorBaseURL)
+		switch {
+		case err != nil:
+			disable("MOESIF_COLLECTOR_BASE_URL is not a valid URL",
+				"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL, "error", err)
+		case u.Scheme != "http" && u.Scheme != "https":
+			disable("MOESIF_COLLECTOR_BASE_URL must use the http or https scheme",
+				"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL, "scheme", u.Scheme)
+		case u.Host == "":
+			disable("MOESIF_COLLECTOR_BASE_URL must have a non-empty host",
+				"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL)
+		case cfg.GrowthAnalytics.MoesifApplicationID != "" && u.Scheme != "https" && !isLoopbackHost(u.Hostname()):
+			// The Application ID is a credential; never send it in cleartext
+			// beyond this machine.
+			disable("MOESIF_COLLECTOR_BASE_URL must use https when MOESIF_APPLICATION_ID is set",
+				"url", cfg.GrowthAnalytics.MoesifCollectorBaseURL)
+		}
+	}
+
+	logGrowthAnalyticsState(cfg.GrowthAnalytics, warned)
+}
+
+// defaultMoesifAPIBaseURL is Moesif's public collection API, used when an
+// Application ID is configured without a collector URL.
+const defaultMoesifAPIBaseURL = "https://api.moesif.net"
+
+// isLoopbackHost reports whether host is localhost or a loopback IP, the only
+// places an Application ID may be sent over plain http (local proxies, tests).
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// logGrowthAnalyticsState records, once at startup, whether feature-usage
+// tracking will actually report anything — the two conditions Track checks
+// before it wraps a route. alreadyWarned suppresses the redundant "disabled"
+// line when a WARN above has already said so and given the real reason.
+func logGrowthAnalyticsState(ga GrowthAnalyticsConfig, alreadyWarned bool) {
+	if alreadyWarned {
+		return
+	}
+	switch {
+	case !ga.Enabled:
+		slog.Info("growthanalytics: feature-usage tracking disabled (MOESIF_ENABLED is false)")
+	case ga.MoesifCollectorBaseURL == "":
+		slog.Info("growthanalytics: feature-usage tracking disabled (neither MOESIF_APPLICATION_ID nor MOESIF_COLLECTOR_BASE_URL is set)")
+	default:
+		slog.Info("growthanalytics: feature-usage tracking enabled",
+			"collector", ga.MoesifCollectorBaseURL,
+			"auth", growthAnalyticsAuthMode(ga),
+			"environment", ga.Environment,
+			"deploymentModel", ga.DeploymentModel,
+			"consoleActions", ga.ConsoleEnabled)
+		if !ga.ConsoleEnabled {
+			slog.Info("growthanalytics: console action tracking disabled (CONSOLE_ANALYTICS_ENABLED is false); " +
+				"endpoint feature-usage events are unaffected")
+		}
+	}
+}
+
+// growthAnalyticsAuthMode names the credential in use without revealing it.
+func growthAnalyticsAuthMode(ga GrowthAnalyticsConfig) string {
+	if ga.MoesifApplicationID != "" {
+		return "moesif-application-id"
+	}
+	return "caller-jwt"
+}
+
 func validateInternalServerConfigs(cfg *Config, r *configReader) {
 	if cfg.InternalServer.Port < 1 || cfg.InternalServer.Port > 65535 {
 		r.errors = append(r.errors, fmt.Errorf("INTERNAL_SERVER_PORT must be between 1 and 65535, got %d", cfg.InternalServer.Port))
@@ -516,6 +651,30 @@ func validateResourceLimitsConfig(cfg *Config, r *configReader) {
 	}
 	if _, err := resource.ParseQuantity(cfg.PerAgentResourceLimits.MaxMemory); err != nil {
 		r.errors = append(r.errors, fmt.Errorf("RESOURCE_MAX_MEMORY %q is not a valid Kubernetes resource quantity: %w", cfg.PerAgentResourceLimits.MaxMemory, err))
+	}
+}
+
+// kubernetesObjectMaxBytes is Kubernetes' size limit for a single ConfigMap or
+// Secret. All of an agent's file mounts render into one such object.
+const kubernetesObjectMaxBytes = 1 << 20
+
+func validateFileMountLimitsConfig(cfg *Config, r *configReader) {
+	limits := cfg.FileMountLimits
+	if limits.MaxFileBytes < 1 {
+		r.errors = append(r.errors, fmt.Errorf("FILE_MOUNT_MAX_FILE_BYTES must be at least 1, got %d", limits.MaxFileBytes))
+	}
+	if limits.MaxTotalBytes < 1 {
+		r.errors = append(r.errors, fmt.Errorf("FILE_MOUNT_MAX_TOTAL_BYTES must be at least 1, got %d", limits.MaxTotalBytes))
+	}
+	// A per-file cap above the total could never be reached, which would make
+	// the per-file setting look like it works when it does not.
+	if limits.MaxFileBytes > limits.MaxTotalBytes {
+		r.errors = append(r.errors, fmt.Errorf("FILE_MOUNT_MAX_FILE_BYTES (%d) must not exceed FILE_MOUNT_MAX_TOTAL_BYTES (%d)", limits.MaxFileBytes, limits.MaxTotalBytes))
+	}
+	// Above this the rendered object is rejected by Kubernetes at deploy time,
+	// after the request has already been accepted.
+	if limits.MaxTotalBytes > kubernetesObjectMaxBytes {
+		r.errors = append(r.errors, fmt.Errorf("FILE_MOUNT_MAX_TOTAL_BYTES must not exceed %d (the Kubernetes ConfigMap/Secret limit), got %d", kubernetesObjectMaxBytes, limits.MaxTotalBytes))
 	}
 }
 

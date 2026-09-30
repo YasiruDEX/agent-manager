@@ -22,7 +22,10 @@ import {
   DrawerWrapper,
   useDirtyState,
 } from "@agent-management-platform/views";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import {
+  useConfirmationDialog,
+  useUnsavedChangesGuard,
+} from "@agent-management-platform/shared-component";
 import type { DeploymentPipelineResponse, Environment } from "@agent-management-platform/types";
 import { Avatar, Box, Button, Divider, Form, Stack, Typography } from "@wso2/oxygen-ui";
 import { Check, Circle, GitBranch } from "@wso2/oxygen-ui-icons-react";
@@ -51,6 +54,7 @@ export function SelectPipelineDrawer({
   const [pendingName, setPendingName] = useState(selectedName);
   const { isDirty, checkDirty } = useDirtyState({ pendingName: selectedName });
   const { addConfirmation } = useConfirmationDialog();
+  useUnsavedChangesGuard(open && isDirty);
 
   const handleSelectCard = (pipelineName: string) => {
     setPendingName(pipelineName);
@@ -63,6 +67,7 @@ export function SelectPipelineDrawer({
       return;
     }
     addConfirmation({
+      analytics: { entity: "deployment-pipeline", action: "discard-changes" },
       title: "Discard changes?",
       description: "You have an unsaved pipeline selection. Closing now will discard it.",
       confirmButtonText: "Discard",

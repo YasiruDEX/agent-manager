@@ -30,11 +30,14 @@ import {
   useGetAgentConfigurations,
   useGetAgentEndpoints,
   useTestAgentAPIKey,
+  ConsoleAction,
+  useTrack,
 } from "@agent-management-platform/api-client";
 import { useParams } from "react-router-dom";
 import { ChatMessage } from "./subComponents/ChatMessage";
 import { FadeIn, useSnackBar } from "@agent-management-platform/views";
 import { readSSEStream, parseStreamChunk } from "./utils/sse";
+import { INPUT_LIMITS } from "@agent-management-platform/types";
 
 interface ChatMessage {
   id: string;
@@ -202,12 +205,18 @@ export function AgentChat() {
     }
   };
 
+  const { track } = useTrack();
+
   const handleStopStreaming = () => {
     abortControllerRef.current?.abort();
   };
 
   const handleSendMessage = async () => {
     if (!message.trim() || isLoading || oauthOnly) return;
+    // Testing an agent from the console is a read path as far as this service
+    // is concerned, so nothing else records that the playground is used.
+    // The prompt itself is never reported.
+    track(ConsoleAction.TestInvoke, { invoke_mode: "chat" });
     if (securityEnabled && !testKey?.apiKey) {
       setError("API key security is enabled, but a test API key is not available yet.");
       return;
@@ -481,6 +490,7 @@ export function AgentChat() {
               gap={1}
             >
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.LONG_TEXT } }}
                 fullWidth
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -585,6 +595,7 @@ export function AgentChat() {
           py={2}
         >
           <TextField
+            slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.LONG_TEXT } }}
             fullWidth
             value={message}
             onChange={(e) => setMessage(e.target.value)}

@@ -28,7 +28,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { useCallback } from "react";
 import type { CreateAgentFormValues } from "../form/schema";
-import type { InputInterfaceType } from "@agent-management-platform/types";
+import { type InputInterfaceType, INPUT_LIMITS } from "@agent-management-platform/types";
 
 interface InputInterfaceProps {
   formData: CreateAgentFormValues;
@@ -63,6 +63,13 @@ const inputInterfaces: Array<{
       "Custom HTTP API with user-specified OpenAPI specification and port configuration",
     default: false,
     value: "CUSTOM",
+  },
+  {
+    label: "A2A Agent",
+    description:
+      "Speaks the A2A protocol. The agent serves its own agent card; the gateway exposes both A2A transports.",
+    default: false,
+    value: "A2A",
   },
 ];
 
@@ -111,21 +118,34 @@ export const InputInterface = ({
         const error = validateField('interfaceType', value, currentData);
         setFieldError('interfaceType', error);
         
-        if (value === 'CUSTOM') {
-          // Validate required fields for CUSTOM interface
-          const portError = validateField('port', currentData.port, currentData);
-          setFieldError('port', portError);
-          
-          const openApiError = validateField('openApiPath', currentData.openApiPath, currentData);
-          setFieldError('openApiPath', openApiError);
-          
-          const basePathError = validateField('basePath', currentData.basePath, currentData);
-          setFieldError('basePath', basePathError);
-        } else {
-          // Clear validation errors when switching to DEFAULT
-          setFieldError('port', undefined);
-          setFieldError('openApiPath', undefined);
-          setFieldError('basePath', undefined);
+        switch (value) {
+          case 'CUSTOM': {
+            const portError = validateField('port', currentData.port, currentData);
+            setFieldError('port', portError);
+
+            const openApiError = validateField('openApiPath', currentData.openApiPath, currentData);
+            setFieldError('openApiPath', openApiError);
+
+            const basePathError = validateField('basePath', currentData.basePath, currentData);
+            setFieldError('basePath', basePathError);
+            break;
+          }
+          case 'A2A': {
+            // An A2A agent declares a port like a custom API, but serves its own
+            // agent card at a well-known path — so it has no OpenAPI document and
+            // no base path to validate.
+            const portError = validateField('port', currentData.port, currentData);
+            setFieldError('port', portError);
+
+            setFieldError('openApiPath', undefined);
+            setFieldError('basePath', undefined);
+            break;
+          }
+          default:
+            // DEFAULT: the platform fixes the port and paths.
+            setFieldError('port', undefined);
+            setFieldError('openApiPath', undefined);
+            setFieldError('basePath', undefined);
         }
         
         return currentData;
@@ -208,6 +228,7 @@ export const InputInterface = ({
               <Box display="flex" flexDirection="column" flexGrow={1}>
                 <Form.ElementWrapper label="OpenAPI Spec Path" name="openApiPath">
                   <TextField
+                    slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.PATH } }}
                     id="openApiPath"
                     placeholder="/openapi.yaml"
                     required
@@ -242,6 +263,7 @@ export const InputInterface = ({
             </Form.Stack>
             <Form.ElementWrapper label="Base Path" name="basePath">
               <TextField
+                slotProps={{ htmlInput: { maxLength: INPUT_LIMITS.PATH } }}
                 id="basePath"
                 placeholder="/"
                 required
@@ -255,6 +277,32 @@ export const InputInterface = ({
                 fullWidth
               />
             </Form.ElementWrapper>
+          </Form.Stack>
+        </Collapse>
+        <Collapse in={formData.interfaceType === "A2A"}>
+          <Form.Stack spacing={2}>
+            <Alert severity="info">
+              The gateway exposes both A2A transports — JSON-RPC at{" "}
+              <strong>/rpc</strong> and HTTP+JSON at <strong>/rest</strong> — and
+              serves the agent&apos;s own card at the well-known path.
+            </Alert>
+            <Box>
+              <Form.ElementWrapper label="Port" name="port">
+                <TextField
+                  id="port"
+                  placeholder="9099"
+                  required
+                  value={formData.port ?? ''}
+                  onChange={handlePortChange}
+                  type="number"
+                  error={!!errors.port}
+                  helperText={
+                    errors.port ||
+                    (formData.port ? undefined : "Port is required")
+                  }
+                />
+              </Form.ElementWrapper>
+            </Box>
           </Form.Stack>
         </Collapse>
       </Form.Stack>

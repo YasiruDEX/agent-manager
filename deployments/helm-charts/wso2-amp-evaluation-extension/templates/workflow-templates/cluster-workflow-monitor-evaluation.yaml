@@ -9,6 +9,11 @@ metadata:
 {{- include "amp-evaluation-extension.labels" . | nindent 4 }}
 spec:
   entrypoint: run-monitor
+  # A pod that can never start — most often a secret it mounts that never syncs —
+  # otherwise holds its slot and IP on a node indefinitely, and neither ttlStrategy
+  # nor the Workflow's ttlAfterCompletion collects a workflow that never completes.
+  # This is the only thing that bounds that, so it applies to every run.
+  activeDeadlineSeconds: {{ .Values.ampEvaluation.activeDeadlineSeconds }}
   {{- if .Values.global.imagePullSecrets }}
   {{- include "amp-evaluation-extension.imagePullSecrets" . | trim | nindent 2 }}
   {{- end }}
@@ -17,11 +22,34 @@ spec:
   podMetadata:
     labels:
       app.kubernetes.io/name: amp-monitor
+      # Selected on by the egress NetworkPolicy, so it stays on the pod.
       app.kubernetes.io/component: evaluation-job
+      # What separates evaluation pods from build pods for metering: they share
+      # the workflows-<org> namespace and are otherwise identical on
+      # kube_pod_labels. A dedicated key rather than reusing the convention
+      # label above, because the exporter's allowlist is cluster-wide -- admitting
+      # app.kubernetes.io/component there would also export it for every platform
+      # pod that happens to follow the same convention, which is a lot of them.
+      amp.wso2.com/workload: evaluation
+      # The organisation's billing identifier, without which an evaluation run
+      # is measurable but chargeable to nobody. Passed in as a parameter because
+      # this is an Argo template: the OpenChoreo Workflow that invokes it has the
+      # value in its substitution context, this does not.
+      cloud.wso2.com/orguuid: '{{ "{{" }}workflow.parameters.org-uuid{{ "}}" }}'
+      # Tenant identity for usage attribution. kube-state-metrics exports pod
+      # labels on kube_pod_labels only, and only the keys in its allowlist, so
+      # these four are what makes an evaluation run attributable to a tenant.
+      openchoreo.dev/namespace: '{{ "{{" }}workflow.parameters.organization{{ "}}" }}'
+      openchoreo.dev/project: '{{ "{{" }}workflow.parameters.project{{ "}}" }}'
+      openchoreo.dev/component: '{{ "{{" }}workflow.parameters.agent{{ "}}" }}'
+      openchoreo.dev/environment: '{{ "{{" }}workflow.parameters.environment{{ "}}" }}'
   arguments:
     parameters:
       - name: monitor-name
       - name: organization
+      # Defaulted so a caller that does not pass it yet still validates.
+      - name: org-uuid
+        value: ""
       - name: project
       - name: agent
       - name: environment
@@ -88,3 +116,10 @@ spec:
             memory: "512Mi"
   ttlStrategy:
     secondsAfterCompletion: 3600
+    # Without this a failed workflow is kept for the full completion TTL, and the
+    # ExternalSecrets created alongside it keep hitting the secret provider at their
+    # refresh interval for just as long.
+    secondsAfterFailure: {{ .Values.ampEvaluation.ttlSecondsAfterFailure }}
+  # Release pod slots as soon as a run is done rather than at workflow GC time.
+  podGC:
+    strategy: OnWorkflowCompletion

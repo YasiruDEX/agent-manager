@@ -1213,6 +1213,29 @@
               "title": "perAgentResourceLimits",
               "type": "object"
             },
+            "fileMountLimits": {
+              "additionalProperties": false,
+              "description": "File mount size caps, in bytes of inline content (secret-reference mounts do not count). All of an agent's mounts render into one ConfigMap/Secret, which Kubernetes limits to 1 MiB, so maxTotalBytes may not exceed 1048576 and maxFileBytes may not exceed maxTotalBytes. The chart fails to render if maxFileBytes exceeds maxTotalBytes.",
+              "properties": {
+                "maxFileBytes": {
+                  "default": 1000000,
+                  "description": "Largest inline content a single file mount may carry.",
+                  "minimum": 1,
+                  "title": "maxFileBytes",
+                  "type": "integer"
+                },
+                "maxTotalBytes": {
+                  "default": 1000000,
+                  "description": "Combined inline content of all file mounts in one request.",
+                  "maximum": 1048576,
+                  "minimum": 1,
+                  "title": "maxTotalBytes",
+                  "type": "integer"
+                }
+              },
+              "title": "fileMountLimits",
+              "type": "object"
+            },
             "thunder": {
               "additionalProperties": false,
               "description": "Thunder admin API configuration (for per-org publisher credential provisioning and the identity APIs: users, roles, groups). When baseURL is empty, the static amp-publisher-client credentials are used instead for publisher provisioning, and the identity APIs are unavailable.",
@@ -1256,6 +1279,59 @@
               },
               "required": [],
               "title": "thunder",
+              "type": "object"
+            },
+            "growthAnalytics": {
+              "additionalProperties": false,
+              "description": "Growth analytics (Moesif) export. Off unless enabled.",
+              "properties": {
+                "enabled": {
+                  "default": false,
+                  "description": "Master switch (MOESIF_ENABLED).",
+                  "type": "boolean"
+                },
+                "consoleEnabled": {
+                  "default": false,
+                  "description": "Console UI action stream (CONSOLE_ANALYTICS_ENABLED); also needs enabled.",
+                  "type": "boolean"
+                },
+                "collectorBaseURL": {
+                  "default": "",
+                  "description": "Collector or Moesif API base URL. Empty with an application ID means https://api.moesif.net.",
+                  "type": "string"
+                },
+                "collectorHostHeader": {
+                  "default": "",
+                  "description": "Host header override for port-forwarded proxies.",
+                  "type": "string"
+                },
+                "applicationId": {
+                  "default": "",
+                  "description": "Moesif Application ID set inline. Prefer existingSecret.",
+                  "type": "string"
+                },
+                "existingSecret": {
+                  "default": "",
+                  "description": "Secret holding the Moesif Application ID.",
+                  "type": "string"
+                },
+                "existingSecretKey": {
+                  "default": "moesif-application-id",
+                  "description": "Key within that Secret.",
+                  "type": "string"
+                },
+                "deploymentModel": {
+                  "default": "on-prem",
+                  "description": "Reported as each event's deployment_model.",
+                  "type": "string"
+                },
+                "environment": {
+                  "default": "",
+                  "description": "Reported as each event's environment.",
+                  "type": "string"
+                }
+              },
+              "title": "growthAnalytics",
               "type": "object"
             }
           },
@@ -1704,8 +1780,8 @@
               "type": "string"
             },
             "gatewayVersion": {
-              "default": "v1.0.0",
-              "description": "Gateway version for setup commands (default: v1.0.0)",
+              "default": "v2026.09.24",
+              "description": "Gateway version for setup commands (default: v2026.09.24)",
               "title": "gatewayVersion",
               "type": "string"
             },
@@ -1772,6 +1848,12 @@
               "title": "instrumentationUrl",
               "type": "string"
             },
+            "promptsBaseUrl": {
+              "default": "",
+              "description": "Base URL the evaluator AI Copilot prompt links the writing guide from. Empty derives the public raw.githubusercontent.com URL from ampVersion. Set it where external AI assistants cannot reach GitHub, to any public host serving the console's prompts/ directory.",
+              "title": "promptsBaseUrl",
+              "type": "string"
+            },
             "scriptBaseUrl": {
               "default": "",
               "description": "Base URL the console's generated commands fetch deployment scripts from, without a trailing slash. Empty derives the public raw.githubusercontent.com URL from ampVersion. Set it where that host is unreachable from the operator's machine, or where this build's scripts are served from somewhere else.",
@@ -1783,6 +1865,20 @@
               "description": "Serve the console over HTTPS.",
               "title": "tlsEnabled",
               "type": "string"
+            },
+            "maxRequestBodyBytes": {
+              "default": 0,
+              "description": "Largest request body, in bytes, the console sends on a save. 0 means no limit (the default). Set it on deployments behind a WAF that rejects bigger bodies with an opaque 403, e.g. 57344 (56 KB) under a 64 KB WAF limit, so the console refuses first with a readable error.",
+              "minimum": 0,
+              "title": "maxRequestBodyBytes",
+              "type": "integer"
+            },
+            "fileMountMaxFileBytes": {
+              "default": 0,
+              "description": "Per-file cap, in bytes, on file-mount content in the console. 0 uses agentManagerService.config.fileMountLimits.maxFileBytes, keeping the two in step. When maxRequestBodyBytes is set, the console also holds it under that value (less 8 KB for the rest of the save), e.g. 48 KB with a 56 KB limit.",
+              "minimum": 0,
+              "title": "fileMountMaxFileBytes",
+              "type": "integer"
             }
           },
           "required": [],

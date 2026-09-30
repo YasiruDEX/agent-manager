@@ -931,11 +931,17 @@ it's the one that proves "the contract docs match what AMP actually consumes."
 
 ### 10.5 Where schema and docs converge
 
-The customer-facing manual-instrumentation contract reference in
-`documentation/docs/concepts/instrumentation.md` is generated from the JSON
-schemas under `contracts/traceloop/v1/`. The same `make
-gen-instrumentation-contract` step (§6.5) emits the MDX table. Three consumers
-share one source of truth.
+`make gen-instrumentation-contract` and `scripts/check-contract-drift.sh` cover
+the JSON schemas under `contracts/traceloop/v1/` and nothing else: the generator
+writes `span.schema.json`, `resource.schema.json` and `kinds/*.schema.json`, and
+the drift check diffs exactly those. Neither emits nor validates documentation.
+
+The customer-facing manual-instrumentation contract is the "Manual
+instrumentation" section of `docs/guides/amp-instrumentation.mdx` in
+[wso2/docs-agent-platform](https://github.com/wso2/docs-agent-platform). It is
+written by hand and lives in a different repository, so adding a required
+attribute here does not update it and no check catches the two drifting apart.
+Changing the contract means a second pull request against that repo.
 
 ## 11. CI workflows and triggers
 
@@ -974,12 +980,14 @@ Jobs:
    release-config). Gates the rest.
 2. `default-cell-required` — runs only the `defaultCell`. The required status
    check on the PR.
-3. `full-emission-matrix` — runs `nox -s emission` (every cell; advisory,
-   `continue-on-error`).
+3. `full-emission-matrix` — runs every cell, sharded into one parallel job
+   per Python version (`nox -s emission -- --python-version=<v>`); advisory,
+   `continue-on-error`.
 4. `publish-matrix-summary` — needs `full-emission-matrix` +
-   `default-cell-required`; aggregates `reports/cells/*.json` and renders the
-   summary table to the job's GitHub step-summary page (not a PR comment —
-   fork PRs get a read-only token that can't comment).
+   `default-cell-required`; merges the shard artifacts, aggregates
+   `reports/cells/*.json` and renders the summary table to the job's GitHub
+   step-summary page (not a PR comment — fork PRs get a read-only token that
+   can't comment).
 5. `scan-cassettes-for-secrets` — greps committed cassettes for leaked keys.
 
 A required check on `full-emission-matrix` overall would let a single advisory

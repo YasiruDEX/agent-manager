@@ -157,6 +157,27 @@ spec:
       name: ${metadata.workflowRunName}
       namespace: ${metadata.namespace}
     spec:
+      # Stamped onto the build pods themselves. metadata.labels above only labels
+      # the Workflow object, and kube-state-metrics reads pod labels — so without
+      # this a build is measurable but not attributable to any tenant.
+      #
+      # No UIDs: the WorkflowRun carries only component and project labels, so
+      # ${metadata.labels['openchoreo.dev/component-uid']} does not resolve here.
+      # Names are unique within a namespace, but a rename splits the series.
+      #
+      # amp.wso2.com/workload is what separates build pods from evaluation pods
+      # for metering; they share the workflows-<org> namespace and are otherwise
+      # identical on kube_pod_labels. It is the key the exporter's allowlist
+      # admits, and the only one the metering service reads.
+      podMetadata:
+        labels:
+          openchoreo.dev/namespace: ${metadata.namespaceName}
+          openchoreo.dev/project: ${metadata.labels['openchoreo.dev/project']}
+          openchoreo.dev/component: ${metadata.labels['openchoreo.dev/component']}
+          amp.wso2.com/workload: build
+          # Convention only: not in the exporter allowlist and selected by
+          # nothing, so it is not a metering signal despite the name.
+          app.kubernetes.io/component: build
       ttlStrategy:
           secondsAfterCompletion: 86400  # Deletes 1 day after it finishes (success or failure)
       activeDeadlineSeconds: 3600

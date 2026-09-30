@@ -21,13 +21,16 @@ data:
   # Gateway control plane URL for gateway setup commands
   GATEWAY_CONTROL_PLANE_URL: {{ .Values.console.config.gatewayControlPlaneUrl | default "http://localhost:9243" | quote }}
   # Gateway version for setup commands
-  GATEWAY_VERSION: {{ .Values.console.config.gatewayVersion | default "v1.0.0" | quote }}
+  GATEWAY_VERSION: {{ .Values.console.config.gatewayVersion | default "v2026.09.24" | quote }}
   # Agent Manager release version — pins the deployment-script git tag (amp/vX.Y.Z)
   AMP_VERSION: {{ .Values.console.config.ampVersion | default "v1.0.0" | quote }}
   # Base URL the console's generated commands fetch deployment scripts from.
   # Empty derives the public raw.githubusercontent.com URL from AMP_VERSION; set
   # it where that host is unreachable or serves nothing for this build.
   SCRIPT_BASE_URL: {{ .Values.console.config.scriptBaseUrl | default "" | quote }}
+  # Base URL the evaluator AI Copilot prompt links the writing guide from.
+  # Empty derives the public raw.githubusercontent.com URL from AMP_VERSION.
+  PROMPTS_BASE_URL: {{ .Values.console.config.promptsBaseUrl | default "" | quote }}
   # Documentation base URL for the console's in-product doc links. Built from
   # the docs version so only the version segment varies per release.
   DOCS_URL: {{ printf "https://wso2.github.io/agent-manager/docs/%s" (.Values.console.config.docsVersion | default "latest") | quote }}
@@ -44,6 +47,12 @@ data:
   # and TLS_ENABLED match this deployment instead of being omitted.
   IDP_HOST_BASE_DOMAIN: {{ .Values.console.config.idpHostBaseDomain | default "amp.localhost" | quote }}
   TLS_ENABLED: {{ .Values.console.config.tlsEnabled | default "false" | quote }}
+  # Request and file-mount size limits in bytes. `dig`, not `default`, for the
+  # body limit: 0 is a real setting (no limit) and `default` would replace it.
+  # `int` because Helm reads YAML numbers as floats and `quote` would render
+  # 1000000 as "1e+06".
+  MAX_REQUEST_BODY_BYTES: {{ dig "maxRequestBodyBytes" 0 .Values.console.config | int | quote }}
+  FILE_MOUNT_MAX_FILE_BYTES: {{ .Values.console.config.fileMountMaxFileBytes | default (dig "fileMountLimits" "maxFileBytes" 1000000 .Values.agentManagerService.config) | int | quote }}
   # Guardrails configuration
   GUARDRAILS_CATALOG_URL: {{ .Values.console.config.guardrailsCatalogUrl | default "" | quote }}
   GUARDRAILS_DEFINITION_BASE_URL: {{ .Values.console.config.guardrailsDefinitionBaseUrl | default "" | quote }}

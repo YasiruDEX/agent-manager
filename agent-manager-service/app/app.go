@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"sync"
@@ -72,6 +73,11 @@ type Options struct {
 	// the env-Thunder system-client credential from AMS's own Postgres — that one
 	// is not read back from a key vault.
 	AgentThunderProvisioning func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient, ocClient occlient.OpenChoreoClient, encryptionKey []byte) services.AgentThunderProvisioningService
+	// ResourceLabels are stamped on every Component and ReleaseBinding Agent
+	// Manager writes to OpenChoreo. nil (the open-source default) stamps none;
+	// cloud deployments inject their own, e.g. the product label WSO2 Cloud's
+	// product-scoped suspension selects ReleaseBindings by.
+	ResourceLabels map[string]string
 }
 
 // Run starts the application with the provided providers and options.
@@ -82,6 +88,8 @@ type Options struct {
 // secret management backend (e.g., the OpenChoreo secret API for open-source, cloud-specific for cloud).
 func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider, opts Options) {
 	cfg := config.GetConfig()
+	// Set before anything builds an OpenChoreo client, which all read it from config.
+	cfg.OpenChoreo.ResourceLabels = maps.Clone(opts.ResourceLabels)
 
 	setupLogger(cfg)
 
@@ -198,6 +206,15 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 		}
 	}
 
+	// Start the A2A publication reconciler. It runs unconditionally: it is a
+	// no-op for an org with no A2A agents, and gating it on a feature flag would
+	// leave a deploy's queued publication stranded if the flag were ever off.
+	a2aReconcilerCtx, a2aReconcilerCancel := context.WithCancel(backgroundCtx)
+	if err := dependencies.A2APublicationReconciler.Start(a2aReconcilerCtx); err != nil {
+		slog.Error("failed to start A2A publication reconciler", "error", err)
+		os.Exit(1)
+	}
+
 	// Load built-in LLM provider templates into memory
 	if err := loadBuiltInLLMTemplates(dependencies); err != nil {
 		slog.Error("Failed to load built-in LLM provider templates", "error", err)
@@ -252,6 +269,11 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 			if err := dependencies.AgentThunderReconciler.Stop(); err != nil {
 				slog.Error("error stopping agent thunder provisioning reconciler", "error", err)
 			}
+		}
+
+		a2aReconcilerCancel()
+		if err := dependencies.A2APublicationReconciler.Stop(); err != nil {
+			slog.Error("error stopping A2A publication reconciler", "error", err)
 		}
 
 		// Shutdown WebSocket manager in a goroutine since it blocks

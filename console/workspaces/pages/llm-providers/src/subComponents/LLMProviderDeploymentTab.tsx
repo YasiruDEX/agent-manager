@@ -24,6 +24,7 @@ import type {
 import {
   EnvironmentGatewaySelector,
   useConfirmationDialog,
+  useUnsavedChangesGuard,
 } from "@agent-management-platform/shared-component";
 import { Alert, Button, Collapse, Skeleton, Stack } from "@wso2/oxygen-ui";
 
@@ -114,6 +115,8 @@ export function LLMProviderDeploymentTab({
     }
   }, [onUpdate, selectedGatewayIds]);
 
+  useUnsavedChangesGuard(isDirty);
+
   const handleSave = useCallback(() => {
     if (!providerData) return;
     const undeploysEverything =
@@ -121,6 +124,7 @@ export function LLMProviderDeploymentTab({
       (providerData.gateways ?? []).length > 0;
     if (undeploysEverything) {
       addConfirmation({
+        analytics: { entity: "llm-provider", action: "undeploy" },
         title: "Undeploy from all gateways?",
         description:
           "This will undeploy the provider from all gateways. Invoke URLs " +
