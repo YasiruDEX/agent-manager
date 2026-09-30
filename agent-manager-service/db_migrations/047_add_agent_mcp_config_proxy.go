@@ -20,7 +20,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// migration044 records the MCP proxy an agent's MCP connection references, in a side table
+// migration047 records the MCP proxy an agent's MCP connection references, in a side table
 // keyed by the configuration.
 //
 // Until now the only link from an agent configuration to an org-level MCP proxy was the
@@ -58,8 +58,8 @@ import (
 //
 // ON DELETE CASCADE on the configuration side: the reference means nothing without the
 // configuration it describes.
-var migration044 = migration{
-	ID: 44,
+var migration047 = migration{
+	ID: 47,
 	Migrate: func(db *gorm.DB) error {
 		return db.Transaction(func(tx *gorm.DB) error {
 			if err := runSQL(

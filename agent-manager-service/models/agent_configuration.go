@@ -72,7 +72,7 @@ type AgentConfiguration struct {
 	// back to the per-environment mapping rows.
 	//
 	// Lives in its own table rather than as a column here because this row is polymorphic
-	// across LLM, MCP and agent configurations — see migration044.
+	// across LLM, MCP and agent configurations — see migration047.
 	MCPProxyRef *AgentMCPConfigProxy `gorm:"foreignKey:ConfigUUID;references:UUID" json:"mcpProxyRef,omitempty"`
 }
 

@@ -478,9 +478,10 @@ func (s *agentConfigurationService) reconcileProxyBindings(
 }
 
 // mcpConfigUUIDsForProxy returns every configuration that references proxy, from both
-// directions: the configuration's own environment-agnostic proxy column, and — for rows
-// migration044 left NULL — the mapping rows. The column is what reaches a connection with
-// no mapping in ANY environment, which the mapping-row query by construction cannot see.
+// directions: the configuration's own environment-agnostic proxy reference, and — for
+// configurations with none, such as divergent ones migration047 skipped — the mapping rows.
+// The reference is what reaches a connection with no mapping in ANY environment, which the
+// mapping-row query by construction cannot see.
 func (s *agentConfigurationService) mcpConfigUUIDsForProxy(
 	ctx context.Context, ouID string, proxy *models.MCPProxy,
 ) ([]uuid.UUID, error) {

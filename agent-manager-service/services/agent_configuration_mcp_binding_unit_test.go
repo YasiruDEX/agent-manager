@@ -197,7 +197,7 @@ func TestMCPConfigTargetsProxy_UnanimousMappingsOutrankStaleReference(t *testing
 		"the proxy only the stale reference names must not also claim it")
 }
 
-// A row migration044 left NULL — its environments named different proxies — falls back to
+// A configuration migration047 gave no reference — its environments named different proxies — falls back to
 // the mapping rows, and is claimed only when they unanimously name this proxy.
 func TestMCPConfigTargetsProxy_FallsBackToUnanimousMappings(t *testing.T) {
 	proxyUUID := uuid.New()
@@ -441,7 +441,7 @@ func TestMCPConfigUUIDsForProxy_FindsConfigReferencedOnlyByColumn(t *testing.T) 
 	require.Equal(t, []uuid.UUID{configUUID}, got)
 }
 
-// The mapping-row side stays live for rows migration044 left NULL (divergent per-environment
+// The mapping-row side stays live for configurations migration047 gave no reference (divergent per-environment
 // proxies). Dropping it would silently orphan every legacy connection the column cannot
 // describe.
 func TestMCPConfigUUIDsForProxy_FindsConfigReferencedOnlyByMappingRow(t *testing.T) {
