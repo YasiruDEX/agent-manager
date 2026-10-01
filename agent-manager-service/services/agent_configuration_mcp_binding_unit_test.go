@@ -576,7 +576,7 @@ func TestMCPScopeExclusions_ExcludesOnlyEnvironmentsTheRequestDrops(t *testing.T
 	vars := mcpVarRows(configUUID, devEnv, stageEnv, prodEnv)
 	requested := map[uuid.UUID]struct{}{devEnv: {}, stageEnv: {}}
 
-	got := mcpScopeExclusions(mappings, vars, requested)
+	got := mcpScopeExclusions(mappings, vars, nil, requested)
 
 	require.Equal(t, []uuid.UUID{prodEnv}, got)
 	require.NotContains(t, got, neverEnv, "an environment the connection was never in is not an exclusion")
@@ -589,7 +589,33 @@ func TestMCPScopeExclusions_GrowingTheScopeExcludesNothing(t *testing.T) {
 	devEnv, stageEnv := uuid.New(), uuid.New()
 
 	got := mcpScopeExclusions(nil, mcpVarRows(configUUID, devEnv),
+		map[uuid.UUID]struct{}{devEnv: {}, stageEnv: {}},
 		map[uuid.UUID]struct{}{devEnv: {}, stageEnv: {}})
 
 	require.Empty(t, got)
+}
+
+// A per-environment create (`amctl agent mcp set --env dev` on a new connection) must stay
+// narrow: the rest of the pipeline is excluded, so the reconcile never binds the connection
+// into stage or production behind the user's back.
+func TestMCPScopeExclusions_SingleEnvCreateExcludesRestOfPipeline(t *testing.T) {
+	devEnv, stageEnv, prodEnv := uuid.New(), uuid.New(), uuid.New()
+	pipeline := map[uuid.UUID]struct{}{devEnv: {}, stageEnv: {}, prodEnv: {}}
+
+	got := mcpScopeExclusions(nil, nil, pipeline, map[uuid.UUID]struct{}{devEnv: {}})
+
+	require.ElementsMatch(t, []uuid.UUID{stageEnv, prodEnv}, got)
+}
+
+// The case this design exists for: a connection attached while the pipeline held only its
+// first environment. Environments added afterwards were never omitted by any request, so a
+// later reconcile can bind them.
+func TestMCPScopeExclusions_EnvironmentsAddedLaterAreNotExcluded(t *testing.T) {
+	defaultEnv := uuid.New()
+
+	got := mcpScopeExclusions(nil, nil,
+		map[uuid.UUID]struct{}{defaultEnv: {}},
+		map[uuid.UUID]struct{}{defaultEnv: {}})
+
+	require.Empty(t, got, "stage did not exist yet, so nothing may be recorded against it")
 }

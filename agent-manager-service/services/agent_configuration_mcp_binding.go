@@ -171,24 +171,88 @@ func envsWithVarRows(vars []models.AgentEnvConfigVariable) map[uuid.UUID]struct{
 	return envs
 }
 
-// mcpScopeExclusions returns the environments an update takes a connection out of: every
-// environment it was in scope in before — bound, or configured with env var rows — that
-// the request no longer names. That is precisely what `amctl agent mcp unset --env` sends
-// (the existing set minus one), and what the console sends when it re-maps a connection.
+// mcpScopeExclusions returns the environments a create or update leaves a connection out
+// of. The request names the scope: every environment it does not name is excluded, among
+// those the connection could otherwise be bound in — the project's pipeline, plus anything
+// it was already in (bound, or configured with env var rows).
+//
+// The pipeline half is what keeps a per-environment request narrow. `amctl agent mcp set
+// --env dev` creates a connection with only dev in its request; without excluding the rest
+// of the pipeline, the binding reconcile would later bind it everywhere its proxy is served,
+// minting API keys in environments the user deliberately left out. The previously-in-scope
+// half is what makes `amctl agent mcp unset --env` durable: the CLI re-sends the existing set
+// minus one, and that one must be recorded.
+//
+// An environment that joins the pipeline later was never omitted by any request, so it stays
+// in scope — the case a connection attached before its environments existed depends on.
 func mcpScopeExclusions(
-	mappings []models.EnvAgentMCPMapping, vars []models.AgentEnvConfigVariable, requested map[uuid.UUID]struct{},
+	mappings []models.EnvAgentMCPMapping, vars []models.AgentEnvConfigVariable,
+	pipeline, requested map[uuid.UUID]struct{},
 ) []uuid.UUID {
-	previously := envsWithVarRows(vars)
+	candidates := envsWithVarRows(vars)
 	for i := range mappings {
-		previously[mappings[i].EnvironmentUUID] = struct{}{}
+		candidates[mappings[i].EnvironmentUUID] = struct{}{}
 	}
-	var removed []uuid.UUID
-	for envUUID := range previously {
-		if _, still := requested[envUUID]; !still {
-			removed = append(removed, envUUID)
+	for envUUID := range pipeline {
+		candidates[envUUID] = struct{}{}
+	}
+	var excluded []uuid.UUID
+	for envUUID := range candidates {
+		if _, named := requested[envUUID]; !named {
+			excluded = append(excluded, envUUID)
 		}
 	}
-	return removed
+	return excluded
+}
+
+// recordMCPRequestScope persists the scope a create or update request expresses: its named
+// environments are included (clearing earlier exclusions), the rest of the pipeline and of
+// the connection's previous scope is excluded. snapshot must be the configuration as it was
+// before the request was applied, so a removal is still visible in it.
+//
+// A pipeline lookup failure narrows rather than fails: it falls back to excluding only what
+// the connection was previously in, which is the pre-pipeline behaviour and never widens it.
+func (s *agentConfigurationService) recordMCPRequestScope(
+	ctx context.Context, snapshot *models.AgentConfiguration, ouID, projectName string,
+	envMap map[string]*models.EnvironmentResponse, reqEnvs map[string]models.EnvModelConfigRequest,
+) error {
+	requested := make(map[uuid.UUID]struct{}, len(reqEnvs))
+	include := make([]uuid.UUID, 0, len(reqEnvs))
+	for envName := range reqEnvs {
+		env, ok := envMap[envName]
+		if !ok {
+			continue
+		}
+		if envUUID, err := uuid.Parse(env.UUID); err == nil {
+			requested[envUUID] = struct{}{}
+			include = append(include, envUUID)
+		}
+	}
+
+	pipeline := map[uuid.UUID]struct{}{}
+	if p, err := s.ocClient.GetProjectDeploymentPipeline(ctx, ouID, projectName); err != nil {
+		if !errors.Is(err, utils.ErrProjectNotFound) && !errors.Is(err, utils.ErrDeploymentPipelineNotFound) {
+			s.logger.Warn("Failed to read deployment pipeline while recording MCP connection scope; "+
+				"excluding only environments the connection was previously in",
+				"configUUID", snapshot.UUID, "projectName", projectName, "error", err)
+		}
+	} else if p != nil {
+		for _, name := range client.PipelineEnvironments(p.PromotionPaths) {
+			if env, ok := envMap[name]; ok {
+				if envUUID, parseErr := uuid.Parse(env.UUID); parseErr == nil {
+					pipeline[envUUID] = struct{}{}
+				}
+			}
+		}
+	}
+
+	exclude := mcpScopeExclusions(snapshot.EnvMCPMappings, snapshot.EnvVariables, pipeline, requested)
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		return s.agentConfigRepo.SetMCPEnvScope(ctx, tx, snapshot.UUID, exclude, include)
+	}); err != nil {
+		return fmt.Errorf("failed to record MCP connection scope: %w", err)
+	}
+	return nil
 }
 
 // mcpConfigTargetsProxy reports whether this connection's environment-agnostic intent is
