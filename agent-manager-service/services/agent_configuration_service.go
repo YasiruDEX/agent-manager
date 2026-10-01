@@ -2613,6 +2613,26 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		return nil, err
 	}
 
+	// Record the connection's scope explicitly, so the binding reconcile can tell an
+	// environment removed here from one that was simply never configured. Every requested
+	// environment is in scope (clearing an earlier exclusion — a re-`set` after an `unset`);
+	// every environment the connection was in before but the request drops is excluded. The
+	// snapshot is pre-update: existingConfig's rows were loaded before the loop above ran.
+	requested := make(map[uuid.UUID]struct{}, len(req.EnvMappings))
+	include := make([]uuid.UUID, 0, len(req.EnvMappings))
+	for envName := range req.EnvMappings {
+		if envUUID, parseErr := uuid.Parse(envMap[envName].UUID); parseErr == nil {
+			requested[envUUID] = struct{}{}
+			include = append(include, envUUID)
+		}
+	}
+	exclude := mcpScopeExclusions(existingConfig.EnvMCPMappings, existingConfig.EnvVariables, requested)
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		return s.agentConfigRepo.SetMCPEnvScope(ctx, tx, existingConfig.UUID, exclude, include)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to record MCP connection scope: %w", err)
+	}
+
 	// Detached onto its own goroutine, off the request path — cost scales
 	// with the number of touched environments, and this is already a
 	// best-effort step. See detachedRefreshContext for why it's built the way

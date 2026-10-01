@@ -116,56 +116,39 @@ func samePtrUUID(a, b *uuid.UUID) bool {
 }
 
 // mcpEnvsNeedingActivation returns the environments where proxy could back a binding for
-// this connection but no EnvAgentMCPMapping row exists yet.
+// this connection but no EnvAgentMCPMapping row exists yet, and which the connection has
+// not been deliberately removed from.
 //
-// An environment qualifies only if it satisfies BOTH halves:
+// Scope comes from recorded exclusions, not from env var rows. Rows only exist for the
+// environments a connection was configured for at the time, and removing an environment
+// deletes them too, so "no rows" meant either "never included" or "removed on purpose" and
+// the reconcile could not tell which. Inferring scope from rows made every environment
+// added to the pipeline after the connection was attached permanently unbindable, while
+// ignoring rows resurrected `amctl agent mcp unset --env`. An exclusion records the removal
+// itself, so an environment absent from it is in scope however late it appeared.
 //
-//   - The PROXY serves it (an endpoint→environment row). Nothing can be bound in an
-//     environment the proxy has no endpoint in.
-//   - The CONNECTION is offered there (env var rows exist). Those rows are the
-//     connection's own record of its environment scope: configuring it writes them for
-//     every requested environment, blank when the proxy is not deployable there yet, and
-//     removeMCPMappingEnvironment deletes them when an environment is taken out of scope.
-//
-// The second half is what keeps this reconcile from overriding an explicit removal.
-// `amctl agent mcp unset --env prod` drops prod from the request, which deletes prod's
-// mapping AND its var rows — leaving a state indistinguishable from "never configured"
-// except by those rows. Without this check the next proxy update would silently re-bind
-// prod, re-mint its API key and re-inject its variables.
-//
-// The cost of the check is that an environment created after the connection was last
-// saved has no var rows and so is not auto-bound; re-saving the connection provisions it.
-// That case is not a regression: promotion into such an environment is refused by the
-// system-managed-keys guard before MCP bindings are ever consulted, since none of the
-// agent's configurations have rows there.
-//
-// Every input is already in hand — mappings and env var rows are preloaded on the
-// configuration, endpoint environments on the proxy — so a steady-state reconcile answers
-// this with no queries and no remote calls at all.
+// The caller still restricts the result to the project's deployment pipeline — this
+// function only knows what the proxy serves, not where the agent deploys.
 func mcpEnvsNeedingActivation(
 	mappings []models.EnvAgentMCPMapping,
-	vars []models.AgentEnvConfigVariable,
+	exclusions []models.AgentMCPConfigEnvExclusion,
 	proxy *models.MCPProxy,
 ) []uuid.UUID {
-	mapped := make(map[uuid.UUID]struct{}, len(mappings))
+	skip := make(map[uuid.UUID]struct{}, len(mappings)+len(exclusions))
 	for i := range mappings {
-		mapped[mappings[i].EnvironmentUUID] = struct{}{}
+		skip[mappings[i].EnvironmentUUID] = struct{}{}
 	}
-	inScope := make(map[uuid.UUID]struct{}, len(vars))
-	for i := range vars {
-		inScope[vars[i].EnvironmentUUID] = struct{}{}
+	for i := range exclusions {
+		skip[exclusions[i].EnvironmentUUID] = struct{}{}
 	}
 
-	unmapped := make([]uuid.UUID, 0, len(inScope))
-	seen := make(map[uuid.UUID]struct{}, len(inScope))
+	var unmapped []uuid.UUID
+	seen := make(map[uuid.UUID]struct{})
 	for i := range proxy.Endpoints {
 		for j := range proxy.Endpoints[i].Environments {
 			envUUID := proxy.Endpoints[i].Environments[j].EnvironmentUUID
-			if _, alreadyMapped := mapped[envUUID]; alreadyMapped {
-				continue
-			}
-			if _, offered := inScope[envUUID]; !offered {
-				continue // out of the connection's scope, or removed from it on purpose
+			if _, skipped := skip[envUUID]; skipped {
+				continue // already bound, or removed from the connection on purpose
 			}
 			if _, dup := seen[envUUID]; dup {
 				continue
@@ -175,6 +158,37 @@ func mcpEnvsNeedingActivation(
 		}
 	}
 	return unmapped
+}
+
+// envsWithVarRows is the environment set a connection has env var rows in — its scope
+// under the pre-exclusion rule, still used when there is no deployment pipeline to bound
+// candidates by.
+func envsWithVarRows(vars []models.AgentEnvConfigVariable) map[uuid.UUID]struct{} {
+	envs := make(map[uuid.UUID]struct{}, len(vars))
+	for i := range vars {
+		envs[vars[i].EnvironmentUUID] = struct{}{}
+	}
+	return envs
+}
+
+// mcpScopeExclusions returns the environments an update takes a connection out of: every
+// environment it was in scope in before — bound, or configured with env var rows — that
+// the request no longer names. That is precisely what `amctl agent mcp unset --env` sends
+// (the existing set minus one), and what the console sends when it re-maps a connection.
+func mcpScopeExclusions(
+	mappings []models.EnvAgentMCPMapping, vars []models.AgentEnvConfigVariable, requested map[uuid.UUID]struct{},
+) []uuid.UUID {
+	previously := envsWithVarRows(vars)
+	for i := range mappings {
+		previously[mappings[i].EnvironmentUUID] = struct{}{}
+	}
+	var removed []uuid.UUID
+	for envUUID := range previously {
+		if _, still := requested[envUUID]; !still {
+			removed = append(removed, envUUID)
+		}
+	}
+	return removed
 }
 
 // mcpConfigTargetsProxy reports whether this connection's environment-agnostic intent is
@@ -576,7 +590,7 @@ func (s *agentConfigurationService) reconcileConfigMCPBindings(
 		}
 	}
 
-	candidates := mcpEnvsNeedingActivation(config.EnvMCPMappings, config.EnvVariables, proxy)
+	candidates := mcpEnvsNeedingActivation(config.EnvMCPMappings, config.MCPEnvExclusions, proxy)
 	if only != nil {
 		candidates = retainEnvs(candidates, only)
 	}
@@ -584,18 +598,25 @@ func (s *agentConfigurationService) reconcileConfigMCPBindings(
 		return nil
 	}
 
-	// An environment the proxy serves but the agent's project never deploys to would get a
+	// Scope is the project's pipeline minus exclusions, so the pipeline is what bounds it: an
+	// environment the proxy serves but the agent never deploys to would otherwise get a
 	// mapping, an API key and env var rows it can never use. Applied only now, so the
-	// steady-state reconcile above never pays for the pipeline lookup.
+	// steady-state reconcile above never pays for the lookup.
+	//
+	// With no pipeline to bound by (an external agent's project has none), fall back to the
+	// connection's own env var rows — exactly the environments it was configured for —
+	// rather than binding it everywhere its proxy happens to be served.
 	pipelineEnvs, err := scope.pipelineEnvironments(ctx, config.ProjectName)
 	if err != nil {
 		return err
 	}
 	if pipelineEnvs.restrict {
 		candidates = retainEnvs(candidates, pipelineEnvs.envs)
-		if len(candidates) == 0 {
-			return nil
-		}
+	} else {
+		candidates = retainEnvs(candidates, envsWithVarRows(config.EnvVariables))
+	}
+	if len(candidates) == 0 {
+		return nil
 	}
 
 	bindable := s.deployableMCPEnvs(ctx, proxy, scope.ouID, candidates)

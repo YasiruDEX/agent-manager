@@ -4319,6 +4319,19 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 		return fmt.Errorf("failed to prepare environment %q for promotion: %w", req.TargetEnvironment, err)
 	}
 
+	// Bind the agent's MCP connections in the target before any guard judges it. A
+	// connection attached before the target joined the pipeline has no configuration there
+	// at all, so the system-managed-keys guard below would refuse it as unconfigured — ahead
+	// of assertMCPBindingsSurvivePromotion, whose own backfill would have fixed it. Running
+	// here, after the target's namespace exists, lets every guard see the target as it will
+	// actually be. Best-effort: a failure is logged and the guards decide either way.
+	if err := s.agentConfigurationService.ReconcileMCPBindingsForAgentEnvironment(
+		ctx, agentName, ouID, projectName, req.TargetEnvironment,
+	); err != nil {
+		s.logger.Warn("Failed to reconcile MCP bindings in the promotion target; guards will judge it as-is",
+			"agentName", agentName, "targetEnvironment", req.TargetEnvironment, "error", err)
+	}
+
 	// System-managed env vars (LLM provider URL/key, MCP, etc.) live per-environment in
 	// agent_env_config_variables_mapping. Promotion must enforce this invariant: if the
 	// SOURCE environment has any system-managed vars, the TARGET environment must also

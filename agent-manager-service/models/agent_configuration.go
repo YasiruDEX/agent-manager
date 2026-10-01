@@ -74,6 +74,11 @@ type AgentConfiguration struct {
 	// Lives in its own table rather than as a column here because this row is polymorphic
 	// across LLM, MCP and agent configurations — see migration047.
 	MCPProxyRef *AgentMCPConfigProxy `gorm:"foreignKey:ConfigUUID;references:UUID" json:"mcpProxyRef,omitempty"`
+
+	// MCPEnvExclusions lists the environments an MCP connection was deliberately removed
+	// from. Its scope is every environment of the project's pipeline except these — see
+	// migration048 for why that is recorded rather than inferred from missing env var rows.
+	MCPEnvExclusions []AgentMCPConfigEnvExclusion `gorm:"foreignKey:ConfigUUID;references:UUID" json:"-"`
 }
 
 // AgentMCPConfigProxy binds one MCP-type AgentConfiguration to the org-level MCP proxy it
@@ -93,6 +98,21 @@ type AgentMCPConfigProxy struct {
 	MCPProxyUUID uuid.UUID `gorm:"column:mcp_proxy_uuid;type:uuid;not null" json:"mcpProxyUuid"`
 	CreatedAt    time.Time `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
+}
+
+// AgentMCPConfigEnvExclusion records that an MCP connection was deliberately taken out of
+// one environment, so the binding reconcile leaves it unbound there. TypeID is pinned to
+// AgentConfigTypeIDMCP and exists only to carry the composite foreign key.
+type AgentMCPConfigEnvExclusion struct {
+	ConfigUUID      uuid.UUID `gorm:"column:config_uuid;type:uuid;primaryKey" json:"configUuid"`
+	EnvironmentUUID uuid.UUID `gorm:"column:environment_uuid;type:uuid;primaryKey" json:"environmentUuid"`
+	TypeID          uint      `gorm:"column:type_id;type:integer;not null;default:2" json:"-"`
+	CreatedAt       time.Time `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
+}
+
+// TableName returns the table name for the AgentMCPConfigEnvExclusion model.
+func (AgentMCPConfigEnvExclusion) TableName() string {
+	return "agent_mcp_config_env_exclusion"
 }
 
 // TableName returns the table name for the AgentMCPConfigProxy model.

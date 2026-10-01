@@ -60,6 +60,9 @@ import (
 //			ListMCPConfigsByProxyFunc: func(ctx context.Context, ouID string, proxyUUID uuid.UUID) ([]models.AgentConfiguration, error) {
 //				panic("mock out the ListMCPConfigsByProxy method")
 //			},
+//			SetMCPEnvScopeFunc: func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, exclude []uuid.UUID, include []uuid.UUID) error {
+//				panic("mock out the SetMCPEnvScope method")
+//			},
 //			SetMCPProxyRefFunc: func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, proxyUUID uuid.UUID) error {
 //				panic("mock out the SetMCPProxyRef method")
 //			},
@@ -114,6 +117,9 @@ type AgentConfigurationRepositoryMock struct {
 
 	// ListMCPConfigsByProxyFunc mocks the ListMCPConfigsByProxy method.
 	ListMCPConfigsByProxyFunc func(ctx context.Context, ouID string, proxyUUID uuid.UUID) ([]models.AgentConfiguration, error)
+
+	// SetMCPEnvScopeFunc mocks the SetMCPEnvScope method.
+	SetMCPEnvScopeFunc func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, exclude []uuid.UUID, include []uuid.UUID) error
 
 	// SetMCPProxyRefFunc mocks the SetMCPProxyRef method.
 	SetMCPProxyRefFunc func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, proxyUUID uuid.UUID) error
@@ -273,6 +279,19 @@ type AgentConfigurationRepositoryMock struct {
 			// ProxyUUID is the proxyUUID argument value.
 			ProxyUUID uuid.UUID
 		}
+		// SetMCPEnvScope holds details about calls to the SetMCPEnvScope method.
+		SetMCPEnvScope []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Tx is the tx argument value.
+			Tx *gorm.DB
+			// ConfigUUID is the configUUID argument value.
+			ConfigUUID uuid.UUID
+			// Exclude is the exclude argument value.
+			Exclude []uuid.UUID
+			// Include is the include argument value.
+			Include []uuid.UUID
+		}
 		// SetMCPProxyRef holds details about calls to the SetMCPProxyRef method.
 		SetMCPProxyRef []struct {
 			// Ctx is the ctx argument value.
@@ -308,6 +327,7 @@ type AgentConfigurationRepositoryMock struct {
 	lockListByAgentAndType    sync.RWMutex
 	lockListMCPConfigsByAgent sync.RWMutex
 	lockListMCPConfigsByProxy sync.RWMutex
+	lockSetMCPEnvScope        sync.RWMutex
 	lockSetMCPProxyRef        sync.RWMutex
 	lockUpdate                sync.RWMutex
 }
@@ -917,6 +937,54 @@ func (mock *AgentConfigurationRepositoryMock) ListMCPConfigsByProxyCalls() []str
 	mock.lockListMCPConfigsByProxy.RLock()
 	calls = mock.calls.ListMCPConfigsByProxy
 	mock.lockListMCPConfigsByProxy.RUnlock()
+	return calls
+}
+
+// SetMCPEnvScope calls SetMCPEnvScopeFunc.
+func (mock *AgentConfigurationRepositoryMock) SetMCPEnvScope(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, exclude []uuid.UUID, include []uuid.UUID) error {
+	if mock.SetMCPEnvScopeFunc == nil {
+		panic("AgentConfigurationRepositoryMock.SetMCPEnvScopeFunc: method is nil but AgentConfigurationRepository.SetMCPEnvScope was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Tx         *gorm.DB
+		ConfigUUID uuid.UUID
+		Exclude    []uuid.UUID
+		Include    []uuid.UUID
+	}{
+		Ctx:        ctx,
+		Tx:         tx,
+		ConfigUUID: configUUID,
+		Exclude:    exclude,
+		Include:    include,
+	}
+	mock.lockSetMCPEnvScope.Lock()
+	mock.calls.SetMCPEnvScope = append(mock.calls.SetMCPEnvScope, callInfo)
+	mock.lockSetMCPEnvScope.Unlock()
+	return mock.SetMCPEnvScopeFunc(ctx, tx, configUUID, exclude, include)
+}
+
+// SetMCPEnvScopeCalls gets all the calls that were made to SetMCPEnvScope.
+// Check the length with:
+//
+//	len(mockedAgentConfigurationRepository.SetMCPEnvScopeCalls())
+func (mock *AgentConfigurationRepositoryMock) SetMCPEnvScopeCalls() []struct {
+	Ctx        context.Context
+	Tx         *gorm.DB
+	ConfigUUID uuid.UUID
+	Exclude    []uuid.UUID
+	Include    []uuid.UUID
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Tx         *gorm.DB
+		ConfigUUID uuid.UUID
+		Exclude    []uuid.UUID
+		Include    []uuid.UUID
+	}
+	mock.lockSetMCPEnvScope.RLock()
+	calls = mock.calls.SetMCPEnvScope
+	mock.lockSetMCPEnvScope.RUnlock()
 	return calls
 }
 

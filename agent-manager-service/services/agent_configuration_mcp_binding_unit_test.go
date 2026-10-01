@@ -78,18 +78,17 @@ func TestMCPEnvsNeedingActivation_ReportsProxyEnvWithNoMapping(t *testing.T) {
 		{ConfigUUID: configUUID, EnvironmentUUID: devEnv, MCPProxyUUID: proxyUUID},
 	}
 
-	got := mcpEnvsNeedingActivation(mappings, mcpVarRows(configUUID, devEnv, prodEnv),
-		mcpProxyServing(proxyUUID, devEnv, prodEnv))
+	got := mcpEnvsNeedingActivation(mappings, nil, mcpProxyServing(proxyUUID, devEnv, prodEnv))
 
 	require.Equal(t, []uuid.UUID{prodEnv}, got,
 		"prod is served by the proxy but has no mapping — it must be reported for backfill")
 }
 
-// The state the original bug left behind: the connection was configured for this
-// environment (blank var rows written by provisionUnconfiguredMCPEnv, because the proxy
-// had no endpoint there yet) but never bound. Once the proxy serves it, the backfill must
-// pick it up — this is what promotion used to refuse for the lifetime of the agent.
-func TestMCPEnvsNeedingActivation_ReportsConfiguredButUnboundEnvironment(t *testing.T) {
+// An environment that joined the pipeline after the connection was attached has no env
+// var rows and no mapping. It was never removed, so it is in scope and must be reported —
+// the case that previously needed a detach and re-attach, because scope was inferred from
+// rows and this environment had none.
+func TestMCPEnvsNeedingActivation_ReportsEnvironmentAddedAfterAttach(t *testing.T) {
 	configUUID, proxyUUID := uuid.New(), uuid.New()
 	devEnv, envAddedLater := uuid.New(), uuid.New()
 
@@ -97,11 +96,10 @@ func TestMCPEnvsNeedingActivation_ReportsConfiguredButUnboundEnvironment(t *test
 		{ConfigUUID: configUUID, EnvironmentUUID: devEnv, MCPProxyUUID: proxyUUID},
 	}
 
-	got := mcpEnvsNeedingActivation(mappings, mcpVarRows(configUUID, devEnv, envAddedLater),
-		mcpProxyServing(proxyUUID, devEnv, envAddedLater))
+	got := mcpEnvsNeedingActivation(mappings, nil, mcpProxyServing(proxyUUID, devEnv, envAddedLater))
 
 	require.Equal(t, []uuid.UUID{envAddedLater}, got,
-		"an environment in scope with no mapping must be reported")
+		"an environment added after attach, never excluded, must be reported")
 }
 
 // Each unmapped environment is reported once. A repeated environment would make the caller
@@ -116,7 +114,7 @@ func TestMCPEnvsNeedingActivation_ReportsEachUnmappedEnvOnce(t *testing.T) {
 	}
 	proxy := mcpProxyServing(proxyUUID, devEnv, prodEnv, prodEnv)
 
-	got := mcpEnvsNeedingActivation(mappings, mcpVarRows(configUUID, devEnv, prodEnv), proxy)
+	got := mcpEnvsNeedingActivation(mappings, nil, proxy)
 
 	require.Equal(t, []uuid.UUID{prodEnv}, got)
 }
@@ -131,7 +129,7 @@ func TestMCPEnvsNeedingActivation_SkipsAlreadyMappedEnv(t *testing.T) {
 		{ConfigUUID: configUUID, EnvironmentUUID: devEnv, MCPProxyUUID: proxyUUID},
 	}
 
-	got := mcpEnvsNeedingActivation(mappings, mcpVarRows(configUUID, devEnv), mcpProxyServing(proxyUUID, devEnv))
+	got := mcpEnvsNeedingActivation(mappings, nil, mcpProxyServing(proxyUUID, devEnv))
 
 	require.Empty(t, got)
 }
@@ -147,8 +145,7 @@ func TestMCPEnvsNeedingActivation_IgnoresEnvironmentProxyDoesNotServe(t *testing
 		{ConfigUUID: configUUID, EnvironmentUUID: devEnv, MCPProxyUUID: proxyUUID},
 	}
 
-	got := mcpEnvsNeedingActivation(mappings, mcpVarRows(configUUID, devEnv, unservedEnv),
-		mcpProxyServing(proxyUUID, devEnv))
+	got := mcpEnvsNeedingActivation(mappings, nil, mcpProxyServing(proxyUUID, devEnv))
 
 	require.Empty(t, got)
 	require.NotContains(t, got, unservedEnv)
@@ -511,23 +508,24 @@ func TestMCPEnvsNeedingActivation_DoesNotResurrectRemovedEnvironment(t *testing.
 	mappings := []models.EnvAgentMCPMapping{
 		{ConfigUUID: configUUID, EnvironmentUUID: devEnv, MCPProxyUUID: proxyUUID},
 	}
-	// unsetEnv is served by the proxy but has no var rows — it was unset on purpose.
-	varsAfterUnset := mcpVarRows(configUUID, devEnv)
+	// The unset is recorded explicitly — that is what distinguishes it from an environment
+	// that was simply never configured.
+	exclusions := []models.AgentMCPConfigEnvExclusion{{ConfigUUID: configUUID, EnvironmentUUID: unsetEnv}}
 
-	got := mcpEnvsNeedingActivation(mappings, varsAfterUnset, mcpProxyServing(proxyUUID, devEnv, unsetEnv))
+	got := mcpEnvsNeedingActivation(mappings, exclusions, mcpProxyServing(proxyUUID, devEnv, unsetEnv))
 
 	require.Empty(t, got, "an environment removed from the connection must stay removed")
 }
 
-// A connection with no scope recorded anywhere has nothing to bind, however many
-// environments the proxy serves. Guards the empty-vars edge of the scope check.
-func TestMCPEnvsNeedingActivation_NoScopeMeansNoCandidates(t *testing.T) {
+// A connection with nothing bound and nothing excluded is in scope everywhere its proxy is
+// served; the pipeline filter applied by the caller is what bounds it from there.
+func TestMCPEnvsNeedingActivation_EmptyScopeRecordsMeanEveryServedEnvironment(t *testing.T) {
 	proxyUUID := uuid.New()
 	devEnv, prodEnv := uuid.New(), uuid.New()
 
 	got := mcpEnvsNeedingActivation(nil, nil, mcpProxyServing(proxyUUID, devEnv, prodEnv))
 
-	require.Empty(t, got)
+	require.ElementsMatch(t, []uuid.UUID{devEnv, prodEnv}, got)
 }
 
 // configMCPProxyUUID must resolve the same proxy mcpConfigTargetsProxy would accept. With a
@@ -563,4 +561,35 @@ func TestConfigMCPProxyUUID_FallsBackToReferenceThenNothing(t *testing.T) {
 	got, ok = configMCPProxyUUID(&models.AgentConfiguration{UUID: configUUID})
 	require.False(t, ok)
 	require.Equal(t, uuid.Nil, got)
+}
+
+// The update path's exclusion rule, which is what makes `amctl agent mcp unset --env`
+// durable: the CLI sends the existing environment set minus one, and exactly that one must
+// be recorded as excluded — not the environments the request still names, and not one the
+// connection was never in.
+func TestMCPScopeExclusions_ExcludesOnlyEnvironmentsTheRequestDrops(t *testing.T) {
+	configUUID := uuid.New()
+	devEnv, stageEnv, prodEnv, neverEnv := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+
+	mappings := []models.EnvAgentMCPMapping{{ConfigUUID: configUUID, EnvironmentUUID: devEnv}}
+	// stage was configured (rows) but not bound; prod was configured and gets unset.
+	vars := mcpVarRows(configUUID, devEnv, stageEnv, prodEnv)
+	requested := map[uuid.UUID]struct{}{devEnv: {}, stageEnv: {}}
+
+	got := mcpScopeExclusions(mappings, vars, requested)
+
+	require.Equal(t, []uuid.UUID{prodEnv}, got)
+	require.NotContains(t, got, neverEnv, "an environment the connection was never in is not an exclusion")
+}
+
+// Adding environments must exclude nothing: a request that is a superset of the existing
+// scope is the console re-mapping a connection onto a grown pipeline.
+func TestMCPScopeExclusions_GrowingTheScopeExcludesNothing(t *testing.T) {
+	configUUID := uuid.New()
+	devEnv, stageEnv := uuid.New(), uuid.New()
+
+	got := mcpScopeExclusions(nil, mcpVarRows(configUUID, devEnv),
+		map[uuid.UUID]struct{}{devEnv: {}, stageEnv: {}})
+
+	require.Empty(t, got)
 }
