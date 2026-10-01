@@ -2626,3 +2626,86 @@ func TestPromoteAgent_VeryLongConfigName_IsShortenedNotPastedWhole(t *testing.T)
 		})
 	}
 }
+
+// stubSystemConfigs makes both environments carry system-managed keys, so the any-keys guard
+// passes, and gives each environment its own configuration set.
+func stubSystemConfigs(t *testing.T, s *agentManagerService, byEnv map[string][]SystemManagedConfigRef) {
+	t.Helper()
+	stub := promoteConfigStub(t, s)
+	stub.SystemKeysFunc = func(_ context.Context, _, _, _, envName string) (map[string]bool, error) {
+		if len(byEnv[envName]) == 0 {
+			return map[string]bool{}, nil
+		}
+		return map[string]bool{"SOME_SYSTEM_KEY": true}, nil
+	}
+	stub.SystemConfigsFunc = func(_ context.Context, _, _, _, envName string) ([]SystemManagedConfigRef, error) {
+		return byEnv[envName], nil
+	}
+}
+
+// MCP connections are bound across the pipeline while LLM providers are configured in the
+// entry environment only. An agent with both must not pass promotion on its target MCP rows
+// alone: it would deploy with no LLM provider and fail on its first model call.
+func TestPromoteAgent_BlocksWhenTargetHasMCPButNoLLMConfig(t *testing.T) {
+	s, promoteCalled := promoteAgentTestFixture(t, []client.EnvVar{{Key: "AMP_AGENTID_CLIENT_ID", Value: "staging-client-id"}}, nil)
+	stubSystemConfigs(t, s, map[string][]SystemManagedConfigRef{
+		"dev": {
+			{Name: "openai", TypeID: models.AgentConfigTypeIDLLM},
+			{Name: "booking", TypeID: models.AgentConfigTypeIDMCP},
+		},
+		"staging": {
+			{Name: "booking", TypeID: models.AgentConfigTypeIDMCP},
+		},
+	})
+
+	err := s.PromoteAgent(tierGrantedCtx(t), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	ve := requireBriefPromotionBlock(t, err)
+	assert.Contains(t, ve.Message, "openai", "the message must name the missing LLM configuration")
+	assert.NotContains(t, ve.Message, "booking", "the MCP connection is present in the target and must not be blamed")
+	assert.False(t, *promoteCalled, "promotion must be refused before PromoteComponent")
+}
+
+// The same agent promotes once the target has its LLM configuration too.
+func TestPromoteAgent_AllowsWhenTargetHasBothLLMAndMCPConfig(t *testing.T) {
+	s, promoteCalled := promoteAgentTestFixture(t, []client.EnvVar{{Key: "AMP_AGENTID_CLIENT_ID", Value: "staging-client-id"}}, nil)
+	both := []SystemManagedConfigRef{
+		{Name: "openai", TypeID: models.AgentConfigTypeIDLLM},
+		{Name: "booking", TypeID: models.AgentConfigTypeIDMCP},
+	}
+	stubSystemConfigs(t, s, map[string][]SystemManagedConfigRef{"dev": both, "staging": both})
+
+	err := s.PromoteAgent(tierGrantedCtx(t), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.NoError(t, err)
+	assert.True(t, *promoteCalled)
+}
+
+// An MCP connection absent from the target is not an LLM gap: `amctl agent mcp unset --env`
+// removes it on purpose, so this guard must not block on it.
+func TestPromoteAgent_DoesNotBlockOnMissingMCPConfigAlone(t *testing.T) {
+	s, promoteCalled := promoteAgentTestFixture(t, []client.EnvVar{{Key: "AMP_AGENTID_CLIENT_ID", Value: "staging-client-id"}}, nil)
+	stubSystemConfigs(t, s, map[string][]SystemManagedConfigRef{
+		"dev": {
+			{Name: "openai", TypeID: models.AgentConfigTypeIDLLM},
+			{Name: "booking", TypeID: models.AgentConfigTypeIDMCP},
+		},
+		"staging": {
+			{Name: "openai", TypeID: models.AgentConfigTypeIDLLM},
+		},
+	})
+
+	err := s.PromoteAgent(tierGrantedCtx(t), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.NoError(t, err)
+	assert.True(t, *promoteCalled)
+}

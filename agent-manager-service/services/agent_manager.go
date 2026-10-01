@@ -4343,6 +4343,16 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 		return utils.NewInvalidInputError(message, reason)
 	}
 
+	// The check above only asks whether the target has ANY system-managed keys, and keys
+	// from every configuration type count. MCP connections are bound across the whole
+	// pipeline at creation while LLM providers are configured in the entry environment only,
+	// so an agent with both would pass on its MCP rows alone and deploy with no LLM provider.
+	if len(srcSystemKeys) > 0 {
+		if err := s.assertLLMConfigsPresentInTarget(ctx, agentName, ouID, projectName, req.SourceEnvironment, req.TargetEnvironment); err != nil {
+			return err
+		}
+	}
+
 	// The key-presence check above cannot see a connection that is present but dead: an MCP
 	// connection configured for the target environment still has its env var rows there, so
 	// tgtSystemKeys is non-empty, yet its URL and API key resolve to empty strings when the
@@ -4757,6 +4767,65 @@ func (s *agentManagerService) assertMCPBindingsSurvivePromotion(
 		"sourceEnvironment", sourceEnv, "connections", brokenList)
 	message, reason := mcpPromotionBlockText(brokenByPromotion, targetEnv)
 	return utils.NewInvalidInputError(message, reason)
+}
+
+// assertLLMConfigsPresentInTarget refuses a promotion that would carry an LLM provider
+// configured in sourceEnv into a targetEnv that has no configuration for it.
+//
+// LLM only, deliberately. An MCP connection absent from the target can be intentional —
+// `amctl agent mcp unset --env` removes it on purpose — and an MCP connection present but
+// dead is caught separately by assertMCPBindingsSurvivePromotion. An LLM provider has no
+// such opt-out: the agent calls it unconditionally, so a missing target configuration means
+// the promoted agent starts and then fails on its first model call.
+func (s *agentManagerService) assertLLMConfigsPresentInTarget(
+	ctx context.Context, agentName, ouID, projectName, sourceEnv, targetEnv string,
+) error {
+	srcConfigs, err := s.agentConfigurationService.ListSystemManagedConfigs(ctx, agentName, ouID, projectName, sourceEnv)
+	if err != nil {
+		return fmt.Errorf("failed to list source env configurations for promotion: %w", err)
+	}
+	var srcLLM []string
+	for _, c := range srcConfigs {
+		if c.TypeID == models.AgentConfigTypeIDLLM {
+			srcLLM = append(srcLLM, c.Name)
+		}
+	}
+	if len(srcLLM) == 0 {
+		return nil
+	}
+
+	tgtConfigs, err := s.agentConfigurationService.ListSystemManagedConfigs(ctx, agentName, ouID, projectName, targetEnv)
+	if err != nil {
+		return fmt.Errorf("failed to list target env configurations for promotion: %w", err)
+	}
+	inTarget := make(map[string]struct{}, len(tgtConfigs))
+	for _, c := range tgtConfigs {
+		if c.TypeID == models.AgentConfigTypeIDLLM {
+			inTarget[c.Name] = struct{}{}
+		}
+	}
+	var missing []string
+	for _, name := range srcLLM {
+		if _, ok := inTarget[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	list := strings.Join(missing, ", ")
+
+	s.logPromotionBlocked(ouID, projectName, agentName, targetEnv,
+		"LLM configurations present in the source environment have no configuration in the target — promoting "+
+			"would deploy the agent without its LLM provider variables",
+		"sourceEnvironment", sourceEnv, "configurations", list)
+	// Kept brief: the console renders message and reason inline together; the full
+	// explanation goes to the log above.
+	return utils.NewInvalidInputError(
+		fmt.Sprintf("Promotion blocked: LLM configuration %s has no provider in %q", list, targetEnv),
+		fmt.Sprintf("configure it in %q, then promote", targetEnv),
+	)
 }
 
 // missingTargetConfigText renders the caller-facing halves of a promotion blocked
