@@ -141,3 +141,31 @@ func TestWithEvents_AgentEventsAreEnvironmentSpecific(t *testing.T) {
 	assert.Equal(t, events.ScopeAgent, pub.got[0].Scope)
 	assert.Empty(t, pub.got[0].Environment)
 }
+
+func TestWithEvents_CreateEventsNameTheCreatedResource(t *testing.T) {
+	pub := serveEvent(t, "POST /orgs/{orgName}/projects/{projName}/agents",
+		map[string]string{"orgName": "acme", "projName": "p1"},
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"name":"a1","projectName":"p1"}`))
+		})
+	require.Len(t, pub.got, 1)
+	e := pub.got[0]
+	assert.Equal(t, events.ScopeProject, e.Scope, "agent.created stays a project event")
+	assert.Equal(t, "a1", e.Subject, "the subject is the created agent, not the project")
+	assert.Equal(t, "p1", e.Project)
+	assert.Equal(t, "a1", e.Agent)
+	assert.Equal(t, "/agent-manager/orgs/ou-1/projects/p1/agents/a1", e.Source)
+
+	pub = serveEvent(t, "POST /orgs/{orgName}/projects", map[string]string{"orgName": "acme"},
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte(`{"name":"p2"}`))
+		})
+	require.Len(t, pub.got, 1)
+	e = pub.got[0]
+	assert.Equal(t, "p2", e.Subject)
+	assert.Equal(t, "p2", e.Project)
+	assert.Empty(t, e.Agent)
+	assert.Equal(t, "/agent-manager/orgs/ou-1/projects/p2", e.Source)
+}

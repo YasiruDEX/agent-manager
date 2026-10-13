@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -100,6 +101,7 @@ func WithEvents(publisher events.Publisher, meta audit.RouteMeta) func(http.Hand
 			if data != nil {
 				e.Data = data
 			}
+			nameCreated(&e, meta, data)
 
 			e.Environment = notes.Environment()
 			for _, p := range envPathParams {
@@ -121,6 +123,33 @@ func WithEvents(publisher events.Publisher, meta audit.RouteMeta) func(http.Hand
 			publisher.Publish(r.Context(), e)
 		}
 	}
+}
+
+// nameCreated points a create event at the resource it created. A create
+// route ends in its collection (POST .../agents), so the created name is only
+// in the response, and the last path parameter names the parent instead. A
+// created project or agent is also set on the event, which moves its source
+// down to that resource.
+func nameCreated(e *events.Event, meta audit.RouteMeta, data map[string]any) {
+	segments := strings.Split(meta.Path, "/")
+	collection := segments[len(segments)-1]
+	if meta.Method != http.MethodPost || strings.HasPrefix(collection, "{") {
+		return
+	}
+	name, _ := data["name"].(string)
+	if name == "" {
+		return
+	}
+	e.Subject = name
+	switch collection {
+	case "projects":
+		e.Project = name
+	case "agents":
+		e.Agent = name
+	default:
+		return
+	}
+	e.Source = events.SourceOf(e.OrgID, e.Project, e.Agent)
 }
 
 // bodyRecorder keeps a bounded copy of the response body.
