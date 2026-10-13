@@ -105,6 +105,8 @@ type APIClient struct {
 	MCPProxyScopesAPI *MCPProxyScopesAPIService
 
 	TelemetryAPI *TelemetryAPIService
+
+	WebhooksAPI *WebhooksAPIService
 }
 
 type service struct {
@@ -152,6 +154,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.MCPProxiesAPI = (*MCPProxiesAPIService)(&c.common)
 	c.MCPProxyScopesAPI = (*MCPProxyScopesAPIService)(&c.common)
 	c.TelemetryAPI = (*TelemetryAPIService)(&c.common)
+	c.WebhooksAPI = (*WebhooksAPIService)(&c.common)
 
 	return c
 }
