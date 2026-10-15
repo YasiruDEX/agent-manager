@@ -36,4 +36,7 @@ export const settingsMetadata = {
 };
 
 export { SettingsOrganization };
+export { OrgAlerting } from "./OrgAlerting";
+export { ProjectAlerting } from "./ProjectAlerting";
+export { AgentAlerting } from "./AgentAlerting";
 export default SettingsOrganization;

@@ -185,6 +185,11 @@ export const generatedRouteMap =  {
             }
           }
         },
+        "alerting": {
+          "path": "/org/:orgId/alerting",
+          "wildPath": "/org/:orgId/alerting/*",
+          "children": {}
+        },
         "deploymentPipelines": {
           "path": "/org/:orgId/deployment-pipelines",
           "wildPath": "/org/:orgId/deployment-pipelines/*",
@@ -227,6 +232,11 @@ export const generatedRouteMap =  {
           "path": "/org/:orgId/project/:projectId",
           "wildPath": "/org/:orgId/project/:projectId/*",
           "children": {
+            "alerting": {
+              "path": "/org/:orgId/project/:projectId/alerting",
+              "wildPath": "/org/:orgId/project/:projectId/alerting/*",
+              "children": {}
+            },
             "newAgent": {
               "path": "/org/:orgId/project/:projectId/newAgent",
               "wildPath": "/org/:orgId/project/:projectId/newAgent/*",
@@ -428,6 +438,11 @@ export const generatedRouteMap =  {
                         "metrics": {
                           "path": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/metrics",
                           "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/metrics/*",
+                          "children": {}
+                        },
+                        "alerting": {
+                          "path": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/alerting",
+                          "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/alerting/*",
                           "children": {}
                         }
                       }

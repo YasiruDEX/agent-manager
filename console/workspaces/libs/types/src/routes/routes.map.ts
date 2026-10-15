@@ -204,6 +204,11 @@ export const rootRouteMap: AppRoute = {
                         },
                     },
                 },
+                alerting: {
+                    path: 'alerting',
+                    index: true,
+                    children: {},
+                },
                 deploymentPipelines: {
                     path: 'deployment-pipelines',
                     index: true,
@@ -246,6 +251,11 @@ export const rootRouteMap: AppRoute = {
                     path: 'project/:projectId',
                     index: true,
                     children: {
+                        alerting: {
+                            path: 'alerting',
+                            index: true,
+                            children: {},
+                        },
                         newAgent: {
                             path: 'newAgent',
                             index: true,
@@ -446,6 +456,11 @@ export const rootRouteMap: AppRoute = {
                                                 },
                                                 metrics: {
                                                     path: 'metrics',
+                                                    index: true,
+                                                    children: {},
+                                                },
+                                                alerting: {
+                                                    path: 'alerting',
                                                     index: true,
                                                     children: {},
                                                 },

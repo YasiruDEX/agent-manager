@@ -42,6 +42,7 @@ import {
   Gauge,
   Layers,
   MonitorCheck,
+  BellRing,
 } from "@wso2/oxygen-ui-icons-react";
 import {
   generatePath,
@@ -53,6 +54,7 @@ import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   useGetAgent,
   useTokenScopes,
+  useAlertingEnabled,
 } from "@agent-management-platform/api-client";
 import { usePipelineEnvironmentsState } from "@agent-management-platform/shared-component";
 import { thunderInstancesMetadata } from "@agent-management-platform/env-thunders/metadata";
@@ -110,6 +112,8 @@ export function useNavigationItems(): Array<
 
   const externalNavItems = useExternalNavItems();
   const { enforced, resolved: scopesResolved, scopes } = useTokenScopes();
+  // Alerting needs the service's event bus; /api/v1/config says whether it runs.
+  const alertingEnabled = useAlertingEnabled();
 
   const navVisibility = useMemo(() => {
     const showAll = {
@@ -120,6 +124,7 @@ export function useNavigationItems(): Array<
       identityRoles: true,
       identityGroups: true,
       agentIdentities: true,
+      alerting: true,
     };
     if (!enforced) return showAll;
     // An unresolved token is handled below by rendering no navigation at all,
@@ -155,6 +160,8 @@ export function useNavigationItems(): Array<
       // the org scopes and gate the Settings tabs; these pages read the
       // agent-identity API and belong to its scope.
       agentIdentities: s.has("amp:agent-identity:read"),
+      // Org-level alerting is gated by the alerting scopes.
+      alerting: s.has("amp:alerting:read") || s.has("amp:alerting:manage"),
     };
   }, [enforced, scopes]);
 
@@ -204,6 +211,7 @@ export function useNavigationItems(): Array<
     >
   ).environments;
   const evaluatorsOrgRoute = absoluteRouteMap.children.org.children.evaluators;
+  const alertingOrgRoute = absoluteRouteMap.children.org.children.alerting;
 
   // An unread scope set is not an empty one. Rendering the navigation before the
   // access token has been decoded would show the sections a caller with no
@@ -509,6 +517,27 @@ export function useNavigationItems(): Array<
               { orgId, projectId, agentId, envId: defaultEnv },
             ),
           },
+          ...(alertingEnabled
+            ? [
+                {
+                  label: "Alerting",
+                  type: "item" as const,
+                icon: <BellRing size={20} />,
+                isActive: !!matchPath(
+                  absoluteRouteMap.children.org.children.projects.children.agents
+                    .children.environment.children.observability.children.alerting
+                    .wildPath,
+                  pathname,
+                ),
+                href: generatePath(
+                  absoluteRouteMap.children.org.children.projects.children.agents
+                    .children.environment.children.observability.children.alerting
+                    .path,
+                  { orgId, projectId, agentId, envId: defaultEnv },
+                ),
+                },
+              ]
+            : []),
         ],
       },
       {
@@ -740,6 +769,27 @@ export function useNavigationItems(): Array<
               { orgId, projectId, agentId, envId: defaultEnv },
             ),
           },
+          ...(alertingEnabled
+            ? [
+                {
+                  label: "Alerting",
+                  type: "item" as const,
+                icon: <BellRing size={20} />,
+                isActive: !!matchPath(
+                  absoluteRouteMap.children.org.children.projects.children.agents
+                    .children.environment.children.observability.children.alerting
+                    .wildPath,
+                  pathname,
+                ),
+                href: generatePath(
+                  absoluteRouteMap.children.org.children.projects.children.agents
+                    .children.environment.children.observability.children.alerting
+                    .path,
+                  { orgId, projectId, agentId, envId: defaultEnv },
+                ),
+                },
+              ]
+            : []),
         ],
       },
       {
@@ -798,6 +848,33 @@ export function useNavigationItems(): Array<
             pathname,
           ),
       },
+      ...(alertingEnabled
+        ? [
+            {
+              title: "Observability",
+              type: "section" as const,
+              icon: <Activity />,
+              collapsible: true,
+              items: [
+                {
+                  label: "Alerting",
+                  type: "item" as const,
+                  icon: <BellRing size={20} />,
+                  href: generatePath(
+                    absoluteRouteMap.children.org.children.projects.children
+                      .alerting.path,
+                    { orgId, projectId },
+                  ),
+                  isActive: !!matchPath(
+                    absoluteRouteMap.children.org.children.projects.children
+                      .alerting.wildPath,
+                    pathname,
+                  ),
+                },
+              ],
+            },
+          ]
+        : []),
     ];
   }
   if (orgId) {
@@ -860,6 +937,25 @@ export function useNavigationItems(): Array<
                   icon: <MCPLogo size={20} />,
                   href: generatePath(mcpProxiesOrgRoute.path, { orgId }),
                   isActive: !!matchPath(mcpProxiesOrgRoute.wildPath, pathname),
+                },
+              ],
+            },
+          ]
+        : []),
+      ...(alertingEnabled && navVisibility.alerting
+        ? [
+            {
+              title: "Observability",
+              type: "section" as const,
+              icon: <Activity />,
+              collapsible: true,
+              items: [
+                {
+                  label: "Alerting",
+                  type: "item" as const,
+                  icon: <BellRing size={20} />,
+                  href: generatePath(alertingOrgRoute.path, { orgId }),
+                  isActive: !!matchPath(alertingOrgRoute.wildPath, pathname),
                 },
               ],
             },

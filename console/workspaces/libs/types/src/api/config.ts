@@ -26,4 +26,10 @@ export interface ConfigResponse {
    * that one switch governs the whole path. Absent is treated as false.
    */
   consoleAnalyticsEnabled?: boolean;
+  /**
+   * Whether this deployment delivers events to alert channels, that is,
+   * whether the service runs an event bus. The console hides alerting when
+   * false. Absent is treated as false.
+   */
+  alertingEnabled?: boolean;
 }
