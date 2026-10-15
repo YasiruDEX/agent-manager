@@ -11945,6 +11945,171 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/alerting/channels/{channelId}/deliveries:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List recent deliveries of an organization alert channel
+      description: Most recent first. Delivery history is kept for ALERTING_DELIVERY_RETENTION_DAYS.
+      operationId: listOrgAlertChannelDeliveries
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of deliveries (default 50, at most 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDeliveryListResponse"
+        "400":
+          description: Invalid limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/deliveries:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List recent deliveries of a project alert channel
+      description: Most recent first. Delivery history is kept for ALERTING_DELIVERY_RETENTION_DAYS.
+      operationId: listProjectAlertChannelDeliveries
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of deliveries (default 50, at most 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDeliveryListResponse"
+        "400":
+          description: Invalid limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/deliveries:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List recent deliveries of an agent alert channel
+      description: Most recent first. Delivery history is kept for ALERTING_DELIVERY_RETENTION_DAYS.
+      operationId: listAgentAlertChannelDeliveries
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of deliveries (default 50, at most 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDeliveryListResponse"
+        "400":
+          description: Invalid limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     AgentIdentityOrgName:
@@ -12206,6 +12371,12 @@ components:
             console buffers and sends nothing when false, so CONSOLE_ANALYTICS_ENABLED
             on the service is the single switch for the whole path rather than
             one half of it. Absent is treated as false.
+        alertingEnabled:
+          type: boolean
+          description: |
+            Whether this deployment delivers platform events to alert channels,
+            that is, whether it runs an event bus (EVENTS_MODE is not off). The
+            console hides alerting when false. Absent is treated as false.
 
     CreateLLMAPIKeyRequest:
       type: object
@@ -19879,3 +20050,41 @@ components:
           type: integer
         error:
           type: string
+
+    AlertDeliveryResponse:
+      type: object
+      required: [id, eventId, eventType, status, attempts, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        eventType:
+          type: string
+        status:
+          type: string
+          enum: [pending, delivered, failed]
+        attempts:
+          type: integer
+        responseCode:
+          type: integer
+        lastError:
+          type: string
+        deliveredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AlertDeliveryListResponse:
+      type: object
+      required: [deliveries]
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertDeliveryResponse"

@@ -6,6 +6,7 @@ package repomocks
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -27,11 +28,32 @@ import (
 //			DeleteChannelsUnderFunc: func(ctx context.Context, ouID string, projectName string, agentName string) error {
 //				panic("mock out the DeleteChannelsUnder method")
 //			},
+//			DeliveryStatusFunc: func(ctx context.Context, channelID uuid.UUID, eventID string) (string, error) {
+//				panic("mock out the DeliveryStatus method")
+//			},
 //			GetChannelFunc: func(ctx context.Context, target repositories.AlertTarget, id uuid.UUID) (*models.AlertChannel, error) {
 //				panic("mock out the GetChannel method")
 //			},
+//			GetChannelByIDFunc: func(ctx context.Context, id uuid.UUID) (*models.AlertChannel, error) {
+//				panic("mock out the GetChannelByID method")
+//			},
 //			ListChannelsFunc: func(ctx context.Context, target repositories.AlertTarget) ([]models.AlertChannel, error) {
 //				panic("mock out the ListChannels method")
+//			},
+//			ListDeliveriesFunc: func(ctx context.Context, channelID uuid.UUID, limit int) ([]models.AlertDelivery, error) {
+//				panic("mock out the ListDeliveries method")
+//			},
+//			MatchingChannelsFunc: func(ctx context.Context, ouID string, scope string, projectName string, agentName string, environment string) ([]models.AlertChannel, error) {
+//				panic("mock out the MatchingChannels method")
+//			},
+//			PruneDeliveriesFunc: func(ctx context.Context, cutoff time.Time) (int64, error) {
+//				panic("mock out the PruneDeliveries method")
+//			},
+//			RecordDeliveryFunc: func(ctx context.Context, delivery *models.AlertDelivery) error {
+//				panic("mock out the RecordDelivery method")
+//			},
+//			RecordQueuedDeliveryFunc: func(ctx context.Context, delivery *models.AlertDelivery) error {
+//				panic("mock out the RecordQueuedDelivery method")
 //			},
 //			UpdateChannelFunc: func(ctx context.Context, channel *models.AlertChannel) error {
 //				panic("mock out the UpdateChannel method")
@@ -52,11 +74,32 @@ type AlertChannelRepositoryMock struct {
 	// DeleteChannelsUnderFunc mocks the DeleteChannelsUnder method.
 	DeleteChannelsUnderFunc func(ctx context.Context, ouID string, projectName string, agentName string) error
 
+	// DeliveryStatusFunc mocks the DeliveryStatus method.
+	DeliveryStatusFunc func(ctx context.Context, channelID uuid.UUID, eventID string) (string, error)
+
 	// GetChannelFunc mocks the GetChannel method.
 	GetChannelFunc func(ctx context.Context, target repositories.AlertTarget, id uuid.UUID) (*models.AlertChannel, error)
 
+	// GetChannelByIDFunc mocks the GetChannelByID method.
+	GetChannelByIDFunc func(ctx context.Context, id uuid.UUID) (*models.AlertChannel, error)
+
 	// ListChannelsFunc mocks the ListChannels method.
 	ListChannelsFunc func(ctx context.Context, target repositories.AlertTarget) ([]models.AlertChannel, error)
+
+	// ListDeliveriesFunc mocks the ListDeliveries method.
+	ListDeliveriesFunc func(ctx context.Context, channelID uuid.UUID, limit int) ([]models.AlertDelivery, error)
+
+	// MatchingChannelsFunc mocks the MatchingChannels method.
+	MatchingChannelsFunc func(ctx context.Context, ouID string, scope string, projectName string, agentName string, environment string) ([]models.AlertChannel, error)
+
+	// PruneDeliveriesFunc mocks the PruneDeliveries method.
+	PruneDeliveriesFunc func(ctx context.Context, cutoff time.Time) (int64, error)
+
+	// RecordDeliveryFunc mocks the RecordDelivery method.
+	RecordDeliveryFunc func(ctx context.Context, delivery *models.AlertDelivery) error
+
+	// RecordQueuedDeliveryFunc mocks the RecordQueuedDelivery method.
+	RecordQueuedDeliveryFunc func(ctx context.Context, delivery *models.AlertDelivery) error
 
 	// UpdateChannelFunc mocks the UpdateChannel method.
 	UpdateChannelFunc func(ctx context.Context, channel *models.AlertChannel) error
@@ -90,12 +133,28 @@ type AlertChannelRepositoryMock struct {
 			// AgentName is the agentName argument value.
 			AgentName string
 		}
+		// DeliveryStatus holds details about calls to the DeliveryStatus method.
+		DeliveryStatus []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ChannelID is the channelID argument value.
+			ChannelID uuid.UUID
+			// EventID is the eventID argument value.
+			EventID string
+		}
 		// GetChannel holds details about calls to the GetChannel method.
 		GetChannel []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Target is the target argument value.
 			Target repositories.AlertTarget
+			// ID is the id argument value.
+			ID uuid.UUID
+		}
+		// GetChannelByID holds details about calls to the GetChannelByID method.
+		GetChannelByID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ID is the id argument value.
 			ID uuid.UUID
 		}
@@ -106,6 +165,51 @@ type AlertChannelRepositoryMock struct {
 			// Target is the target argument value.
 			Target repositories.AlertTarget
 		}
+		// ListDeliveries holds details about calls to the ListDeliveries method.
+		ListDeliveries []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ChannelID is the channelID argument value.
+			ChannelID uuid.UUID
+			// Limit is the limit argument value.
+			Limit int
+		}
+		// MatchingChannels holds details about calls to the MatchingChannels method.
+		MatchingChannels []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// OuID is the ouID argument value.
+			OuID string
+			// Scope is the scope argument value.
+			Scope string
+			// ProjectName is the projectName argument value.
+			ProjectName string
+			// AgentName is the agentName argument value.
+			AgentName string
+			// Environment is the environment argument value.
+			Environment string
+		}
+		// PruneDeliveries holds details about calls to the PruneDeliveries method.
+		PruneDeliveries []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Cutoff is the cutoff argument value.
+			Cutoff time.Time
+		}
+		// RecordDelivery holds details about calls to the RecordDelivery method.
+		RecordDelivery []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Delivery is the delivery argument value.
+			Delivery *models.AlertDelivery
+		}
+		// RecordQueuedDelivery holds details about calls to the RecordQueuedDelivery method.
+		RecordQueuedDelivery []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Delivery is the delivery argument value.
+			Delivery *models.AlertDelivery
+		}
 		// UpdateChannel holds details about calls to the UpdateChannel method.
 		UpdateChannel []struct {
 			// Ctx is the ctx argument value.
@@ -114,12 +218,19 @@ type AlertChannelRepositoryMock struct {
 			Channel *models.AlertChannel
 		}
 	}
-	lockCreateChannel       sync.RWMutex
-	lockDeleteChannel       sync.RWMutex
-	lockDeleteChannelsUnder sync.RWMutex
-	lockGetChannel          sync.RWMutex
-	lockListChannels        sync.RWMutex
-	lockUpdateChannel       sync.RWMutex
+	lockCreateChannel        sync.RWMutex
+	lockDeleteChannel        sync.RWMutex
+	lockDeleteChannelsUnder  sync.RWMutex
+	lockDeliveryStatus       sync.RWMutex
+	lockGetChannel           sync.RWMutex
+	lockGetChannelByID       sync.RWMutex
+	lockListChannels         sync.RWMutex
+	lockListDeliveries       sync.RWMutex
+	lockMatchingChannels     sync.RWMutex
+	lockPruneDeliveries      sync.RWMutex
+	lockRecordDelivery       sync.RWMutex
+	lockRecordQueuedDelivery sync.RWMutex
+	lockUpdateChannel        sync.RWMutex
 }
 
 // CreateChannel calls CreateChannelFunc.
@@ -242,6 +353,46 @@ func (mock *AlertChannelRepositoryMock) DeleteChannelsUnderCalls() []struct {
 	return calls
 }
 
+// DeliveryStatus calls DeliveryStatusFunc.
+func (mock *AlertChannelRepositoryMock) DeliveryStatus(ctx context.Context, channelID uuid.UUID, eventID string) (string, error) {
+	if mock.DeliveryStatusFunc == nil {
+		panic("AlertChannelRepositoryMock.DeliveryStatusFunc: method is nil but AlertChannelRepository.DeliveryStatus was just called")
+	}
+	callInfo := struct {
+		Ctx       context.Context
+		ChannelID uuid.UUID
+		EventID   string
+	}{
+		Ctx:       ctx,
+		ChannelID: channelID,
+		EventID:   eventID,
+	}
+	mock.lockDeliveryStatus.Lock()
+	mock.calls.DeliveryStatus = append(mock.calls.DeliveryStatus, callInfo)
+	mock.lockDeliveryStatus.Unlock()
+	return mock.DeliveryStatusFunc(ctx, channelID, eventID)
+}
+
+// DeliveryStatusCalls gets all the calls that were made to DeliveryStatus.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.DeliveryStatusCalls())
+func (mock *AlertChannelRepositoryMock) DeliveryStatusCalls() []struct {
+	Ctx       context.Context
+	ChannelID uuid.UUID
+	EventID   string
+} {
+	var calls []struct {
+		Ctx       context.Context
+		ChannelID uuid.UUID
+		EventID   string
+	}
+	mock.lockDeliveryStatus.RLock()
+	calls = mock.calls.DeliveryStatus
+	mock.lockDeliveryStatus.RUnlock()
+	return calls
+}
+
 // GetChannel calls GetChannelFunc.
 func (mock *AlertChannelRepositoryMock) GetChannel(ctx context.Context, target repositories.AlertTarget, id uuid.UUID) (*models.AlertChannel, error) {
 	if mock.GetChannelFunc == nil {
@@ -282,6 +433,42 @@ func (mock *AlertChannelRepositoryMock) GetChannelCalls() []struct {
 	return calls
 }
 
+// GetChannelByID calls GetChannelByIDFunc.
+func (mock *AlertChannelRepositoryMock) GetChannelByID(ctx context.Context, id uuid.UUID) (*models.AlertChannel, error) {
+	if mock.GetChannelByIDFunc == nil {
+		panic("AlertChannelRepositoryMock.GetChannelByIDFunc: method is nil but AlertChannelRepository.GetChannelByID was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		ID  uuid.UUID
+	}{
+		Ctx: ctx,
+		ID:  id,
+	}
+	mock.lockGetChannelByID.Lock()
+	mock.calls.GetChannelByID = append(mock.calls.GetChannelByID, callInfo)
+	mock.lockGetChannelByID.Unlock()
+	return mock.GetChannelByIDFunc(ctx, id)
+}
+
+// GetChannelByIDCalls gets all the calls that were made to GetChannelByID.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.GetChannelByIDCalls())
+func (mock *AlertChannelRepositoryMock) GetChannelByIDCalls() []struct {
+	Ctx context.Context
+	ID  uuid.UUID
+} {
+	var calls []struct {
+		Ctx context.Context
+		ID  uuid.UUID
+	}
+	mock.lockGetChannelByID.RLock()
+	calls = mock.calls.GetChannelByID
+	mock.lockGetChannelByID.RUnlock()
+	return calls
+}
+
 // ListChannels calls ListChannelsFunc.
 func (mock *AlertChannelRepositoryMock) ListChannels(ctx context.Context, target repositories.AlertTarget) ([]models.AlertChannel, error) {
 	if mock.ListChannelsFunc == nil {
@@ -315,6 +502,206 @@ func (mock *AlertChannelRepositoryMock) ListChannelsCalls() []struct {
 	mock.lockListChannels.RLock()
 	calls = mock.calls.ListChannels
 	mock.lockListChannels.RUnlock()
+	return calls
+}
+
+// ListDeliveries calls ListDeliveriesFunc.
+func (mock *AlertChannelRepositoryMock) ListDeliveries(ctx context.Context, channelID uuid.UUID, limit int) ([]models.AlertDelivery, error) {
+	if mock.ListDeliveriesFunc == nil {
+		panic("AlertChannelRepositoryMock.ListDeliveriesFunc: method is nil but AlertChannelRepository.ListDeliveries was just called")
+	}
+	callInfo := struct {
+		Ctx       context.Context
+		ChannelID uuid.UUID
+		Limit     int
+	}{
+		Ctx:       ctx,
+		ChannelID: channelID,
+		Limit:     limit,
+	}
+	mock.lockListDeliveries.Lock()
+	mock.calls.ListDeliveries = append(mock.calls.ListDeliveries, callInfo)
+	mock.lockListDeliveries.Unlock()
+	return mock.ListDeliveriesFunc(ctx, channelID, limit)
+}
+
+// ListDeliveriesCalls gets all the calls that were made to ListDeliveries.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.ListDeliveriesCalls())
+func (mock *AlertChannelRepositoryMock) ListDeliveriesCalls() []struct {
+	Ctx       context.Context
+	ChannelID uuid.UUID
+	Limit     int
+} {
+	var calls []struct {
+		Ctx       context.Context
+		ChannelID uuid.UUID
+		Limit     int
+	}
+	mock.lockListDeliveries.RLock()
+	calls = mock.calls.ListDeliveries
+	mock.lockListDeliveries.RUnlock()
+	return calls
+}
+
+// MatchingChannels calls MatchingChannelsFunc.
+func (mock *AlertChannelRepositoryMock) MatchingChannels(ctx context.Context, ouID string, scope string, projectName string, agentName string, environment string) ([]models.AlertChannel, error) {
+	if mock.MatchingChannelsFunc == nil {
+		panic("AlertChannelRepositoryMock.MatchingChannelsFunc: method is nil but AlertChannelRepository.MatchingChannels was just called")
+	}
+	callInfo := struct {
+		Ctx         context.Context
+		OuID        string
+		Scope       string
+		ProjectName string
+		AgentName   string
+		Environment string
+	}{
+		Ctx:         ctx,
+		OuID:        ouID,
+		Scope:       scope,
+		ProjectName: projectName,
+		AgentName:   agentName,
+		Environment: environment,
+	}
+	mock.lockMatchingChannels.Lock()
+	mock.calls.MatchingChannels = append(mock.calls.MatchingChannels, callInfo)
+	mock.lockMatchingChannels.Unlock()
+	return mock.MatchingChannelsFunc(ctx, ouID, scope, projectName, agentName, environment)
+}
+
+// MatchingChannelsCalls gets all the calls that were made to MatchingChannels.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.MatchingChannelsCalls())
+func (mock *AlertChannelRepositoryMock) MatchingChannelsCalls() []struct {
+	Ctx         context.Context
+	OuID        string
+	Scope       string
+	ProjectName string
+	AgentName   string
+	Environment string
+} {
+	var calls []struct {
+		Ctx         context.Context
+		OuID        string
+		Scope       string
+		ProjectName string
+		AgentName   string
+		Environment string
+	}
+	mock.lockMatchingChannels.RLock()
+	calls = mock.calls.MatchingChannels
+	mock.lockMatchingChannels.RUnlock()
+	return calls
+}
+
+// PruneDeliveries calls PruneDeliveriesFunc.
+func (mock *AlertChannelRepositoryMock) PruneDeliveries(ctx context.Context, cutoff time.Time) (int64, error) {
+	if mock.PruneDeliveriesFunc == nil {
+		panic("AlertChannelRepositoryMock.PruneDeliveriesFunc: method is nil but AlertChannelRepository.PruneDeliveries was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Cutoff time.Time
+	}{
+		Ctx:    ctx,
+		Cutoff: cutoff,
+	}
+	mock.lockPruneDeliveries.Lock()
+	mock.calls.PruneDeliveries = append(mock.calls.PruneDeliveries, callInfo)
+	mock.lockPruneDeliveries.Unlock()
+	return mock.PruneDeliveriesFunc(ctx, cutoff)
+}
+
+// PruneDeliveriesCalls gets all the calls that were made to PruneDeliveries.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.PruneDeliveriesCalls())
+func (mock *AlertChannelRepositoryMock) PruneDeliveriesCalls() []struct {
+	Ctx    context.Context
+	Cutoff time.Time
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Cutoff time.Time
+	}
+	mock.lockPruneDeliveries.RLock()
+	calls = mock.calls.PruneDeliveries
+	mock.lockPruneDeliveries.RUnlock()
+	return calls
+}
+
+// RecordDelivery calls RecordDeliveryFunc.
+func (mock *AlertChannelRepositoryMock) RecordDelivery(ctx context.Context, delivery *models.AlertDelivery) error {
+	if mock.RecordDeliveryFunc == nil {
+		panic("AlertChannelRepositoryMock.RecordDeliveryFunc: method is nil but AlertChannelRepository.RecordDelivery was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		Delivery *models.AlertDelivery
+	}{
+		Ctx:      ctx,
+		Delivery: delivery,
+	}
+	mock.lockRecordDelivery.Lock()
+	mock.calls.RecordDelivery = append(mock.calls.RecordDelivery, callInfo)
+	mock.lockRecordDelivery.Unlock()
+	return mock.RecordDeliveryFunc(ctx, delivery)
+}
+
+// RecordDeliveryCalls gets all the calls that were made to RecordDelivery.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.RecordDeliveryCalls())
+func (mock *AlertChannelRepositoryMock) RecordDeliveryCalls() []struct {
+	Ctx      context.Context
+	Delivery *models.AlertDelivery
+} {
+	var calls []struct {
+		Ctx      context.Context
+		Delivery *models.AlertDelivery
+	}
+	mock.lockRecordDelivery.RLock()
+	calls = mock.calls.RecordDelivery
+	mock.lockRecordDelivery.RUnlock()
+	return calls
+}
+
+// RecordQueuedDelivery calls RecordQueuedDeliveryFunc.
+func (mock *AlertChannelRepositoryMock) RecordQueuedDelivery(ctx context.Context, delivery *models.AlertDelivery) error {
+	if mock.RecordQueuedDeliveryFunc == nil {
+		panic("AlertChannelRepositoryMock.RecordQueuedDeliveryFunc: method is nil but AlertChannelRepository.RecordQueuedDelivery was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		Delivery *models.AlertDelivery
+	}{
+		Ctx:      ctx,
+		Delivery: delivery,
+	}
+	mock.lockRecordQueuedDelivery.Lock()
+	mock.calls.RecordQueuedDelivery = append(mock.calls.RecordQueuedDelivery, callInfo)
+	mock.lockRecordQueuedDelivery.Unlock()
+	return mock.RecordQueuedDeliveryFunc(ctx, delivery)
+}
+
+// RecordQueuedDeliveryCalls gets all the calls that were made to RecordQueuedDelivery.
+// Check the length with:
+//
+//	len(mockedAlertChannelRepository.RecordQueuedDeliveryCalls())
+func (mock *AlertChannelRepositoryMock) RecordQueuedDeliveryCalls() []struct {
+	Ctx      context.Context
+	Delivery *models.AlertDelivery
+} {
+	var calls []struct {
+		Ctx      context.Context
+		Delivery *models.AlertDelivery
+	}
+	mock.lockRecordQueuedDelivery.RLock()
+	calls = mock.calls.RecordQueuedDelivery
+	mock.lockRecordQueuedDelivery.RUnlock()
 	return calls
 }
 

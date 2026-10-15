@@ -206,6 +206,11 @@ type AlertingConfig struct {
 	// cannot point the service at internal infrastructure; enable only for
 	// local development.
 	AllowPrivateEndpoints bool
+	// MaxAttempts is how many times a delivery is tried before it is marked
+	// failed.
+	MaxAttempts int
+	// DeliveryRetentionDays is how long the delivery log is kept.
+	DeliveryRetentionDays int
 }
 
 // AuditConfig controls the audit trail.

@@ -316,6 +316,8 @@ func loadEnvs() {
 	r.errors = append(r.errors, validateEventsConfig(config.Events)...)
 	config.Alerting = AlertingConfig{
 		AllowPrivateEndpoints: r.readOptionalBool("ALERTING_ALLOW_PRIVATE_ENDPOINTS", false),
+		MaxAttempts:           int(r.readOptionalInt64("ALERTING_MAX_ATTEMPTS", 6)),
+		DeliveryRetentionDays: int(r.readOptionalInt64("ALERTING_DELIVERY_RETENTION_DAYS", 14)),
 	}
 
 	// Resource limits for agent resource configurations (operator-controlled ceilings)

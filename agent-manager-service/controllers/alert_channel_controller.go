@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
@@ -48,13 +49,14 @@ type AlertChannelController interface {
 
 // AlertChannelScopeHandlers are the handlers for one scope.
 type AlertChannelScopeHandlers struct {
-	List         http.HandlerFunc
-	Create       http.HandlerFunc
-	Get          http.HandlerFunc
-	Update       http.HandlerFunc
-	Delete       http.HandlerFunc
-	RotateSecret http.HandlerFunc
-	Test         http.HandlerFunc
+	List           http.HandlerFunc
+	Create         http.HandlerFunc
+	Get            http.HandlerFunc
+	Update         http.HandlerFunc
+	Delete         http.HandlerFunc
+	RotateSecret   http.HandlerFunc
+	Test           http.HandlerFunc
+	ListDeliveries http.HandlerFunc
 }
 
 type alertChannelController struct {
@@ -193,6 +195,27 @@ func (c *alertChannelController) ForScope(scope string) AlertChannelScopeHandler
 			}
 			utils.WriteSuccessResponse(w, http.StatusOK, resp)
 		}),
+		ListDeliveries: withID(func(w http.ResponseWriter, r *http.Request, t repositories.AlertTarget, id uuid.UUID) {
+			limit := 0
+			if raw := r.URL.Query().Get("limit"); raw != "" {
+				parsed, err := strconv.Atoi(raw)
+				if err != nil || parsed < 1 {
+					utils.WriteErrorResponse(w, http.StatusBadRequest, "limit must be a positive integer")
+					return
+				}
+				limit = parsed
+			}
+			list, err := c.svc.ListDeliveries(r.Context(), t, id, limit)
+			if err != nil {
+				writeAlertChannelError(w, r, err, "Failed to list alert deliveries")
+				return
+			}
+			resp := spec.AlertDeliveryListResponse{Deliveries: make([]spec.AlertDeliveryResponse, 0, len(list))}
+			for i := range list {
+				resp.Deliveries = append(resp.Deliveries, toAlertDeliveryResponse(&list[i]))
+			}
+			utils.WriteSuccessResponse(w, http.StatusOK, resp)
+		}),
 	}
 }
 
@@ -267,6 +290,28 @@ func (c *alertChannelController) toResponse(ch *models.AlertChannel, secret stri
 	}
 	if secret != "" {
 		resp.Secret = &secret
+	}
+	return resp
+}
+
+func toAlertDeliveryResponse(d *models.AlertDelivery) spec.AlertDeliveryResponse {
+	resp := spec.AlertDeliveryResponse{
+		Id:          d.ID.String(),
+		EventId:     d.EventID,
+		EventType:   d.EventType,
+		Status:      d.Status,
+		Attempts:    int32(d.Attempts),
+		DeliveredAt: d.DeliveredAt,
+		CreatedAt:   d.CreatedAt,
+		UpdatedAt:   d.UpdatedAt,
+	}
+	if d.ResponseCode != nil {
+		code := int32(*d.ResponseCode)
+		resp.ResponseCode = &code
+	}
+	if d.LastError != "" {
+		msg := d.LastError
+		resp.LastError = &msg
 	}
 	return resp
 }
