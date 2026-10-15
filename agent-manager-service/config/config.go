@@ -148,6 +148,9 @@ type Config struct {
 	// Events configures the platform event bus.
 	Events EventsConfig
 
+	// Alerting configures delivering events to alert channels.
+	Alerting AlertingConfig
+
 	// GatewayManifestCache configures where the gateway-reported policy manifest
 	// cache lives. The default in-memory backend is process-local and therefore
 	// inconsistent across replicas — set Backend to "redis" in HA deployments.
@@ -194,6 +197,15 @@ type EventsConfig struct {
 	Mode string
 	// NATSURL is the NATS server for nats mode, e.g. nats://nats:4222.
 	NATSURL string
+}
+
+// AlertingConfig configures delivering events to alert channels.
+type AlertingConfig struct {
+	// AllowPrivateEndpoints lets channel URLs resolve to private, loopback or
+	// link-local addresses, and allows plain http. Off by default so an admin
+	// cannot point the service at internal infrastructure; enable only for
+	// local development.
+	AllowPrivateEndpoints bool
 }
 
 // AuditConfig controls the audit trail.

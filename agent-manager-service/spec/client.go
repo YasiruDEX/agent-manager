@@ -60,6 +60,8 @@ type APIClient struct {
 
 	AgentKindsAPI *AgentKindsAPIService
 
+	AlertingAPI *AlertingAPIService
+
 	CatalogAPI *CatalogAPIService
 
 	ConfigAPI *ConfigAPIService
@@ -129,6 +131,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.AgentIdentitiesAPI = (*AgentIdentitiesAPIService)(&c.common)
 	c.AgentIdentityAPI = (*AgentIdentityAPIService)(&c.common)
 	c.AgentKindsAPI = (*AgentKindsAPIService)(&c.common)
+	c.AlertingAPI = (*AlertingAPIService)(&c.common)
 	c.CatalogAPI = (*CatalogAPIService)(&c.common)
 	c.ConfigAPI = (*ConfigAPIService)(&c.common)
 	c.DefaultAPI = (*DefaultAPIService)(&c.common)

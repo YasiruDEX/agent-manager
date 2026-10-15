@@ -207,6 +207,24 @@ var sensitiveReadPaths = map[string]bool{
 // Keys are matched against the path with the method prefix stripped, so the
 // same path under different methods maps through methodActionOverrides first.
 var actionOverrides = map[string]Action{
+	// Alert channels are gated by the permission of the scope they belong to
+	// (alerting, project or agent), which says nothing about the operation.
+	"POST /orgs/{orgName}/alerting/channels":                                                                  "alert-channel:create",
+	"PUT /orgs/{orgName}/alerting/channels/{channelId}":                                                       "alert-channel:update",
+	"DELETE /orgs/{orgName}/alerting/channels/{channelId}":                                                    "alert-channel:delete",
+	"POST /orgs/{orgName}/alerting/channels/{channelId}/rotate-secret":                                        "alert-channel:rotate-secret",
+	"POST /orgs/{orgName}/alerting/channels/{channelId}/test":                                                 "alert-channel:test",
+	"POST /orgs/{orgName}/projects/{projName}/alerting/channels":                                              "alert-channel:create",
+	"PUT /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}":                                   "alert-channel:update",
+	"DELETE /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}":                                "alert-channel:delete",
+	"POST /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/rotate-secret":                    "alert-channel:rotate-secret",
+	"POST /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/test":                             "alert-channel:test",
+	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels":                           "alert-channel:create",
+	"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}":                "alert-channel:update",
+	"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}":             "alert-channel:delete",
+	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/rotate-secret": "alert-channel:rotate-secret",
+	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/test":          "alert-channel:test",
+
 	// Gating permission names a different resource than the effect.
 	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/publish-kind": "agent-kind:publish",
 

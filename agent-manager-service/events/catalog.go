@@ -30,6 +30,9 @@ type Type struct {
 const (
 	TypeMonitorRunSucceeded = "monitor_run.succeeded"
 	TypeMonitorRunFailed    = "monitor_run.failed"
+	// TypeAlertingTest is sent by the "test" action of an alert channel. It
+	// is not in the catalog: channels cannot subscribe to it.
+	TypeAlertingTest = "alerting.test"
 )
 
 // routeEvent maps one API route to the event it emits on success.
