@@ -47,6 +47,9 @@ import {
   LazyGatewaysOrg,
   LazyThunderInstancesOrg,
   LazySettingsOrg,
+  LazyOrgAlerting,
+  LazyProjectAlerting,
+  LazyAgentAlerting,
   LazyDeploymentPipelinesOrg,
   LazyEnvironmentsOrg,
   LazyCatalogOrg,
@@ -287,6 +290,14 @@ export function RootRouter() {
               }
               element={<LazySettingsOrg />}
             />
+            <Route
+              path={relativeRouteMap.children.org.children.alerting.path + "/*"}
+              element={
+                <Suspense fallback={<LoadingFallback />}>
+                  <LazyOrgAlerting />
+                </Suspense>
+              }
+            />
             {/* Back-compat: identities pages moved under Settings → IDP Settings */}
             <Route path="identities/*" element={<LegacyIdentitiesRedirect />} />
             <Route
@@ -386,6 +397,17 @@ export function RootRouter() {
                   }
                 />
               ))}
+              <Route
+                path={
+                  relativeRouteMap.children.org.children.projects.children
+                    .alerting.path + "/*"
+                }
+                element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <LazyProjectAlerting />
+                  </Suspense>
+                }
+              />
               <Route
                 path={
                   relativeRouteMap.children.org.children.projects.children
@@ -587,6 +609,23 @@ export function RootRouter() {
                         .children.logs.path
                     }
                     element={<LazyLogsComponent />}
+                  />
+                  <Route
+                    path={
+                      relativeRouteMap.children.org.children.projects.children
+                        .agents.children.environment.children.observability
+                        .path +
+                      "/" +
+                      relativeRouteMap.children.org.children.projects.children
+                        .agents.children.environment.children.observability
+                        .children.alerting.path +
+                      "/*"
+                    }
+                    element={
+                      <Suspense fallback={<LoadingFallback />}>
+                        <LazyAgentAlerting />
+                      </Suspense>
+                    }
                   />
                   <Route
                     path={
