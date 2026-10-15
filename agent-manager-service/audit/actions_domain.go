@@ -55,6 +55,14 @@ const (
 	ActionThunderURLSet    Action = "thunder-url:set"
 	ActionThunderURLDelete Action = "thunder-url:delete"
 
+	// An alert channel decides where event data leaves the platform and may
+	// hold a secret (a webhook's signing secret, say).
+	ActionAlertChannelCreate       Action = "alert-channel:create"
+	ActionAlertChannelUpdate       Action = "alert-channel:update"
+	ActionAlertChannelDelete       Action = "alert-channel:delete"
+	ActionAlertChannelRotateSecret Action = "alert-channel:rotate-secret"
+	ActionAlertChannelTest         Action = "alert-channel:test"
+
 	// Identity and privilege. These are the escalation path: a record that says
 	// only "a role was updated" is useless, so each names what actually changed.
 	ActionRoleGrantPermission  Action = "role:grant-permission"
@@ -149,6 +157,7 @@ const (
 	ResourceEnvironment    = "environment"
 	ResourceServiceAccount = "service-account"
 	ResourceThunderURL     = "thunder-url"
+	ResourceAlertChannel   = "alert-channel"
 )
 
 // class, severity and permitted detail keys next to the action itself keeps the
@@ -250,6 +259,25 @@ func init() {
 	registerCredential(ActionServiceAccountRemove, map[string]FieldKind{
 		"environment": KindName,
 	})
+
+	// A destination is recorded as scheme and host only, since a URL path is
+	// often a credential. Secrets never reach the record.
+	alertChannelFields := map[string]FieldKind{
+		"scope":        KindEnum,
+		"kind":         KindEnum,
+		"destination":  KindURL,
+		"eventCount":   KindCount,
+		"enabled":      KindFlag,
+		"environments": KindNameList,
+	}
+	registerCredential(ActionAlertChannelCreate, alertChannelFields)
+	registerCredential(ActionAlertChannelUpdate, alertChannelFields)
+	registerCredential(ActionAlertChannelDelete, alertChannelFields)
+	registerCredential(ActionAlertChannelRotateSecret, alertChannelFields)
+	// A test send changes nothing, but it does send a request to the
+	// configured destination, so it is recorded above info.
+	Register(ActionAlertChannelTest, ClassConfig, SeverityNotice)
+	RegisterDetailSchema(ActionAlertChannelTest, nil)
 
 	// Identity and privilege changes. Critical for the same reason credential
 	// changes are: they decide who can do what.

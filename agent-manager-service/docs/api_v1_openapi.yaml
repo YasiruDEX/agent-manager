@@ -11193,6 +11193,758 @@ paths:
         "404":
           description: Environment not found
 
+  /orgs/{orgName}/alerting/event-types:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List the event types alert channels can subscribe to
+      operationId: listAlertEventTypes
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: Only event types of this scope.
+          schema:
+            type: string
+            enum: [org, project, agent]
+      responses:
+        "200":
+          description: Event types
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertEventTypeListResponse"
+        "400":
+          description: Invalid scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/alerting/channels:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List organization alert channels
+      description: Organization-level events, such as projects, MCP servers and LLM providers being created or changed. Organization administrators only.
+      operationId: listOrgAlertChannels
+      responses:
+        "200":
+          description: Alert channels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Alerting
+      summary: Create an organization alert channel
+      description: |
+        Creates a channel that receives the selected events. The channel's
+        kind decides how events are delivered; "webhook" sends each event as a
+        signed CloudEvents JSON POST (Standard Webhooks headers). A generated
+        secret, if the kind uses one, is returned only in this response.
+      operationId: createOrgAlertChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertChannelRequest"
+      responses:
+        "201":
+          description: Alert channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/alerting/channels/{channelId}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: Get an organization alert channel
+      operationId: getOrgAlertChannel
+      responses:
+        "200":
+          description: Alert channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Alerting
+      summary: Update an organization alert channel
+      description: The channel's kind cannot be changed.
+      operationId: updateOrgAlertChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertChannelRequest"
+      responses:
+        "200":
+          description: Alert channel updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Alerting
+      summary: Delete an organization alert channel
+      operationId: deleteOrgAlertChannel
+      responses:
+        "204":
+          description: Alert channel deleted
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/alerting/channels/{channelId}/rotate-secret:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    post:
+      tags:
+        - Alerting
+      summary: Rotate an organization alert channel's secret
+      description: Replaces the channel's generated secret (the signing secret of a webhook channel). The new secret is returned only in this response.
+      operationId: rotateOrgAlertChannelSecret
+      responses:
+        "200":
+          description: New secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelSecretResponse"
+        "400":
+          description: The channel's kind has no generated secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/alerting/channels/{channelId}/test:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    post:
+      tags:
+        - Alerting
+      summary: Send a test event to an organization alert channel
+      description: Sends an alerting.test event straight to the channel and reports the result.
+      operationId: testOrgAlertChannel
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelTestResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/alerting/channels:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List project alert channels
+      description: Events about the project and its agents being created or deleted.
+      operationId: listProjectAlertChannels
+      responses:
+        "200":
+          description: Alert channels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Alerting
+      summary: Create a project alert channel
+      description: |
+        Creates a channel that receives the selected events. The channel's
+        kind decides how events are delivered; "webhook" sends each event as a
+        signed CloudEvents JSON POST (Standard Webhooks headers). A generated
+        secret, if the kind uses one, is returned only in this response.
+      operationId: createProjectAlertChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertChannelRequest"
+      responses:
+        "201":
+          description: Alert channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: Get a project alert channel
+      operationId: getProjectAlertChannel
+      responses:
+        "200":
+          description: Alert channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Alerting
+      summary: Update a project alert channel
+      description: The channel's kind cannot be changed.
+      operationId: updateProjectAlertChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertChannelRequest"
+      responses:
+        "200":
+          description: Alert channel updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Alerting
+      summary: Delete a project alert channel
+      operationId: deleteProjectAlertChannel
+      responses:
+        "204":
+          description: Alert channel deleted
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/rotate-secret:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    post:
+      tags:
+        - Alerting
+      summary: Rotate a project alert channel's secret
+      description: Replaces the channel's generated secret (the signing secret of a webhook channel). The new secret is returned only in this response.
+      operationId: rotateProjectAlertChannelSecret
+      responses:
+        "200":
+          description: New secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelSecretResponse"
+        "400":
+          description: The channel's kind has no generated secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/test:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    post:
+      tags:
+        - Alerting
+      summary: Send a test event to a project alert channel
+      description: Sends an alerting.test event straight to the channel and reports the result.
+      operationId: testProjectAlertChannel
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelTestResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List agent alert channels
+      description: The agent's events, such as builds, deployments and monitor runs, in the environments each channel selects.
+      operationId: listAgentAlertChannels
+      responses:
+        "200":
+          description: Alert channels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Alerting
+      summary: Create an agent alert channel
+      description: |
+        Creates a channel that receives the selected events. The channel's
+        kind decides how events are delivered; "webhook" sends each event as a
+        signed CloudEvents JSON POST (Standard Webhooks headers). A generated
+        secret, if the kind uses one, is returned only in this response.
+      operationId: createAgentAlertChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertChannelRequest"
+      responses:
+        "201":
+          description: Alert channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: Get an agent alert channel
+      operationId: getAgentAlertChannel
+      responses:
+        "200":
+          description: Alert channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Alerting
+      summary: Update an agent alert channel
+      description: The channel's kind cannot be changed.
+      operationId: updateAgentAlertChannel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertChannelRequest"
+      responses:
+        "200":
+          description: Alert channel updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Alerting
+      summary: Delete an agent alert channel
+      operationId: deleteAgentAlertChannel
+      responses:
+        "204":
+          description: Alert channel deleted
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/rotate-secret:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    post:
+      tags:
+        - Alerting
+      summary: Rotate an agent alert channel's secret
+      description: Replaces the channel's generated secret (the signing secret of a webhook channel). The new secret is returned only in this response.
+      operationId: rotateAgentAlertChannelSecret
+      responses:
+        "200":
+          description: New secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelSecretResponse"
+        "400":
+          description: The channel's kind has no generated secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/test:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+      - name: channelId
+        in: path
+        required: true
+        description: Alert channel ID
+        schema:
+          type: string
+    post:
+      tags:
+        - Alerting
+      summary: Send a test event to an agent alert channel
+      description: Sends an alerting.test event straight to the channel and reports the result.
+      operationId: testAgentAlertChannel
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelTestResponse"
+        "404":
+          description: Alert channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     AgentIdentityOrgName:
@@ -18998,3 +19750,132 @@ components:
             The workload may keep referencing the revoked credential until this is confirmed
             or the workload is redeployed.
           example: Could not confirm whether this is the deployment pipeline's lowest environment, so its shared workload-level credentials were left untouched as a precaution.
+    AlertEventType:
+      type: object
+      required: [type, scope, category, description]
+      properties:
+        type:
+          type: string
+          example: agent.deployed
+        scope:
+          type: string
+          enum: [org, project, agent]
+        category:
+          type: string
+        description:
+          type: string
+
+    AlertEventTypeListResponse:
+      type: object
+      required: [eventTypes]
+      properties:
+        eventTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertEventType"
+
+    AlertChannelRequest:
+      type: object
+      required: [name, kind, config, eventTypes]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        kind:
+          type: string
+          description: How events are delivered. Only "webhook" is supported today.
+          enum: [webhook]
+        config:
+          type: object
+          additionalProperties: true
+          description: |
+            Settings of the channel's kind. For "webhook": {"url": "https://…"},
+            the HTTPS URL that receives event POST requests.
+          example:
+            url: https://hooks.example.com/amp
+        environments:
+          type: array
+          description: |
+            Environments whose agent events the channel receives. At least one
+            is required for agent channels; ignored for org and project
+            channels. Agent events not tied to an environment, such as builds,
+            are sent to every agent channel.
+          items:
+            type: string
+        eventTypes:
+          type: array
+          description: Event types to send. Every type must belong to the channel's scope. Empty sends nothing.
+          items:
+            type: string
+        enabled:
+          type: boolean
+          default: true
+
+    AlertChannelResponse:
+      type: object
+      required: [id, scope, kind, name, description, config, environments, eventTypes, enabled, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+          enum: [org, project, agent]
+        kind:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+          description: Settings of the channel's kind. Parts that may carry a credential are masked for callers who cannot change the channel.
+        environments:
+          type: array
+          items:
+            type: string
+        eventTypes:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        secret:
+          type: string
+          description: Present only in the response that created the channel, for kinds with a generated secret. For "webhook" it verifies the webhook-signature header.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AlertChannelListResponse:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertChannelResponse"
+
+    AlertChannelSecretResponse:
+      type: object
+      required: [secret]
+      properties:
+        secret:
+          type: string
+
+    AlertChannelTestResponse:
+      type: object
+      required: [delivered]
+      properties:
+        delivered:
+          type: boolean
+        statusCode:
+          type: integer
+        error:
+          type: string

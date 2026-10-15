@@ -314,6 +314,9 @@ func loadEnvs() {
 		}
 	}
 	r.errors = append(r.errors, validateEventsConfig(config.Events)...)
+	config.Alerting = AlertingConfig{
+		AllowPrivateEndpoints: r.readOptionalBool("ALERTING_ALLOW_PRIVATE_ENDPOINTS", false),
+	}
 
 	// Resource limits for agent resource configurations (operator-controlled ceilings)
 	config.PerAgentResourceLimits = ResourceLimitsConfig{

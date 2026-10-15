@@ -41,6 +41,8 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
+	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels"
+	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/webhook"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 )
@@ -115,6 +117,9 @@ var serviceProviderSet = wire.NewSet(
 	ProvideEventBus,
 	ProvideEventPublisher,
 	services.NewMonitorRunEvents,
+	ProvideAlertChannelDrivers,
+	services.NewAlertChannelService,
+	wire.Bind(new(services.AlertChannelCleaner), new(services.AlertChannelService)),
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -152,6 +157,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewIdentityController,
 	controllers.NewMCPProxyScopeController,
 	controllers.NewAgentIdentityController,
+	controllers.NewAlertChannelController,
 )
 
 var testClientProviderSet = wire.NewSet(
@@ -395,6 +401,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideEnvThunderSystemClientRepository,
 	ProvideEnvThunderURLRepository,
 	repositories.NewMCPProxyScopeRepository,
+	repositories.NewAlertChannelRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
@@ -590,6 +597,14 @@ func ProvideAgentIdentityInjectionService(
 	logger *slog.Logger,
 ) services.AgentIdentityInjectionService {
 	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyScopeRepo, ocClient, cfg.SecretManager.AgentIdentityRefreshInterval, logger)
+}
+
+// ProvideAlertChannelDrivers registers the driver of each supported alert
+// channel kind. Add a kind here once its driver exists.
+func ProvideAlertChannelDrivers(cfg config.Config) *alertchannels.Registry {
+	return alertchannels.NewRegistry(
+		webhook.New(cfg.Alerting.AllowPrivateEndpoints),
+	)
 }
 
 // ProvideEventBus connects to NATS, or starts the embedded in-memory server,
