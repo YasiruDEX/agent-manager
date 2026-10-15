@@ -116,6 +116,22 @@ data:
   AUDIT_BUFFER_SIZE: {{ .Values.agentManagerService.config.audit.bufferSize | default 4096 | quote }}
   AUDIT_BATCH_SIZE: {{ .Values.agentManagerService.config.audit.batchSize | default 200 | quote }}
   AUDIT_FLUSH_INTERVAL_MS: {{ .Values.agentManagerService.config.audit.flushIntervalMs | default 1000 | quote }}
+  # Platform events and alerting. events.mode decides the event bus; the
+  # alert dispatcher runs inside the service whenever the bus is on.
+  {{- $eventsMode := include "agent-management-platform.eventsMode" . }}
+  {{- if not (has $eventsMode (list "nats" "embedded" "off")) }}
+  {{- fail (printf "agentManagerService.config.events.mode must be nats, embedded or off, got %q" $eventsMode) }}
+  {{- end }}
+  {{- if and (eq $eventsMode "embedded") (gt (int .Values.agentManagerService.replicaCount) 1) }}
+  {{- fail "agentManagerService.config.events.mode=embedded keeps events in one process and supports a single replica; use nats with replicaCount > 1" }}
+  {{- end }}
+  EVENTS_MODE: {{ $eventsMode | quote }}
+  EVENTS_NATS_URL: {{ include "agent-management-platform.natsUrl" . | quote }}
+  {{- with .Values.agentManagerService.config.alerting }}
+  ALERTING_MAX_ATTEMPTS: {{ .maxAttempts | default 6 | quote }}
+  ALERTING_DELIVERY_RETENTION_DAYS: {{ .deliveryRetentionDays | default 14 | quote }}
+  ALERTING_ALLOW_PRIVATE_ENDPOINTS: {{ dig "allowPrivateEndpoints" false . | quote }}
+  {{- end }}
   # Gateway manifest cache backend. Must be "redis" whenever replicaCount > 1 — see
   # the gatewayManifestCache note in values.yaml.
   GATEWAY_MANIFEST_CACHE_BACKEND: {{ .Values.agentManagerService.config.gatewayManifestCache.backend | default "memory" | quote }}
