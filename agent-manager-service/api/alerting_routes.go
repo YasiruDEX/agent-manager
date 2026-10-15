@@ -39,6 +39,7 @@ func registerAlertingRoutes(rr *middleware.RouteRegistrar, controller controller
 	rr.HandleFuncWithValidationAndAuthz(route("DELETE", "/orgs/{orgName}/alerting/channels/{channelId}"), rbac.AlertingManage, org.Delete)
 	rr.HandleFuncWithValidationAndAuthz(route("POST", "/orgs/{orgName}/alerting/channels/{channelId}/rotate-secret"), rbac.AlertingManage, org.RotateSecret)
 	rr.HandleFuncWithValidationAndAuthz(route("POST", "/orgs/{orgName}/alerting/channels/{channelId}/test"), rbac.AlertingManage, org.Test)
+	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/alerting/channels/{channelId}/deliveries"), rbac.AlertingRead, org.ListDeliveries)
 
 	project := controller.ForScope(models.AlertScopeProject)
 	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/projects/{projName}/alerting/channels"), rbac.ProjectRead, project.List)
@@ -48,6 +49,7 @@ func registerAlertingRoutes(rr *middleware.RouteRegistrar, controller controller
 	rr.HandleFuncWithValidationAndAuthz(route("DELETE", "/orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}"), rbac.ProjectUpdate, project.Delete)
 	rr.HandleFuncWithValidationAndAuthz(route("POST", "/orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/rotate-secret"), rbac.ProjectUpdate, project.RotateSecret)
 	rr.HandleFuncWithValidationAndAuthz(route("POST", "/orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/test"), rbac.ProjectUpdate, project.Test)
+	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/deliveries"), rbac.ProjectRead, project.ListDeliveries)
 
 	agent := controller.ForScope(models.AlertScopeAgent)
 	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels"), rbac.AgentRead, agent.List)
@@ -57,4 +59,5 @@ func registerAlertingRoutes(rr *middleware.RouteRegistrar, controller controller
 	rr.HandleFuncWithValidationAndAuthz(route("DELETE", "/orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}"), rbac.AgentUpdate, agent.Delete)
 	rr.HandleFuncWithValidationAndAuthz(route("POST", "/orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/rotate-secret"), rbac.AgentUpdate, agent.RotateSecret)
 	rr.HandleFuncWithValidationAndAuthz(route("POST", "/orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/test"), rbac.AgentUpdate, agent.Test)
+	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/deliveries"), rbac.AgentRead, agent.ListDeliveries)
 }

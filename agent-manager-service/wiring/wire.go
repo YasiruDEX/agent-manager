@@ -120,6 +120,8 @@ var serviceProviderSet = wire.NewSet(
 	ProvideAlertChannelDrivers,
 	services.NewAlertChannelService,
 	wire.Bind(new(services.AlertChannelCleaner), new(services.AlertChannelService)),
+	wire.Bind(new(services.AlertChannelResolver), new(services.AlertChannelService)),
+	services.NewAlertDispatcherService,
 )
 
 var instrumentationProviderSet = wire.NewSet(

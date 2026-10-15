@@ -41,6 +41,8 @@ const (
 	maxAlertChannelNameLength = 100
 	maxAlertChannelDescLength = 500
 	alertTestEventMessage     = "Test event from WSO2 Agent Manager. No action is needed."
+	defaultAlertDeliveryLimit = 50
+	maxAlertDeliveryLimit     = 100
 )
 
 // AlertChannelInput is the input for creating or updating an alert channel.
@@ -72,6 +74,12 @@ type AlertChannelCleaner interface {
 	RemoveForAgent(ctx context.Context, ouID, projectName, agentName string)
 }
 
+// AlertChannelResolver turns a stored channel into its driver and a
+// destination with the secret decrypted, ready to deliver to.
+type AlertChannelResolver interface {
+	Resolve(channel *models.AlertChannel) (alertchannels.Driver, alertchannels.Destination, error)
+}
+
 // AlertChannelService manages alert channels at org, project and agent scope.
 // Every change is recorded fail-closed in the audit trail before it applies.
 type AlertChannelService interface {
@@ -92,7 +100,10 @@ type AlertChannelService interface {
 	// RedactedConfig masks the parts of a channel's settings that may carry a
 	// credential, for callers who may see the channel but not change it.
 	RedactedConfig(channel *models.AlertChannel) json.RawMessage
+	// ListDeliveries returns a channel's most recent deliveries, newest first.
+	ListDeliveries(ctx context.Context, target repositories.AlertTarget, id uuid.UUID, limit int) ([]models.AlertDelivery, error)
 
+	AlertChannelResolver
 	AlertChannelCleaner
 }
 
@@ -295,6 +306,24 @@ func (s *alertChannelService) RedactedConfig(c *models.AlertChannel) json.RawMes
 		return json.RawMessage(`{}`)
 	}
 	return driver.RedactConfig(c.Config)
+}
+
+func (s *alertChannelService) ListDeliveries(
+	ctx context.Context, t repositories.AlertTarget, id uuid.UUID, limit int,
+) ([]models.AlertDelivery, error) {
+	// Loading the channel within target is what keeps one scope from reading
+	// another's delivery log.
+	if _, err := s.Get(ctx, t, id); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = defaultAlertDeliveryLimit
+	}
+	out, err := s.repo.ListDeliveries(ctx, id, min(limit, maxAlertDeliveryLimit))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list alert deliveries: %w", err)
+	}
+	return out, nil
 }
 
 // Resolve returns a channel's driver and its destination, with the secret
