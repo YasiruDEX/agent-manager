@@ -26,16 +26,20 @@ import {
   CardHeader,
   Chip,
   Form,
-  FormControlLabel,
+  ListSubheader,
+  MenuItem,
   Skeleton,
   Stack,
-  Switch,
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
 import { Check, CircleIcon } from "@wso2/oxygen-ui-icons-react";
-import { useAlertEventTypes } from "@agent-management-platform/api-client";
+import {
+  useAlertChannelKinds,
+  useAlertEventTypes,
+} from "@agent-management-platform/api-client";
 import type {
+  AlertChannelKindService,
   AlertEventType,
   AlertChannelKind,
   AlertChannelRequest,
@@ -44,14 +48,21 @@ import type {
 } from "@agent-management-platform/types";
 
 /**
- * Channel kinds the form offers. A new kind (Slack, Teams, ...) adds an entry
- * here, a branch for its settings below, and a driver in the service.
+ * Channel kinds the form offers, if the service supports them. A new kind
+ * adds an entry here, a branch for its settings below, and a driver in the
+ * service. The services a "notify" channel can use come from the service, so
+ * a new one needs no change here.
  */
 const CHANNEL_KINDS: { kind: AlertChannelKind; label: string; description: string }[] = [
   {
     kind: "webhook",
     label: "Webhook",
     description: "Signed HTTPS POST of each event (Standard Webhooks)",
+  },
+  {
+    kind: "notify",
+    label: "Notification service",
+    description: "A text message to Slack, Teams, email, PagerDuty and more",
   },
 ];
 
@@ -129,11 +140,12 @@ export function AlertChannelForm({
   onDirtyChange,
 }: AlertChannelFormProps) {
   const { data: catalog, isLoading } = useAlertEventTypes(orgName, scope);
+  const { data: kindList } = useAlertChannelKinds(orgName);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<AlertChannelKind>("webhook");
+  const [service, setService] = useState("");
   const [url, setUrl] = useState("");
-  const [enabled, setEnabled] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [envs, setEnvs] = useState<Set<string>>(new Set());
   const [submitted, setSubmitted] = useState(false);
@@ -143,8 +155,10 @@ export function AlertChannelForm({
     setName(channel?.name ?? "");
     setDescription(channel?.description ?? "");
     setKind(channel?.kind ?? "webhook");
-    setUrl(channel?.config?.url ?? "");
-    setEnabled(channel?.enabled ?? true);
+    setService(channel?.config?.service ?? "");
+    // A notification service URL is a credential and never comes back: it
+    // starts empty, and stays as it is unless a new one is entered.
+    setUrl(channel?.kind === "notify" ? "" : (channel?.config?.url ?? ""));
     setSelected(new Set(channel?.eventTypes ?? []));
     setEnvs(new Set(channel?.environments ?? defaultEnvironments ?? []));
     setSubmitted(false);
@@ -156,8 +170,8 @@ export function AlertChannelForm({
     name !== (channel?.name ?? "") ||
     description !== (channel?.description ?? "") ||
     kind !== (channel?.kind ?? "webhook") ||
-    url !== (channel?.config?.url ?? "") ||
-    enabled !== (channel?.enabled ?? true) ||
+    service !== (channel?.config?.service ?? "") ||
+    url !== (channel?.kind === "notify" ? "" : (channel?.config?.url ?? "")) ||
     !sameSet(selected, channel?.eventTypes ?? []) ||
     (isAgent && !sameSet(envs, channel?.environments ?? defaultEnvironments ?? []));
 
@@ -185,22 +199,53 @@ export function AlertChannelForm({
       return next;
     });
 
+  const kindInfo = kindList?.kinds.find((k) => k.kind === kind);
+  // Offer the kinds the service supports; all of them until it has answered.
+  const kindOptions = kindList
+    ? CHANNEL_KINDS.filter((k) => kindList.kinds.some((info) => info.kind === k.kind))
+    : CHANNEL_KINDS;
+  const services = useMemo(() => kindInfo?.services ?? [], [kindInfo]);
+  const selectedService = services.find((s) => s.id === service);
+  const serviceGroups = useMemo(() => {
+    const byCategory = new Map<string, AlertChannelKindService[]>();
+    for (const s of services) {
+      byCategory.set(s.category, [...(byCategory.get(s.category) ?? []), s]);
+    }
+    return [...byCategory.entries()];
+  }, [services]);
+
+  const isNotify = kind === "notify";
+  // Editing a notification channel keeps its URL unless a new one is
+  // entered; a new channel, or another service, needs one.
+  const keepsUrl = isNotify && !!channel && service === (channel.config?.service ?? "");
+  const urlProblem = (): string | undefined => {
+    const v = url.trim();
+    if (!isNotify) return isValidUrl(v) ? undefined : "Enter an http(s) URL";
+    if (!v) return keepsUrl ? undefined : "Enter the service URL";
+    const scheme = v.split("://")[0]?.split("+")[0];
+    return scheme === service ? undefined : `A ${selectedService?.label ?? service} URL starts with ${service}://`;
+  };
+
   const nameError = submitted && !name.trim() ? "Enter a name" : undefined;
-  const urlError = submitted && !isValidUrl(url.trim()) ? "Enter an http(s) URL" : undefined;
+  const serviceError = submitted && isNotify && !service ? "Choose a service" : undefined;
+  const urlError = submitted && (!isNotify || !!service) ? urlProblem() : undefined;
   const envError =
     submitted && isAgent && envs.size === 0 ? "Select at least one environment" : undefined;
 
   const handleSubmit = () => {
     setSubmitted(true);
-    if (!name.trim() || !isValidUrl(url.trim())) return;
+    if (!name.trim() || (isNotify && !service) || urlProblem()) return;
     if (isAgent && envs.size === 0) return;
     onSubmit({
       name: name.trim(),
       description: description.trim(),
       kind,
-      config: { url: url.trim() },
+      config: isNotify
+        ? { service, ...(url.trim() ? { url: url.trim() } : {}) }
+        : { url: url.trim() },
       environments: isAgent ? [...envs] : undefined,
-      enabled,
+      // Enabled is switched from the channels list; a new channel starts on.
+      enabled: channel?.enabled ?? true,
       // Keep only types this scope still offers, so a channel saved before an
       // event moved to another scope can be edited without an error.
       eventTypes: [...selected].filter((t) => offered.has(t)),
@@ -211,7 +256,7 @@ export function AlertChannelForm({
     <Stack spacing={3}>
       <Form.Stack>
         <Form.Section>
-          <Form.Header>Basic Details</Form.Header>
+          <Form.Header>Channel Details</Form.Header>
           <Form.ElementWrapper name="name" label="Name">
             <TextField
               id="name"
@@ -247,7 +292,7 @@ export function AlertChannelForm({
               : "Choose how events are delivered."}
           </Typography>
           <Box sx={cardGrid}>
-            {CHANNEL_KINDS.map((k) => {
+            {kindOptions.map((k) => {
               const isSelected = kind === k.kind;
               return (
                 <Form.CardButton
@@ -255,7 +300,12 @@ export function AlertChannelForm({
                   selected={isSelected}
                   disabled={!!channel && !isSelected}
                   sx={{ width: "100%", minWidth: 0, justifyContent: "flex-start" }}
-                  onClick={() => !channel && setKind(k.kind)}
+                  onClick={() => {
+                    if (channel || k.kind === kind) return;
+                    setKind(k.kind);
+                    setUrl("");
+                    setService("");
+                  }}
                 >
                   <CardHeader
                     title={
@@ -272,24 +322,109 @@ export function AlertChannelForm({
               );
             })}
           </Box>
-          <Form.ElementWrapper name="url" label="Endpoint URL">
-            <TextField
-              id="url"
-              required
-              fullWidth
-              placeholder="https://hooks.example.com/amp"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              error={!!urlError}
-              helperText={
-                urlError ?? "Events are sent here as signed JSON POST requests"
-              }
-            />
-          </Form.ElementWrapper>
-          <FormControlLabel
-            control={<Switch checked={enabled} onChange={(_, v) => setEnabled(v)} />}
-            label="Send events to this channel"
-          />
+          {isNotify ? (
+            <>
+              <Form.ElementWrapper name="service" label="Service">
+                <TextField
+                  id="service"
+                  select
+                  required
+                  fullWidth
+                  value={service}
+                  onChange={(e) => setService(e.target.value)}
+                  error={!!serviceError}
+                  helperText={serviceError ?? "Where the notification is sent"}
+                  slotProps={{
+                    select: {
+                      displayEmpty: true,
+                      renderValue: (value) =>
+                        value ? (
+                          (services.find((s) => s.id === value)?.label ?? String(value))
+                        ) : (
+                          <Typography component="span" color="text.secondary">
+                            Choose a service
+                          </Typography>
+                        ),
+                      MenuProps: {
+                        slotProps: {
+                          paper: { sx: { maxHeight: 360 } },
+                          list: { sx: { py: 0.5 } },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  {serviceGroups.flatMap(([category, items], i) => [
+                    <ListSubheader
+                      key={`h-${category}`}
+                      sx={{
+                        lineHeight: "32px",
+                        bgcolor: "background.paper",
+                        ...(i > 0 && { borderTop: 1, borderColor: "divider", mt: 0.5 }),
+                      }}
+                    >
+                      <Typography variant="overline" color="text.secondary">
+                        {category}
+                      </Typography>
+                    </ListSubheader>,
+                    ...items.map((s) => (
+                      <MenuItem key={s.id} value={s.id} sx={{ pl: 3 }}>
+                        {s.label}
+                      </MenuItem>
+                    )),
+                  ])}
+                </TextField>
+              </Form.ElementWrapper>
+              {selectedService && (
+                <Form.ElementWrapper name="url" label="Service URL">
+                  <TextField
+                    id="url"
+                    required={!keepsUrl}
+                    fullWidth
+                    autoComplete="off"
+                    placeholder={
+                      keepsUrl ? "Leave blank to keep the current URL" : selectedService.urlFormat
+                    }
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    error={!!urlError}
+                    helperText={
+                      urlError ?? (
+                        <>
+                          {`Format: ${selectedService.urlFormat}. The URL holds the service's token, so it is stored encrypted and not shown again. `}
+                          <Typography
+                            component="a"
+                            variant="caption"
+                            href={selectedService.docsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ color: "primary.main" }}
+                          >
+                            How to get these values
+                          </Typography>
+                        </>
+                      )
+                    }
+                  />
+                </Form.ElementWrapper>
+              )}
+            </>
+          ) : (
+            <Form.ElementWrapper name="url" label="Endpoint URL">
+              <TextField
+                id="url"
+                required
+                fullWidth
+                placeholder="https://hooks.example.com/amp"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                error={!!urlError}
+                helperText={
+                  urlError ?? "Events are sent here as signed JSON POST requests"
+                }
+              />
+            </Form.ElementWrapper>
+          )}
         </Form.Section>
 
         {isAgent && (

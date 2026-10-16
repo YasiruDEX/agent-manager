@@ -44,6 +44,8 @@ import {
 import {
   useCreateAlertChannel,
   useDeleteAlertChannel,
+  useAlertChannelKinds,
+  useAlertEventTypes,
   useAlertingEnabled,
   useListAlertChannels,
   useRotateAlertChannelSecret,
@@ -216,6 +218,26 @@ function AlertChannelsList({
   const navigate = useNavigate();
   const location = useLocation();
   const { mutate: remove } = useDeleteAlertChannel(target);
+  const { mutate: update, isPending: toggling, variables: toggled } = useUpdateAlertChannel(target);
+  const { data: catalog } = useAlertEventTypes(target.orgName, target.scope);
+  // Sends the channel back as it is with only enabled changed. A notification
+  // service URL is left out, which keeps the stored one. Types this scope no
+  // longer offers are dropped, as the form does, so an older channel saves.
+  const handleToggleEnabled = (w: AlertChannelResponse, enabled: boolean) =>
+    update({
+      id: w.id,
+      body: {
+        name: w.name,
+        description: w.description,
+        kind: w.kind,
+        config: w.config,
+        environments: target.scope === "agent" ? w.environments : undefined,
+        eventTypes: catalog
+          ? w.eventTypes.filter((t) => catalog.eventTypes.some((c) => c.type === t))
+          : w.eventTypes,
+        enabled,
+      },
+    });
   const { mutate: rotate } = useRotateAlertChannelSecret(target);
   const {
     mutate: sendTest,
@@ -223,6 +245,8 @@ function AlertChannelsList({
     variables: testingId,
   } = useTestAlertChannel(target);
   const { addConfirmation } = useConfirmationDialog();
+  const { data: kindList } = useAlertChannelKinds(target.orgName);
+  const kindInfo = (c: AlertChannelResponse) => kindList?.kinds.find((k) => k.kind === c.kind);
   const [viewing, setViewing] = useState<AlertChannelResponse | undefined>();
   const [rotated, setRotated] = useState<RevealedSecret | null>(null);
   const [testResult, setTestResult] = useState<
@@ -343,7 +367,18 @@ function AlertChannelsList({
           onTest={handleTest}
           onDeliveries={setViewing}
           onRotate={handleRotate}
+          // Until the kinds load, a webhook is the kind known to have a secret.
+          canRotate={(c) => kindInfo(c)?.generatedSecret ?? c.kind === "webhook"}
+          destinationOf={(c) =>
+            c.kind === "notify"
+              ? (kindInfo(c)?.services.find((s) => s.id === c.config?.service)?.label ??
+                c.config?.service ??
+                "")
+              : (c.config?.url ?? "")
+          }
           onDelete={handleDelete}
+          onToggleEnabled={handleToggleEnabled}
+          togglingId={toggling ? toggled?.id : undefined}
         />
       </Stack>
       <AlertDeliveriesDrawer

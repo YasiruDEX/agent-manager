@@ -34,6 +34,9 @@ const (
 // driver in services/alertchannels.
 const (
 	AlertChannelKindWebhook = "webhook"
+	// AlertChannelKindNotify delivers a text notification to a chat, email,
+	// paging or push service through the Shoutrrr library.
+	AlertChannelKindNotify = "notify"
 )
 
 // Alert delivery statuses.

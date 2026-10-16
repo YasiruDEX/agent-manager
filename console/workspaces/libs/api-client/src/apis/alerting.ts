@@ -19,6 +19,7 @@
 import { httpDELETE, httpGET, httpPOST, httpPUT, SERVICE_BASE } from "../utils";
 import type {
   AlertDeliveryListResponse,
+  AlertChannelKindListResponse,
   AlertEventTypeListResponse,
   AlertChannelListResponse,
   AlertChannelRequest,
@@ -42,6 +43,18 @@ export function alertChannelsBase(target: AlertTargetParams): string {
 
 async function tokenOf(getToken?: () => Promise<string>) {
   return getToken ? await getToken() : undefined;
+}
+
+export async function listAlertChannelKinds(
+  orgName: string | undefined,
+  getToken?: () => Promise<string>,
+): Promise<AlertChannelKindListResponse> {
+  const token = await tokenOf(getToken);
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName ?? "default")}/alerting/channel-kinds`,
+    { token },
+  );
+  return res.json();
 }
 
 export async function listAlertEventTypes(

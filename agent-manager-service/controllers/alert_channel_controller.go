@@ -44,6 +44,7 @@ const PathParamAlertChannelID = "channelId"
 // ForScope.
 type AlertChannelController interface {
 	ListEventTypes(w http.ResponseWriter, r *http.Request)
+	ListChannelKinds(w http.ResponseWriter, r *http.Request)
 	ForScope(scope string) AlertChannelScopeHandlers
 }
 
@@ -79,6 +80,26 @@ func (c *alertChannelController) ListEventTypes(w http.ResponseWriter, r *http.R
 		resp.EventTypes = append(resp.EventTypes, spec.AlertEventType{
 			Type: t.Name, Scope: string(t.Scope), Category: t.Category, Description: t.Description,
 		})
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, resp)
+}
+
+func (c *alertChannelController) ListChannelKinds(w http.ResponseWriter, _ *http.Request) {
+	kinds := c.svc.Kinds()
+	resp := spec.AlertChannelKindListResponse{Kinds: make([]spec.AlertChannelKind, 0, len(kinds))}
+	for _, k := range kinds {
+		kind := spec.AlertChannelKind{
+			Kind:               k.Kind,
+			GeneratedSecret:    k.GeneratedSecret,
+			SuppliedCredential: k.SuppliedCredential,
+			Services:           make([]spec.AlertChannelKindService, 0, len(k.Services)),
+		}
+		for _, s := range k.Services {
+			kind.Services = append(kind.Services, spec.AlertChannelKindService{
+				Id: s.ID, Label: s.Label, Category: s.Category, UrlFormat: s.URLFormat, DocsUrl: s.DocsURL,
+			})
+		}
+		resp.Kinds = append(resp.Kinds, kind)
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, resp)
 }

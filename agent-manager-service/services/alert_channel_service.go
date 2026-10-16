@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"time"
 
@@ -80,12 +81,27 @@ type AlertChannelResolver interface {
 	Resolve(channel *models.AlertChannel) (alertchannels.Driver, alertchannels.Destination, error)
 }
 
+// AlertChannelKind describes a supported kind of alert channel.
+type AlertChannelKind struct {
+	Kind string
+	// GeneratedSecret is set for kinds whose channels get a secret that can
+	// be rotated.
+	GeneratedSecret bool
+	// SuppliedCredential is set for kinds whose settings include a
+	// credential the user enters, which is never returned.
+	SuppliedCredential bool
+	// Services lists the services the kind delivers to, if it has several.
+	Services []alertchannels.Service
+}
+
 // AlertChannelService manages alert channels at org, project and agent scope.
 // Every change is recorded fail-closed in the audit trail before it applies.
 type AlertChannelService interface {
 	// EventTypes lists the event types channels of a scope can subscribe to;
 	// all of them for an empty scope.
 	EventTypes(scope string) ([]events.Type, error)
+	// Kinds lists the supported channel kinds.
+	Kinds() []AlertChannelKind
 	List(ctx context.Context, target repositories.AlertTarget) ([]models.AlertChannel, error)
 	Get(ctx context.Context, target repositories.AlertTarget, id uuid.UUID) (*models.AlertChannel, error)
 	// Create returns the new channel and its generated secret, if its kind
@@ -129,6 +145,23 @@ func (s *alertChannelService) EventTypes(scope string) ([]events.Type, error) {
 	return events.Types(events.Scope(scope)), nil
 }
 
+func (s *alertChannelService) Kinds() []AlertChannelKind {
+	drivers := s.drivers.All()
+	out := make([]AlertChannelKind, 0, len(drivers))
+	for _, d := range drivers {
+		k := AlertChannelKind{Kind: d.Kind(), Services: []alertchannels.Service{}}
+		// Asking for a secret only to learn whether the kind has one is
+		// cheap: it is a few random bytes, thrown away.
+		_, k.GeneratedSecret, _ = d.NewSecret()
+		_, k.SuppliedCredential = d.(alertchannels.CredentialDriver)
+		if c, ok := d.(alertchannels.ServiceCatalog); ok {
+			k.Services = c.Services()
+		}
+		out = append(out, k)
+	}
+	return out
+}
+
 func (s *alertChannelService) List(ctx context.Context, t repositories.AlertTarget) ([]models.AlertChannel, error) {
 	out, err := s.repo.ListChannels(ctx, t)
 	if err != nil {
@@ -151,9 +184,12 @@ func (s *alertChannelService) Get(ctx context.Context, t repositories.AlertTarge
 func (s *alertChannelService) Create(
 	ctx context.Context, t repositories.AlertTarget, in AlertChannelInput,
 ) (*models.AlertChannel, string, error) {
-	driver, err := s.validate(ctx, t, &in)
+	driver, credential, err := s.validate(ctx, t, &in)
 	if err != nil {
 		return nil, "", err
+	}
+	if _, ok := driver.(alertchannels.CredentialDriver); ok && credential == "" {
+		return nil, "", fmt.Errorf("%w: url is required", utils.ErrInvalidInput)
 	}
 	existing, err := s.repo.ListChannels(ctx, t)
 	if err != nil {
@@ -165,6 +201,11 @@ func (s *alertChannelService) Create(
 	secret, encrypted, err := s.newSecret(driver)
 	if err != nil {
 		return nil, "", err
+	}
+	if credential != "" {
+		if encrypted, err = s.encrypt(credential); err != nil {
+			return nil, "", err
+		}
 	}
 	c := &models.AlertChannel{
 		ID:              uuid.New(),
@@ -205,9 +246,18 @@ func (s *alertChannelService) Update(
 	if in.Kind != c.Kind {
 		return nil, fmt.Errorf("%w: the kind of an alert channel cannot be changed", utils.ErrInvalidInput)
 	}
-	driver, err := s.validate(ctx, t, &in)
+	driver, credential, err := s.validate(ctx, t, &in)
 	if err != nil {
 		return nil, err
+	}
+	if credential != "" {
+		if c.SecretEncrypted, err = s.encrypt(credential); err != nil {
+			return nil, err
+		}
+	} else if _, ok := driver.(alertchannels.CredentialDriver); ok && !sameJSON(in.Config, c.Config) {
+		// The stored credential belongs to the old settings (another
+		// service's URL), so it cannot be kept.
+		return nil, fmt.Errorf("%w: enter the url again when changing the service", utils.ErrInvalidInput)
 	}
 	c.Name, c.Description, c.Config = in.Name, in.Description, in.Config
 	c.Environments, c.EventTypes, c.Enabled = in.Environments, in.EventTypes, in.Enabled
@@ -361,25 +411,31 @@ func (s *alertChannelService) RemoveForAgent(ctx context.Context, ouID, projectN
 }
 
 // validate checks and normalises an input for target's scope and returns the
-// driver of its kind.
+// driver of its kind. For a kind whose settings carry a credential, the
+// credential is taken out of in.Config and returned; it is empty when the
+// input leaves it out.
 func (s *alertChannelService) validate(
 	ctx context.Context, t repositories.AlertTarget, in *AlertChannelInput,
-) (alertchannels.Driver, error) {
+) (alertchannels.Driver, string, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
 	if in.Name == "" || len(in.Name) > maxAlertChannelNameLength {
-		return nil, fmt.Errorf("%w: name is required and must be at most %d characters", utils.ErrInvalidInput, maxAlertChannelNameLength)
+		return nil, "", fmt.Errorf("%w: name is required and must be at most %d characters", utils.ErrInvalidInput, maxAlertChannelNameLength)
 	}
 	if len(in.Description) > maxAlertChannelDescLength {
-		return nil, fmt.Errorf("%w: description must be at most %d characters", utils.ErrInvalidInput, maxAlertChannelDescLength)
+		return nil, "", fmt.Errorf("%w: description must be at most %d characters", utils.ErrInvalidInput, maxAlertChannelDescLength)
 	}
 	driver, ok := s.drivers.Get(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be one of %s", utils.ErrInvalidInput, strings.Join(s.drivers.Kinds(), ", "))
+		return nil, "", fmt.Errorf("%w: kind must be one of %s", utils.ErrInvalidInput, strings.Join(s.drivers.Kinds(), ", "))
 	}
 	cfg, err := driver.NormalizeConfig(ctx, in.Config)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	var credential string
+	if cd, ok := driver.(alertchannels.CredentialDriver); ok {
+		cfg, credential = cd.SplitCredential(cfg)
 	}
 	in.Config = cfg
 
@@ -394,7 +450,7 @@ func (s *alertChannelService) validate(
 			}
 		}
 		if len(envs) == 0 {
-			return nil, fmt.Errorf("%w: select at least one environment for an agent alert channel", utils.ErrInvalidInput)
+			return nil, "", fmt.Errorf("%w: select at least one environment for an agent alert channel", utils.ErrInvalidInput)
 		}
 		in.Environments = envs
 	} else {
@@ -406,7 +462,7 @@ func (s *alertChannelService) validate(
 	for _, name := range in.EventTypes {
 		def, ok := events.Lookup(name)
 		if !ok || string(def.Scope) != t.Scope {
-			return nil, fmt.Errorf("%w: %q is not a %s event", utils.ErrInvalidInput, name, t.Scope)
+			return nil, "", fmt.Errorf("%w: %q is not a %s event", utils.ErrInvalidInput, name, t.Scope)
 		}
 		if !seen[name] {
 			seen[name] = true
@@ -414,7 +470,7 @@ func (s *alertChannelService) validate(
 		}
 	}
 	in.EventTypes = types
-	return driver, nil
+	return driver, credential, nil
 }
 
 // newSecret generates and encrypts a secret for a channel of driver's kind.
@@ -424,11 +480,29 @@ func (s *alertChannelService) newSecret(driver alertchannels.Driver) (string, []
 	if err != nil || !ok {
 		return "", nil, err
 	}
-	encrypted, err := utils.EncryptBytes([]byte(secret), s.encryptionKey)
+	encrypted, err := s.encrypt(secret)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to encrypt alert channel secret: %w", err)
+		return "", nil, err
 	}
 	return secret, encrypted, nil
+}
+
+// sameJSON reports whether a and b encode the same value; stored JSON comes
+// back from the database reformatted.
+func sameJSON(a, b json.RawMessage) bool {
+	var va, vb any
+	if json.Unmarshal(a, &va) != nil || json.Unmarshal(b, &vb) != nil {
+		return false
+	}
+	return reflect.DeepEqual(va, vb)
+}
+
+func (s *alertChannelService) encrypt(secret string) ([]byte, error) {
+	encrypted, err := utils.EncryptBytes([]byte(secret), s.encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt alert channel secret: %w", err)
+	}
+	return encrypted, nil
 }
 
 func (s *alertChannelService) auditOpts(

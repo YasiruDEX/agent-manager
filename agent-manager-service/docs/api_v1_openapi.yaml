@@ -11193,6 +11193,30 @@ paths:
         "404":
           description: Environment not found
 
+  /orgs/{orgName}/alerting/channel-kinds:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    get:
+      tags:
+        - Alerting
+      summary: List the kinds of alert channel and the services each delivers to
+      description: |
+        The console builds its channel form from this list, so a service added
+        to a kind's driver needs no console change.
+      operationId: listAlertChannelKinds
+      responses:
+        "200":
+          description: Channel kinds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelKindListResponse"
+
   /orgs/{orgName}/alerting/event-types:
     parameters:
       - name: orgName
@@ -19936,6 +19960,54 @@ components:
         description:
           type: string
 
+    AlertChannelKindService:
+      type: object
+      required: [id, label, category, urlFormat, docsUrl]
+      properties:
+        id:
+          type: string
+          example: slack
+        label:
+          type: string
+          example: Slack
+        category:
+          type: string
+          example: Chat
+        urlFormat:
+          type: string
+          description: The shape of the service URL.
+        docsUrl:
+          type: string
+          description: How to get the values the URL needs.
+
+    AlertChannelKind:
+      type: object
+      required: [kind, generatedSecret, suppliedCredential, services]
+      properties:
+        kind:
+          type: string
+          example: notify
+        generatedSecret:
+          type: boolean
+          description: Channels of this kind get a generated secret that can be rotated.
+        suppliedCredential:
+          type: boolean
+          description: Channels of this kind take a credential the user supplies, which is never returned.
+        services:
+          type: array
+          description: The services the kind delivers to; empty for kinds with one destination type.
+          items:
+            $ref: "#/components/schemas/AlertChannelKindService"
+
+    AlertChannelKindListResponse:
+      type: object
+      required: [kinds]
+      properties:
+        kinds:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertChannelKind"
+
     AlertEventTypeListResponse:
       type: object
       required: [eventTypes]
@@ -19957,14 +20029,21 @@ components:
           maxLength: 500
         kind:
           type: string
-          description: How events are delivered. Only "webhook" is supported today.
-          enum: [webhook]
+          description: |
+            How events are delivered: "webhook" posts each event as a signed
+            CloudEvent; "notify" sends a text notification to a chat, email,
+            paging or push service.
+          enum: [webhook, notify]
         config:
           type: object
           additionalProperties: true
           description: |
             Settings of the channel's kind. For "webhook": {"url": "https://…"},
-            the HTTPS URL that receives event POST requests.
+            the HTTPS URL that receives event POST requests. For "notify":
+            {"service": "slack", "url": "slack://…"}, a service from
+            /alerting/channel-kinds and its Shoutrrr service URL. The URL is a
+            credential: it is stored encrypted and never returned. Leave it out
+            when updating to keep the current one.
           example:
             url: https://hooks.example.com/amp
         environments:

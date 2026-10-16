@@ -19,10 +19,10 @@
 export type AlertScope = 'org' | 'project' | 'agent';
 
 /**
- * How an alert channel delivers events. Only "webhook" exists today; further
- * kinds (Slack, Teams, ...) add a value here and their own config shape.
+ * How an alert channel delivers events: "webhook" posts the signed CloudEvent;
+ * "notify" sends a text notification to a chat, email, paging or push service.
  */
-export type AlertChannelKind = 'webhook';
+export type AlertChannelKind = 'webhook' | 'notify';
 
 /** Settings of a "webhook" channel. */
 export interface WebhookChannelConfig {
@@ -30,8 +30,43 @@ export interface WebhookChannelConfig {
   url: string;
 }
 
+/** Settings of a "notify" channel. */
+export interface NotifyChannelConfig {
+  /** A service id from the channel-kinds list, e.g. "slack". */
+  service: string;
+  /**
+   * The Shoutrrr service URL. Sent to set or replace it; never returned.
+   * Leave it out on update to keep the current one.
+   */
+  url?: string;
+}
+
 /** Settings of a channel, by kind. */
-export type AlertChannelConfig = WebhookChannelConfig;
+export type AlertChannelConfig = Partial<WebhookChannelConfig> & Partial<NotifyChannelConfig>;
+
+/** A service a channel kind delivers to, such as Slack for "notify". */
+export interface AlertChannelKindService {
+  id: string;
+  label: string;
+  category: string;
+  /** The shape of the service URL. */
+  urlFormat: string;
+  /** How to get the values the URL needs. */
+  docsUrl: string;
+}
+
+export interface AlertChannelKindInfo {
+  kind: AlertChannelKind;
+  /** Channels get a generated secret that can be rotated. */
+  generatedSecret: boolean;
+  /** Channels take a credential the user enters, which is never returned. */
+  suppliedCredential: boolean;
+  services: AlertChannelKindService[];
+}
+
+export interface AlertChannelKindListResponse {
+  kinds: AlertChannelKindInfo[];
+}
 
 export interface AlertEventType {
   type: string;

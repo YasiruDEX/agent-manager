@@ -25,6 +25,7 @@ import (
 
 func registerAlertingRoutes(rr *middleware.RouteRegistrar, controller controllers.AlertChannelController) {
 	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/alerting/event-types"), rbac.OrgView, controller.ListEventTypes)
+	rr.HandleFuncWithValidationAndAuthz(route("GET", "/orgs/{orgName}/alerting/channel-kinds"), rbac.OrgView, controller.ListChannelKinds)
 
 	// Each scope is gated by the permissions of what it belongs to: org
 	// channels are an admin setting, project and agent channels are part of

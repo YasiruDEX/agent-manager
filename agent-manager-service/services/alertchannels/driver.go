@@ -75,6 +75,36 @@ type Driver interface {
 	Deliver(ctx context.Context, dest Destination, msg Message) Result
 }
 
+// CredentialDriver is a Driver whose settings include a credential the user
+// supplies, such as a service URL with a token in it. The credential is
+// stored encrypted, like a generated secret, and never returned: callers see
+// only the settings SplitCredential leaves in place.
+type CredentialDriver interface {
+	Driver
+	// SplitCredential takes the credential out of settings NormalizeConfig
+	// accepted, returning the settings to store in plain and the credential.
+	// An empty credential keeps the channel's current one.
+	SplitCredential(cfg json.RawMessage) (json.RawMessage, string)
+}
+
+// Service is one destination service a kind can deliver to, such as Slack
+// for a notification channel.
+type Service struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Category string `json:"category"`
+	// URLFormat shows the shape of the service URL the user enters.
+	URLFormat string `json:"urlFormat"`
+	// DocsURL explains how to get the values the URL needs.
+	DocsURL string `json:"docsUrl"`
+}
+
+// ServiceCatalog is implemented by drivers that deliver to several services,
+// so the console can offer them without knowing each one.
+type ServiceCatalog interface {
+	Services() []Service
+}
+
 // Registry holds the driver of each supported kind.
 type Registry struct {
 	drivers map[string]Driver
@@ -93,6 +123,15 @@ func NewRegistry(drivers ...Driver) *Registry {
 func (r *Registry) Get(kind string) (Driver, bool) {
 	d, ok := r.drivers[kind]
 	return d, ok
+}
+
+// All returns every driver, sorted by kind.
+func (r *Registry) All() []Driver {
+	out := make([]Driver, 0, len(r.drivers))
+	for _, k := range r.Kinds() {
+		out = append(out, r.drivers[k])
+	}
+	return out
 }
 
 // Kinds lists the supported kinds, sorted.

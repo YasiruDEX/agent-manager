@@ -21,9 +21,9 @@ var _ MappedNullable = &AlertChannelRequest{}
 type AlertChannelRequest struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`
-	// How events are delivered. Only \"webhook\" is supported today.
+	// How events are delivered: \"webhook\" posts each event as a signed CloudEvent; \"notify\" sends a text notification to a chat, email, paging or push service.
 	Kind string `json:"kind"`
-	// Settings of the channel's kind. For \"webhook\": {\"url\": \"https://…\"}, the HTTPS URL that receives event POST requests.
+	// Settings of the channel's kind. For \"webhook\": {\"url\": \"https://…\"}, the HTTPS URL that receives event POST requests. For \"notify\": {\"service\": \"slack\", \"url\": \"slack://…\"}, a service from /alerting/channel-kinds and its Shoutrrr service URL. The URL is a credential: it is stored encrypted and never returned. Leave it out when updating to keep the current one.
 	Config map[string]interface{} `json:"config"`
 	// Environments whose agent events the channel receives. At least one is required for agent channels; ignored for org and project channels. Agent events not tied to an environment, such as builds, are sent to every agent channel.
 	Environments []string `json:"environments,omitempty"`

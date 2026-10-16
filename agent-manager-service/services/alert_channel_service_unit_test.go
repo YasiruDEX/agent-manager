@@ -328,3 +328,74 @@ func TestAlertChannelService_RedactedConfig(t *testing.T) {
 	assert.JSONEq(t, `{"dest":"masked"}`, string(svc.RedactedConfig(&models.AlertChannel{Kind: "fake"})))
 	assert.JSONEq(t, `{}`, string(svc.RedactedConfig(&models.AlertChannel{Kind: "unknown"})))
 }
+
+// credentialDriver is a "cred" kind: settings {"dest": "...", "token": "..."},
+// where the token is a credential the user supplies.
+type credentialDriver struct{ fakeChannelDriver }
+
+func (c *credentialDriver) Kind() string { return "cred" }
+
+func (c *credentialDriver) NormalizeConfig(_ context.Context, raw json.RawMessage) (json.RawMessage, error) {
+	var cfg struct {
+		Dest  string `json:"dest"`
+		Token string `json:"token,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil || cfg.Dest == "" {
+		return nil, utils.ErrInvalidInput
+	}
+	out, _ := json.Marshal(cfg)
+	return out, nil
+}
+
+func (c *credentialDriver) SplitCredential(raw json.RawMessage) (json.RawMessage, string) {
+	var cfg struct {
+		Dest  string `json:"dest"`
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(raw, &cfg)
+	out, _ := json.Marshal(map[string]string{"dest": cfg.Dest})
+	return out, cfg.Token
+}
+
+func TestAlertChannelService_SuppliedCredential(t *testing.T) {
+	driver := &credentialDriver{}
+	repo := newAlertChannelRepoMock()
+	svc := NewAlertChannelService(repo, alertchannels.NewRegistry(driver), testAlertKey, slog.New(slog.DiscardHandler))
+	ctx := auditCtx(&recordingAuditor{})
+	in := validAgentInput()
+	in.Kind = "cred"
+
+	in.Config = json.RawMessage(`{"dest":"a"}`)
+	_, _, err := svc.Create(ctx, agentAlertTarget(), in)
+	assert.ErrorIs(t, err, utils.ErrInvalidInput, "a new channel needs its credential")
+
+	in.Config = json.RawMessage(`{"dest":"a","token":"tok-1"}`)
+	ch, secret, err := svc.Create(ctx, agentAlertTarget(), in)
+	require.NoError(t, err)
+	assert.Empty(t, secret, "a supplied credential is never returned")
+	assert.JSONEq(t, `{"dest":"a"}`, string(ch.Config), "the credential is not stored in plain")
+	_, dest, err := svc.Resolve(ch)
+	require.NoError(t, err)
+	assert.Equal(t, "tok-1", dest.Secret, "it is stored encrypted and resolved for sending")
+
+	// Leaving the credential out keeps it, even if the stored JSON is
+	// formatted differently.
+	ch.Config = json.RawMessage(`{"dest": "a"}`)
+	require.NoError(t, repo.UpdateChannel(ctx, ch))
+	in.Config = json.RawMessage(`{"dest":"a"}`)
+	in.Enabled = false
+	ch, err = svc.Update(ctx, agentAlertTarget(), ch.ID, in)
+	require.NoError(t, err)
+	_, dest, _ = svc.Resolve(ch)
+	assert.Equal(t, "tok-1", dest.Secret)
+
+	in.Config = json.RawMessage(`{"dest":"b"}`)
+	_, err = svc.Update(ctx, agentAlertTarget(), ch.ID, in)
+	assert.ErrorIs(t, err, utils.ErrInvalidInput, "other settings need the credential again")
+
+	in.Config = json.RawMessage(`{"dest":"b","token":"tok-2"}`)
+	ch, err = svc.Update(ctx, agentAlertTarget(), ch.ID, in)
+	require.NoError(t, err)
+	_, dest, _ = svc.Resolve(ch)
+	assert.Equal(t, "tok-2", dest.Secret, "a new credential replaces the old one")
+}

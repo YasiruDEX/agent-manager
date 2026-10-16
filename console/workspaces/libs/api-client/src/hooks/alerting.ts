@@ -21,6 +21,7 @@ import {
   createAlertChannel,
   deleteAlertChannel,
   listAlertChannelDeliveries,
+  listAlertChannelKinds,
   listAlertEventTypes,
   listAlertChannels,
   rotateAlertChannelSecret,
@@ -29,6 +30,7 @@ import {
 } from "../apis";
 import type {
   AlertDeliveryListResponse,
+  AlertChannelKindListResponse,
   AlertEventTypeListResponse,
   AlertChannelListResponse,
   AlertChannelRequest,
@@ -51,6 +53,17 @@ function targetReady(t: AlertTargetParams): boolean {
 }
 
 /** Hook to list the event types a scope's alert channels can subscribe to. */
+/** Hook to list the channel kinds and the services each delivers to. */
+export function useAlertChannelKinds(orgName: string | undefined) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AlertChannelKindListResponse>({
+    queryKey: ["alert-channel-kinds", orgName],
+    queryFn: () => listAlertChannelKinds(orgName, getToken),
+    enabled: !!orgName,
+    staleTime: Infinity,
+  });
+}
+
 export function useAlertEventTypes(orgName: string | undefined, scope: AlertScope) {
   const { getToken } = useAuthHooks();
   return useApiQuery<AlertEventTypeListResponse>({

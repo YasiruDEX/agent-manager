@@ -42,6 +42,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels"
+	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/notify"
 	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/webhook"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
@@ -606,6 +607,7 @@ func ProvideAgentIdentityInjectionService(
 func ProvideAlertChannelDrivers(cfg config.Config) *alertchannels.Registry {
 	return alertchannels.NewRegistry(
 		webhook.New(cfg.Alerting.AllowPrivateEndpoints),
+		notify.New(cfg.Alerting.AllowPrivateEndpoints),
 	)
 }
 

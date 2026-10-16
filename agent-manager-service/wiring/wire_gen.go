@@ -8,9 +8,6 @@ package wiring
 
 import (
 	"fmt"
-	"log/slog"
-	"time"
-
 	"github.com/google/wire"
 	"github.com/wso2/agent-manager/agent-manager-service/audit"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/observersvc"
@@ -27,10 +24,13 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels"
+	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/notify"
 	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/webhook"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 	"gorm.io/gorm"
+	"log/slog"
+	"time"
 )
 
 // Injectors from wire.go:
@@ -910,7 +910,7 @@ func ProvideAgentIdentityInjectionService(
 // ProvideAlertChannelDrivers registers the driver of each supported alert
 // channel kind. Add a kind here once its driver exists.
 func ProvideAlertChannelDrivers(cfg config.Config) *alertchannels.Registry {
-	return alertchannels.NewRegistry(webhook.New(cfg.Alerting.AllowPrivateEndpoints))
+	return alertchannels.NewRegistry(webhook.New(cfg.Alerting.AllowPrivateEndpoints), notify.New(cfg.Alerting.AllowPrivateEndpoints))
 }
 
 // ProvideEventBus connects to NATS, or starts the embedded in-memory server,

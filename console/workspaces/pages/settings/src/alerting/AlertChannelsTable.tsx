@@ -24,6 +24,7 @@ import {
   ListingTable,
   Skeleton,
   Stack,
+  Switch,
   TablePagination,
   Tooltip,
   Typography,
@@ -39,10 +40,10 @@ import {
 } from "@wso2/oxygen-ui-icons-react";
 import type { AlertChannelResponse } from "@agent-management-platform/types";
 
-const CHANNEL_KIND_LABELS: Record<string, string> = { webhook: "Webhook" };
+const CHANNEL_KIND_LABELS: Record<string, string> = { webhook: "Webhook", notify: "Notification" };
 
-/** Where a channel delivers, as shown in the list (masked for read-only users). */
-function channelDestination(c: AlertChannelResponse): string {
+/** Where a channel delivers, by default its URL (masked for read-only users). */
+function urlOf(c: AlertChannelResponse): string {
   return c.config?.url ?? "";
 }
 
@@ -62,6 +63,14 @@ export interface AlertChannelsTableProps {
   onDeliveries: (w: AlertChannelResponse) => void;
   onRotate: (w: AlertChannelResponse) => void;
   onDelete: (w: AlertChannelResponse) => void;
+  /** Turns a channel on or off; saved straight away. */
+  onToggleEnabled: (w: AlertChannelResponse, enabled: boolean) => void;
+  /** Channel whose enabled state is being saved. */
+  togglingId?: string;
+  /** Whether a channel has a generated secret to rotate; true when omitted. */
+  canRotate?: (w: AlertChannelResponse) => boolean;
+  /** Where a channel delivers, as shown in the list; its URL when omitted. */
+  destinationOf?: (w: AlertChannelResponse) => string;
 }
 
 function ChipList({ values, max = 2 }: { values: string[]; max?: number }) {
@@ -107,7 +116,12 @@ export function AlertChannelsTable({
   onDeliveries,
   onRotate,
   onDelete,
+  onToggleEnabled,
+  togglingId,
+  canRotate = () => true,
+  destinationOf = urlOf,
 }: AlertChannelsTableProps) {
+  const channelDestination = destinationOf;
   const [searchValue, setSearchValue] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -118,7 +132,7 @@ export function AlertChannelsTable({
     return channels.filter(
       (w) => w.name.toLowerCase().includes(q) || channelDestination(w).toLowerCase().includes(q),
     );
-  }, [channels, searchValue]);
+  }, [channels, searchValue, channelDestination]);
 
   const toolbar = (
     <ListingTable.Toolbar
@@ -211,12 +225,18 @@ export function AlertChannelsTable({
                 </Stack>
               </ListingTable.Cell>
               <ListingTable.Cell align="center">
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={w.enabled ? "Enabled" : "Disabled"}
-                  color={w.enabled ? "success" : "default"}
-                />
+                <Tooltip title={w.enabled ? "Disable channel" : "Enable channel"}>
+                  <span>
+                    <Switch
+                      size="small"
+                      checked={w.enabled}
+                      disabled={!canManage || togglingId === w.id}
+                      inputProps={{ "aria-label": `${w.enabled ? "Disable" : "Enable"} ${w.name}` }}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(_, v) => onToggleEnabled(w, v)}
+                    />
+                  </span>
+                </Tooltip>
               </ListingTable.Cell>
               {showEnvironments && (
                 <ListingTable.Cell>
@@ -251,17 +271,19 @@ export function AlertChannelsTable({
                   >
                     <Edit size={16} />
                   </IconButton>
-                  <Tooltip title="Rotate signing secret">
-                    <span>
-                      <IconButton
-                        aria-label={`Rotate signing secret of ${w.name}`}
-                        disabled={!canManage}
-                        onClick={() => onRotate(w)}
-                      >
-                        <KeyRound size={16} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                  {canRotate(w) && (
+                    <Tooltip title="Rotate signing secret">
+                      <span>
+                        <IconButton
+                          aria-label={`Rotate signing secret of ${w.name}`}
+                          disabled={!canManage}
+                          onClick={() => onRotate(w)}
+                        >
+                          <KeyRound size={16} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
                   <Tooltip title="Delete Channel">
                     <span>
                       <IconButton
