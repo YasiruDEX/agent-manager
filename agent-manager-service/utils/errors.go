@@ -118,6 +118,7 @@ var (
 	ErrMonitorAlreadyStopped          = errors.New("monitor already stopped")
 	ErrMonitorAlreadyActive           = errors.New("monitor already active")
 	ErrAlertChannelNotFound           = errors.New("alert channel not found")
+	ErrNotificationNotFound           = errors.New("notification not found")
 	ErrEvaluatorNotFound              = errors.New("evaluator not found")
 	ErrCustomEvaluatorNotFound        = errors.New("custom evaluator not found")
 	ErrCustomEvaluatorAlreadyExists   = errors.New("custom evaluator already exists")

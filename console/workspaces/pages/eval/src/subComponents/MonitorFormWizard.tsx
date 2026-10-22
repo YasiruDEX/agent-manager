@@ -30,6 +30,23 @@ import { CreateMonitorForm, type EnvironmentOption } from "./CreateMonitorForm";
 import { SelectPresetMonitors } from "./SelectPresetMonitors";
 import { slugifyMonitorName } from "../utils/monitorFormUtils";
 import { useValidatedForm } from "../hooks/useValidatedForm";
+import { useNotificationsEnabled } from "@agent-management-platform/api-client";
+import { MonitorWatchFormSection } from "./MonitorWatchFormSection";
+import {
+  defaultWatchSettings,
+  hasWatchSettingsErrors,
+  validateWatchSettings,
+  type WatchSettingsValue,
+} from "./MonitorWatchSettings";
+
+/**
+ * The caller's watch as the form saves it: the settings to watch with, or
+ * null to not watch. Undefined when the deployment has no notifications.
+ */
+export type MonitorWatchChoice = WatchSettingsValue | null | undefined;
+
+/** A new monitor starts watched, for failures. */
+const NEW_MONITOR_WATCH = defaultWatchSettings();
 
 interface MonitorFormWizardProps {
   title: string;
@@ -39,6 +56,7 @@ interface MonitorFormWizardProps {
   onSubmit: (
     values: CreateMonitorFormValues,
     allowNavigation: (action: () => void) => void,
+    watch: MonitorWatchChoice,
   ) => void;
   initialValues: CreateMonitorFormValues;
   isSubmitting: boolean;
@@ -47,6 +65,12 @@ interface MonitorFormWizardProps {
   backLabel?: string;
   isTypeEditable?: boolean;
   environments?: EnvironmentOption[];
+  /**
+   * The caller's current watch on the monitor, or null when they do not
+   * watch it. A new monitor starts watched with the default settings. Pass a
+   * stable (memoized) value: a new one resets what the user has entered.
+   */
+  initialWatch?: WatchSettingsValue | null;
 }
 
 export function MonitorFormWizard({
@@ -62,17 +86,30 @@ export function MonitorFormWizard({
   backLabel = "Back to Monitors",
   isTypeEditable = true,
   environments = [],
+  initialWatch = NEW_MONITOR_WATCH,
 }: MonitorFormWizardProps) {
   const [page, setPage] = useState<1 | 2>(1);
   const [formData, setFormData] =
     useState<CreateMonitorFormValues>(initialValues);
   const [hasLLMJudge, setHasLLMJudge] = useState(false);
   const [llmProviderError, setLLMProviderError] = useState("");
+  const notificationsEnabled = useNotificationsEnabled();
+  const [watching, setWatching] = useState(initialWatch !== null);
+  const [watchSettings, setWatchSettings] = useState<WatchSettingsValue>(
+    initialWatch ?? NEW_MONITOR_WATCH,
+  );
+  const [watchSubmitted, setWatchSubmitted] = useState(false);
 
   useEffect(() => {
     setFormData(initialValues);
     setPage(1);
   }, [initialValues]);
+
+  // The watch loads on its own; take it once it arrives.
+  useEffect(() => {
+    setWatching(initialWatch !== null);
+    setWatchSettings(initialWatch ?? NEW_MONITOR_WATCH);
+  }, [initialWatch]);
 
   const isDirty = useMemo(
     () => JSON.stringify(formData) !== JSON.stringify(initialValues),
@@ -220,7 +257,17 @@ export function MonitorFormWizard({
       return;
     }
 
-    onSubmit(formData, allowNavigation);
+    let watch: MonitorWatchChoice;
+    if (notificationsEnabled) {
+      watch = watching ? watchSettings : null;
+      if (watch && hasWatchSettingsErrors(validateWatchSettings(watch, formData.evaluators))) {
+        setWatchSubmitted(true);
+        setPage(2);
+        return;
+      }
+    }
+
+    onSubmit(formData, allowNavigation, watch);
   }, [
     formData,
     hasLLMJudge,
@@ -228,6 +275,9 @@ export function MonitorFormWizard({
     onSubmit,
     guardSubmit,
     allowNavigation,
+    notificationsEnabled,
+    watching,
+    watchSettings,
   ]);
 
   // In edit mode (isTypeEditable=false) traceStart/traceEnd errors don't block
@@ -310,6 +360,16 @@ export function MonitorFormWizard({
             onHasLLMJudgeChange={handleHasLLMJudgeChange}
             error={errors.evaluators}
             llmProviderError={llmProviderError}
+          />
+        )}
+        {page === 2 && notificationsEnabled && (
+          <MonitorWatchFormSection
+            watching={watching}
+            onWatchingChange={setWatching}
+            settings={watchSettings}
+            onSettingsChange={setWatchSettings}
+            evaluators={formData.evaluators}
+            showErrors={watchSubmitted}
           />
         )}
         <Stack direction="row" gap={2}>

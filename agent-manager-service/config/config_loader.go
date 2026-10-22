@@ -319,6 +319,9 @@ func loadEnvs() {
 		MaxAttempts:           int(r.readOptionalInt64("ALERTING_MAX_ATTEMPTS", 6)),
 		DeliveryRetentionDays: int(r.readOptionalInt64("ALERTING_DELIVERY_RETENTION_DAYS", 14)),
 	}
+	config.Notifications = NotificationsConfig{
+		RetentionDays: int(r.readOptionalInt64("NOTIFICATION_RETENTION_DAYS", 30)),
+	}
 
 	// Resource limits for agent resource configurations (operator-controlled ceilings)
 	config.PerAgentResourceLimits = ResourceLimitsConfig{

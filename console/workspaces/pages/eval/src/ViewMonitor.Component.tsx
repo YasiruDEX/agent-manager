@@ -74,6 +74,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import MonitorRunList from "./subComponents/MonitorRunList";
+import { MonitorWatchButton } from "./subComponents/MonitorWatchButton";
 import {
   computeAverageScore,
   computeLevelSummaries,
@@ -461,6 +462,14 @@ export const ViewMonitorComponent: React.FC = () => {
                     onCustomRangeApply={handleCustomRangeApply}
                   />
                 )}
+                <MonitorWatchButton
+                  orgName={orgId}
+                  projName={projectId}
+                  agentName={agentId}
+                  monitorName={monitorId}
+                  monitorDisplayName={monitorData?.displayName}
+                  evaluators={monitorData?.evaluators ?? []}
+                />
                 <Button
                   size="small"
                   variant="outlined"

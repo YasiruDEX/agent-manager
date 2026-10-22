@@ -1393,6 +1393,23 @@
               "required": [],
               "title": "alerting",
               "type": "object"
+            },
+            "notifications": {
+              "additionalProperties": false,
+              "description": "Console notifications about the monitors users watch.",
+              "properties": {
+                "retentionDays": {
+                  "default": 30,
+                  "description": "Days users' console notifications about watched monitors are kept.",
+                  "minimum": 1,
+                  "required": [],
+                  "title": "retentionDays",
+                  "type": "integer"
+                }
+              },
+              "required": [],
+              "title": "notifications",
+              "type": "object"
             }
           },
           "required": [],

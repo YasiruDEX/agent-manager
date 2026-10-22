@@ -185,6 +185,9 @@ agentManagerService:
       # Let channel URLs resolve to private addresses or use plain http.
       # Local development only.
       allowPrivateEndpoints: false
+    notifications:
+      # Days users' console notifications about watched monitors are kept.
+      retentionDays: 30
     # In-cluster URL the agent-manager-service uses to query trace data server-side.
     amObserverURL: "http://amp-observer.openchoreo-observability-plane.svc.cluster.local:9098"
     # Externally reachable observer URL returned to out-of-cluster clients

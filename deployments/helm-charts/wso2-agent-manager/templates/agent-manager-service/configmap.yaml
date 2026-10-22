@@ -132,6 +132,9 @@ data:
   ALERTING_DELIVERY_RETENTION_DAYS: {{ .deliveryRetentionDays | default 14 | quote }}
   ALERTING_ALLOW_PRIVATE_ENDPOINTS: {{ dig "allowPrivateEndpoints" false . | quote }}
   {{- end }}
+  {{- with .Values.agentManagerService.config.notifications }}
+  NOTIFICATION_RETENTION_DAYS: {{ .retentionDays | default 30 | quote }}
+  {{- end }}
   # Gateway manifest cache backend. Must be "redis" whenever replicaCount > 1 — see
   # the gatewayManifestCache note in values.yaml.
   GATEWAY_MANIFEST_CACHE_BACKEND: {{ .Values.agentManagerService.config.gatewayManifestCache.backend | default "memory" | quote }}

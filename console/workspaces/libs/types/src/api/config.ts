@@ -32,4 +32,10 @@ export interface ConfigResponse {
    * false. Absent is treated as false.
    */
   alertingEnabled?: boolean;
+  /**
+   * Whether this deployment notifies users in the console about the monitors
+   * they watch. Like alerting it needs the event bus; the console hides
+   * watching and the notification bell when false. Absent is treated as false.
+   */
+  notificationsEnabled?: boolean;
 }

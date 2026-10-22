@@ -224,6 +224,12 @@ var actionOverrides = map[string]Action{
 	"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}":             "alert-channel:delete",
 	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/rotate-secret": "alert-channel:rotate-secret",
 	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/test":          "alert-channel:test",
+	// Watching a monitor and reading notifications are gated by what the
+	// caller can see, but change the caller's own settings.
+	"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/watch":    "monitor-watch:update",
+	"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/watch": "monitor-watch:delete",
+	"POST /orgs/{orgName}/notifications/read-all":                                                "notification:update",
+	"PATCH /orgs/{orgName}/notifications/{notificationId}":                                       "notification:update",
 
 	// Gating permission names a different resource than the effect.
 	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/publish-kind": "agent-kind:publish",

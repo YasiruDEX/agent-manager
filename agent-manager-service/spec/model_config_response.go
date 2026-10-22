@@ -25,6 +25,8 @@ type ConfigResponse struct {
 	ConsoleAnalyticsEnabled *bool `json:"consoleAnalyticsEnabled,omitempty"`
 	// Whether this deployment delivers platform events to alert channels, that is, whether it runs an event bus (EVENTS_MODE is not off). The console hides alerting when false. Absent is treated as false.
 	AlertingEnabled *bool `json:"alertingEnabled,omitempty"`
+	// Whether this deployment notifies users in the console about the monitors they watch. Like alerting it needs an event bus; the console hides watching and the notification bell when false. Absent is treated as false.
+	NotificationsEnabled *bool `json:"notificationsEnabled,omitempty"`
 }
 
 // NewConfigResponse instantiates a new ConfigResponse object
@@ -133,6 +135,38 @@ func (o *ConfigResponse) SetAlertingEnabled(v bool) {
 	o.AlertingEnabled = &v
 }
 
+// GetNotificationsEnabled returns the NotificationsEnabled field value if set, zero value otherwise.
+func (o *ConfigResponse) GetNotificationsEnabled() bool {
+	if o == nil || IsNil(o.NotificationsEnabled) {
+		var ret bool
+		return ret
+	}
+	return *o.NotificationsEnabled
+}
+
+// GetNotificationsEnabledOk returns a tuple with the NotificationsEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ConfigResponse) GetNotificationsEnabledOk() (*bool, bool) {
+	if o == nil || IsNil(o.NotificationsEnabled) {
+		return nil, false
+	}
+	return o.NotificationsEnabled, true
+}
+
+// HasNotificationsEnabled returns a boolean if a field has been set.
+func (o *ConfigResponse) HasNotificationsEnabled() bool {
+	if o != nil && !IsNil(o.NotificationsEnabled) {
+		return true
+	}
+
+	return false
+}
+
+// SetNotificationsEnabled gets a reference to the given bool and assigns it to the NotificationsEnabled field.
+func (o *ConfigResponse) SetNotificationsEnabled(v bool) {
+	o.NotificationsEnabled = &v
+}
+
 func (o ConfigResponse) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -149,6 +183,9 @@ func (o ConfigResponse) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.AlertingEnabled) {
 		toSerialize["alertingEnabled"] = o.AlertingEnabled
+	}
+	if !IsNil(o.NotificationsEnabled) {
+		toSerialize["notificationsEnabled"] = o.NotificationsEnabled
 	}
 	return toSerialize, nil
 }

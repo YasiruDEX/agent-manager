@@ -150,6 +150,8 @@ type Config struct {
 
 	// Alerting configures delivering events to alert channels.
 	Alerting AlertingConfig
+	// Notifications configures the console notifications of watched monitors.
+	Notifications NotificationsConfig
 
 	// GatewayManifestCache configures where the gateway-reported policy manifest
 	// cache lives. The default in-memory backend is process-local and therefore
@@ -211,6 +213,13 @@ type AlertingConfig struct {
 	MaxAttempts int
 	// DeliveryRetentionDays is how long the delivery log is kept.
 	DeliveryRetentionDays int
+}
+
+// NotificationsConfig configures the console notifications users get about
+// the monitors they watch.
+type NotificationsConfig struct {
+	// RetentionDays is how long notifications are kept.
+	RetentionDays int
 }
 
 // AuditConfig controls the audit trail.

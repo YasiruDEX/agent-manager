@@ -27,6 +27,7 @@ import {
 import { generatePath, Outlet, useNavigate, useParams } from "react-router-dom";
 import { LogOut, Settings } from "@wso2/oxygen-ui-icons-react";
 import { ProfileDrawer } from "./ProfileDrawer";
+import { NotificationCenter } from "./NotificationCenter";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { Logo, useExternalComponentModules } from "@agent-management-platform/views";
 import { globalConfig, absoluteRouteMap } from "@agent-management-platform/types";
@@ -137,6 +138,7 @@ export function OxygenLayout() {
             ))
             }
             <Header.Actions>
+              <NotificationCenter orgId={orgId} />
               <ColorSchemeToggle />
               <UserMenu>
                 <UserMenu.Trigger

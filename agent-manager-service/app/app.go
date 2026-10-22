@@ -440,7 +440,8 @@ func loadBuiltInLLMTemplates(dependencies *wiring.AppParams) error {
 }
 
 // startEvents sets up the event bus, retrying until it answers, then starts
-// the publisher and the alert dispatcher. A no-op with events off.
+// the publisher, the alert dispatcher and the notification center. A no-op
+// with events off.
 func startEvents(ctx context.Context, deps *wiring.AppParams) {
 	if deps.EventBus == nil {
 		return
@@ -468,17 +469,23 @@ func startEvents(ctx context.Context, deps *wiring.AppParams) {
 		if err := deps.AlertDispatcher.Start(ctx); err != nil {
 			slog.Error("Failed to start the alert dispatcher", "error", err)
 		}
+		if err := deps.NotificationCenter.Start(ctx); err != nil {
+			slog.Error("Failed to start the notification center", "error", err)
+		}
 	}()
 }
 
-// stopEvents stops the alert dispatcher, flushes queued events and closes
-// the bus.
+// stopEvents stops the alert dispatcher and the notification center, flushes
+// queued events and closes the bus.
 func stopEvents(deps *wiring.AppParams) {
 	if deps.EventBus == nil {
 		return
 	}
 	if err := deps.AlertDispatcher.Stop(); err != nil {
 		slog.Error("Failed to stop the alert dispatcher", "error", err)
+	}
+	if err := deps.NotificationCenter.Stop(); err != nil {
+		slog.Error("Failed to stop the notification center", "error", err)
 	}
 	if publisher, ok := deps.EventPublisher.(*events.AsyncPublisher); ok {
 		publisher.Stop()

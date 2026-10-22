@@ -26,10 +26,21 @@ import {
   type UpdateMonitorRequest,
 } from "@agent-management-platform/types";
 import {
+  useApplyMonitorWatch,
   useGetMonitor,
+  useMonitorWatch,
+  useNotificationsEnabled,
   useUpdateMonitor,
 } from "@agent-management-platform/api-client";
-import { MonitorFormWizard } from "./subComponents/MonitorFormWizard";
+import {
+  MonitorFormWizard,
+  type MonitorWatchChoice,
+} from "./subComponents/MonitorFormWizard";
+import {
+  toWatchRequest,
+  watchSettingsFromResponse,
+  type WatchSettingsValue,
+} from "./subComponents/MonitorWatchSettings";
 import type { CreateMonitorFormValues } from "./form/schema";
 
 export const EditMonitorComponent: React.FC = () => {
@@ -63,6 +74,21 @@ export const EditMonitorComponent: React.FC = () => {
     projName: projectId ?? "",
     agentName: agentId ?? "",
   });
+
+  const notificationsEnabled = useNotificationsEnabled();
+  const { data: currentWatch, isLoading: isLoadingWatch } = useMonitorWatch(
+    { orgName: orgId, projName: projectId, agentName: agentId, monitorName: monitorId },
+    notificationsEnabled,
+  );
+  const { mutate: applyWatch } = useApplyMonitorWatch({
+    orgName: orgId,
+    projName: projectId,
+    agentName: agentId,
+  });
+  const initialWatch = useMemo<WatchSettingsValue | null>(
+    () => (currentWatch?.watching ? watchSettingsFromResponse(currentWatch) : null),
+    [currentWatch],
+  );
 
   const missingParamsMessage = useMemo(() => {
     if (!orgId) return "Organization is required to edit a monitor.";
@@ -115,6 +141,7 @@ export const EditMonitorComponent: React.FC = () => {
     (
       values: CreateMonitorFormValues,
       allowNavigation: (action: () => void) => void,
+      watch: MonitorWatchChoice,
     ) => {
       if (!orgId || !projectId || !agentId || !monitorId) {
         return;
@@ -142,13 +169,27 @@ export const EditMonitorComponent: React.FC = () => {
             : undefined,
       };
 
+      // Only a changed watch is saved: an untouched form leaves it as it is.
+      const watchRequest = watch ? toWatchRequest(watch) : null;
+      const initialRequest = initialWatch ? toWatchRequest(initialWatch) : null;
+      const watchChanged =
+        watch !== undefined && JSON.stringify(watchRequest) !== JSON.stringify(initialRequest);
+
       updateMonitor(payload, {
         onSuccess: () => {
-          allowNavigation(() => navigate(backHref));
+          const goBack = () => allowNavigation(() => navigate(backHref));
+          if (watchChanged) {
+            applyWatch({ monitorName: monitorId, watch: watchRequest }, { onSettled: goBack });
+            return;
+          }
+          goBack();
         },
       });
     },
-    [agentId, backHref, initialValues, monitorId, navigate, orgId, projectId, updateMonitor],
+    [
+      agentId, applyWatch, backHref, initialValues, initialWatch, monitorId, navigate, orgId,
+      projectId, updateMonitor,
+    ],
   );
 
   if (missingParamsMessage) {
@@ -165,7 +206,7 @@ export const EditMonitorComponent: React.FC = () => {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (notificationsEnabled && isLoadingWatch)) {
     return (
       <PageLayout
         title="Edit Monitor"
@@ -223,6 +264,7 @@ export const EditMonitorComponent: React.FC = () => {
       isSubmitting={isUpdating}
       serverError={updateError}
       isTypeEditable={false}
+      initialWatch={initialWatch}
     />
   );
 };

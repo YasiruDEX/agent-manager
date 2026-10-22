@@ -12134,6 +12134,238 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/watch:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+      - name: monitorName
+        in: path
+        required: true
+        description: Monitor name
+        schema:
+          type: string
+    get:
+      tags:
+        - Notifications
+      summary: Get the caller's watch on a monitor
+      description: |
+        Returns the calling user's watch settings. When the caller does not
+        watch the monitor, watching is false and the settings are the defaults
+        a new watch starts with.
+      operationId: getMonitorWatch
+      responses:
+        "200":
+          description: Watch settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitorWatchResponse"
+        "404":
+          description: Monitor not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Notifications
+      summary: Watch a monitor, or change the caller's watch settings
+      description: |
+        Creates or replaces the calling user's watch. The user is then notified
+        in the console about the monitor's runs as the settings select.
+      operationId: putMonitorWatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonitorWatchRequest"
+      responses:
+        "200":
+          description: Watch settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitorWatchResponse"
+        "400":
+          description: Invalid settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Monitor not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Notifications
+      summary: Stop watching a monitor
+      description: Removes the calling user's watch. Succeeds when there is none.
+      operationId: deleteMonitorWatch
+      responses:
+        "204":
+          description: Not watching
+        "404":
+          description: Monitor not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/notifications:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    get:
+      tags:
+        - Notifications
+      summary: List the caller's notifications
+      description: |
+        Newest first. Each user sees only their own notifications. They are
+        kept for NOTIFICATION_RETENTION_DAYS.
+      operationId: listNotifications
+      parameters:
+        - name: unread
+          in: query
+          required: false
+          description: Only unread notifications.
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of notifications (default 20, at most 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          required: false
+          description: Number of notifications to skip.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationListResponse"
+        "400":
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/notifications/unread-count:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    get:
+      tags:
+        - Notifications
+      summary: Count the caller's unread notifications
+      operationId: getUnreadNotificationCount
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationUnreadCountResponse"
+
+  /orgs/{orgName}/notifications/read-all:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    post:
+      tags:
+        - Notifications
+      summary: Mark all of the caller's notifications as read
+      operationId: markAllNotificationsRead
+      responses:
+        "204":
+          description: All read
+
+  /orgs/{orgName}/notifications/{notificationId}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: notificationId
+        in: path
+        required: true
+        description: Notification ID
+        schema:
+          type: string
+    patch:
+      tags:
+        - Notifications
+      summary: Mark a notification as read or unread
+      operationId: updateNotification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationUpdateRequest"
+      responses:
+        "200":
+          description: The notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   parameters:
     AgentIdentityOrgName:
@@ -12401,6 +12633,13 @@ components:
             Whether this deployment delivers platform events to alert channels,
             that is, whether it runs an event bus (EVENTS_MODE is not off). The
             console hides alerting when false. Absent is treated as false.
+        notificationsEnabled:
+          type: boolean
+          description: |
+            Whether this deployment notifies users in the console about the
+            monitors they watch. Like alerting it needs an event bus; the
+            console hides watching and the notification bell when false.
+            Absent is treated as false.
 
     CreateLLMAPIKeyRequest:
       type: object
@@ -20167,3 +20406,137 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AlertDeliveryResponse"
+
+    MonitorScoreThreshold:
+      type: object
+      description: |
+        Notifies the watcher when a score of the monitor's runs crosses a
+        value, and again when it crosses back.
+      required: [evaluator, aggregation, operator, value]
+      properties:
+        evaluator:
+          type: string
+          description: Display name of one of the monitor's evaluators.
+        aggregation:
+          type: string
+          enum: [mean, pass_rate]
+          description: Which of the run's aggregated scores to compare.
+        operator:
+          type: string
+          enum: [below, above]
+          description: The score is breached when it is below (or above) value.
+        value:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+
+    MonitorWatchRequest:
+      type: object
+      required: [notifyOnFailure, notifyOnSuccess, thresholds]
+      properties:
+        notifyOnFailure:
+          type: boolean
+          description: Notify when a run fails or cannot start.
+        notifyOnSuccess:
+          type: boolean
+          description: Notify when a run completes.
+        thresholds:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/MonitorScoreThreshold"
+
+    MonitorWatchResponse:
+      type: object
+      required: [watching, notifyOnFailure, notifyOnSuccess, thresholds]
+      properties:
+        watching:
+          type: boolean
+          description: Whether the caller watches the monitor.
+        notifyOnFailure:
+          type: boolean
+        notifyOnSuccess:
+          type: boolean
+        thresholds:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitorScoreThreshold"
+        breached:
+          type: array
+          description: The thresholds the latest evaluated run breached.
+          items:
+            $ref: "#/components/schemas/MonitorScoreThreshold"
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotificationMonitorRef:
+      type: object
+      description: The monitor, and run if any, a notification is about.
+      required: [projectName, agentName, monitorName, monitorDisplayName]
+      properties:
+        projectName:
+          type: string
+        agentName:
+          type: string
+        environmentName:
+          type: string
+        monitorName:
+          type: string
+        monitorDisplayName:
+          type: string
+        runId:
+          type: string
+
+    NotificationResponse:
+      type: object
+      required: [id, kind, title, body, read, createdAt]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [monitor_run_failed, monitor_run_succeeded, score_breached, score_recovered]
+        title:
+          type: string
+        body:
+          type: string
+        read:
+          type: boolean
+        monitor:
+          $ref: "#/components/schemas/NotificationMonitorRef"
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+
+    NotificationListResponse:
+      type: object
+      required: [notifications, total, unreadCount]
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationResponse"
+        total:
+          type: integer
+          description: Notifications matching the query, ignoring limit and offset.
+        unreadCount:
+          type: integer
+
+    NotificationUnreadCountResponse:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+
+    NotificationUpdateRequest:
+      type: object
+      required: [read]
+      properties:
+        read:
+          type: boolean

@@ -123,6 +123,8 @@ var serviceProviderSet = wire.NewSet(
 	wire.Bind(new(services.AlertChannelCleaner), new(services.AlertChannelService)),
 	wire.Bind(new(services.AlertChannelResolver), new(services.AlertChannelService)),
 	services.NewAlertDispatcherService,
+	services.NewNotificationService,
+	services.NewNotificationCenterService,
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -161,6 +163,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewMCPProxyScopeController,
 	controllers.NewAgentIdentityController,
 	controllers.NewAlertChannelController,
+	controllers.NewNotificationController,
 )
 
 var testClientProviderSet = wire.NewSet(
@@ -405,6 +408,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideEnvThunderURLRepository,
 	repositories.NewMCPProxyScopeRepository,
 	repositories.NewAlertChannelRepository,
+	repositories.NewNotificationRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
