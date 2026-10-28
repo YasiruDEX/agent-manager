@@ -196,20 +196,20 @@ export const LazySettingsOrg = lazy(() =>
   }))
 );
 
-// Alerting (alert channels at org, project and agent levels)
-export const LazyOrgAlerting = lazy(() =>
+// Events (destinations and subscriptions at org, project and agent levels)
+export const LazyOrgEvents = lazy(() =>
   import("@agent-management-platform/settings").then((m) => ({
-    default: m.OrgAlerting as ComponentType,
+    default: m.OrgEvents as ComponentType,
   }))
 );
-export const LazyProjectAlerting = lazy(() =>
+export const LazyProjectEvents = lazy(() =>
   import("@agent-management-platform/settings").then((m) => ({
-    default: m.ProjectAlerting as ComponentType,
+    default: m.ProjectEvents as ComponentType,
   }))
 );
-export const LazyAgentAlerting = lazy(() =>
+export const LazyAgentEvents = lazy(() =>
   import("@agent-management-platform/settings").then((m) => ({
-    default: m.AgentAlerting as ComponentType,
+    default: m.AgentEvents as ComponentType,
   }))
 );
 

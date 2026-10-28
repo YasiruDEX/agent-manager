@@ -37,17 +37,19 @@ const (
 
 	streamMaxAge = 72 * time.Hour
 	// natsAckWait is how long a handler has before an unanswered message is
-	// redelivered; it must outlast a delivery to an alert channel.
+	// redelivered; it must outlast a delivery to a destination.
 	natsAckWait = 30 * time.Second
 	// natsPullBuffer bounds the messages fetched ahead of the handler. The
-	// ack timer starts at fetch, so a large buffer behind a few slow channel
+	// ack timer starts at fetch, so a large buffer behind a few slow
 	// deliveries would time out and be redelivered, sending them twice.
 	natsPullBuffer = 16
 )
 
 // natsQueues maps work queue names to their JetStream streams and subjects.
+// A queue's subjects must stay outside amp.events.>, which AMP_EVENTS
+// captures: JetStream refuses streams with overlapping subjects.
 var natsQueues = map[string]struct{ stream, subject string }{
-	QueueAlertDeliveries: {stream: "AMP_ALERT_DELIVERIES", subject: "amp.alerts.deliveries"},
+	QueueEventDeliveries: {stream: "AMP_EVENT_DELIVERIES", subject: "amp.event-deliveries"},
 }
 
 // Subject is the NATS subject an event is published on.

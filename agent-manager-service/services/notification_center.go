@@ -39,7 +39,7 @@ const (
 // notifications for the users who watch the monitor.
 //
 // It reads every published event through its own durable consumer, so it
-// sees each event independently of the alert dispatcher; across replicas each
+// sees each event independently of the event dispatcher; across replicas each
 // event goes to one of them. A notification is created at most once per
 // user, event and kind, so an event redelivered after a crash is harmless.
 type NotificationCenterService interface {

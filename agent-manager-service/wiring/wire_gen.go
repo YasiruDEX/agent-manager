@@ -8,6 +8,9 @@ package wiring
 
 import (
 	"fmt"
+	"log/slog"
+	"time"
+
 	"github.com/google/wire"
 	"github.com/wso2/agent-manager/agent-manager-service/audit"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/observersvc"
@@ -23,14 +26,12 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
-	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels"
-	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/notify"
-	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/webhook"
+	"github.com/wso2/agent-manager/agent-manager-service/services/eventdestinations"
+	"github.com/wso2/agent-manager/agent-manager-service/services/eventdestinations/notify"
+	"github.com/wso2/agent-manager/agent-manager-service/services/eventdestinations/webhook"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 	"gorm.io/gorm"
-	"log/slog"
-	"time"
 )
 
 // Injectors from wire.go:
@@ -125,12 +126,11 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	a2APublicationRepository := ProvideA2APublicationRepository(db)
 	a2AAgentCardRepository := ProvideA2AAgentCardRepository(db)
 	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioning, monitorManagerService, agentIdentityInjectionService, identityClient, a2APublicationRepository, a2AAgentCardRepository, deploymentRepository, gatewayEventsService, logger)
-	alertChannelRepository := repositories.NewAlertChannelRepository(db)
-	registry := ProvideAlertChannelDrivers(configConfig)
-	alertChannelService := services.NewAlertChannelService(alertChannelRepository, registry, v, logger)
-	agentController := controllers.NewAgentController(agentManagerService, agentKindService, alertChannelService)
+	eventRepository := repositories.NewEventRepository(db)
+	eventSubscriptionService := services.NewEventSubscriptionService(eventRepository, logger)
+	agentController := controllers.NewAgentController(agentManagerService, agentKindService, eventSubscriptionService)
 	agentKindController := controllers.NewAgentKindController(agentKindService)
-	infraResourceController := controllers.NewInfraResourceController(infraResourceManager, alertChannelService)
+	infraResourceController := controllers.NewInfraResourceController(infraResourceManager, eventSubscriptionService)
 	agentTokenController := controllers.NewAgentTokenController(agentTokenManagerService)
 	repositoryController := controllers.NewRepositoryController(repositoryService)
 	prober := thundersvc.NewProber()
@@ -181,7 +181,9 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	mcpProxyScopeService := services.NewMCPProxyScopeService(mcpProxyScopeRepository, mcpProxyRepository, infraResourceManager, envThunderResolver, mcpProxyService, logger)
 	mcpProxyScopeController := controllers.NewMCPProxyScopeController(mcpProxyScopeService)
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, agentThunderClientRepository, mcpProxyRepository, mcpProxyScopeRepository, mcpProxyService)
-	alertChannelController := controllers.NewAlertChannelController(alertChannelService)
+	registry := ProvideDestinationDrivers(configConfig)
+	eventDestinationService := services.NewEventDestinationService(eventRepository, registry, v, logger)
+	eventsController := controllers.NewEventsController(eventDestinationService, eventSubscriptionService)
 	notificationRepository := repositories.NewNotificationRepository(db)
 	notificationService := services.NewNotificationService(notificationRepository, monitorRepository)
 	notificationController := controllers.NewNotificationController(notificationService)
@@ -196,7 +198,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	a2APublicationReconcilerService := services.NewA2APublicationReconcilerService(a2APublicationRepository, a2AAgentCardRepository, deploymentRepository, gatewayRepository, agentConfigRepository, openChoreoClient, gatewayEventsService, logger)
 	a2ACardFetcher := services.NewA2ACardFetcher()
 	a2ACardReconcilerService := services.NewA2ACardReconcilerService(a2AAgentCardRepository, a2ACardFetcher, openChoreoClient, logger)
-	alertDispatcherService := services.NewAlertDispatcherService(bus, alertChannelRepository, alertChannelService, configConfig, logger)
+	eventDispatcherService := services.NewEventDispatcherService(bus, eventRepository, eventDestinationService, configConfig, logger)
 	notificationCenterService := services.NewNotificationCenterService(bus, notificationRepository, configConfig, logger)
 	appParams := &AppParams{
 		AuthMiddleware:                   middleware,
@@ -231,7 +233,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 		IdentityController:               identityController,
 		MCPProxyScopeController:          mcpProxyScopeController,
 		AgentIdentityController:          agentIdentityController,
-		AlertChannelController:           alertChannelController,
+		EventsController:                 eventsController,
 		NotificationController:           notificationController,
 		MonitorScheduler:                 monitorSchedulerService,
 		AgentThunderReconciler:           agentThunderReconcilerService,
@@ -243,7 +245,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 		AgentTokenManagerService:         agentTokenManagerService,
 		AgentIdentityInjectionService:    agentIdentityInjectionService,
 		EnvironmentService:               environmentService,
-		AlertDispatcher:                  alertDispatcherService,
+		EventDispatcher:                  eventDispatcherService,
 		NotificationCenter:               notificationCenterService,
 		EventBus:                         bus,
 		EventPublisher:                   publisher,
@@ -336,12 +338,11 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	a2APublicationRepository := ProvideA2APublicationRepository(db)
 	a2AAgentCardRepository := ProvideA2AAgentCardRepository(db)
 	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioningService, monitorManagerService, agentIdentityInjectionService, identityClient, a2APublicationRepository, a2AAgentCardRepository, deploymentRepository, gatewayEventsService, logger)
-	alertChannelRepository := repositories.NewAlertChannelRepository(db)
-	registry := ProvideAlertChannelDrivers(configConfig)
-	alertChannelService := services.NewAlertChannelService(alertChannelRepository, registry, v, logger)
-	agentController := controllers.NewAgentController(agentManagerService, agentKindService, alertChannelService)
+	eventRepository := repositories.NewEventRepository(db)
+	eventSubscriptionService := services.NewEventSubscriptionService(eventRepository, logger)
+	agentController := controllers.NewAgentController(agentManagerService, agentKindService, eventSubscriptionService)
 	agentKindController := controllers.NewAgentKindController(agentKindService)
-	infraResourceController := controllers.NewInfraResourceController(infraResourceManager, alertChannelService)
+	infraResourceController := controllers.NewInfraResourceController(infraResourceManager, eventSubscriptionService)
 	agentTokenController := controllers.NewAgentTokenController(agentTokenManagerService)
 	repositoryController := controllers.NewRepositoryController(repositoryService)
 	prober := thundersvc.NewProber()
@@ -392,7 +393,9 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	mcpProxyScopeService := services.NewMCPProxyScopeService(mcpProxyScopeRepository, mcpProxyRepository, infraResourceManager, envThunderResolver, mcpProxyService, logger)
 	mcpProxyScopeController := controllers.NewMCPProxyScopeController(mcpProxyScopeService)
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, agentThunderClientRepository, mcpProxyRepository, mcpProxyScopeRepository, mcpProxyService)
-	alertChannelController := controllers.NewAlertChannelController(alertChannelService)
+	registry := ProvideDestinationDrivers(configConfig)
+	eventDestinationService := services.NewEventDestinationService(eventRepository, registry, v, logger)
+	eventsController := controllers.NewEventsController(eventDestinationService, eventSubscriptionService)
 	notificationRepository := repositories.NewNotificationRepository(db)
 	notificationService := services.NewNotificationService(notificationRepository, monitorRepository)
 	notificationController := controllers.NewNotificationController(notificationService)
@@ -407,7 +410,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	a2APublicationReconcilerService := services.NewA2APublicationReconcilerService(a2APublicationRepository, a2AAgentCardRepository, deploymentRepository, gatewayRepository, agentConfigRepository, openChoreoClient, gatewayEventsService, logger)
 	a2ACardFetcher := services.NewA2ACardFetcher()
 	a2ACardReconcilerService := services.NewA2ACardReconcilerService(a2AAgentCardRepository, a2ACardFetcher, openChoreoClient, logger)
-	alertDispatcherService := services.NewAlertDispatcherService(bus, alertChannelRepository, alertChannelService, configConfig, logger)
+	eventDispatcherService := services.NewEventDispatcherService(bus, eventRepository, eventDestinationService, configConfig, logger)
 	notificationCenterService := services.NewNotificationCenterService(bus, notificationRepository, configConfig, logger)
 	appParams := &AppParams{
 		AuthMiddleware:                   authMiddleware,
@@ -442,7 +445,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 		IdentityController:               identityController,
 		MCPProxyScopeController:          mcpProxyScopeController,
 		AgentIdentityController:          agentIdentityController,
-		AlertChannelController:           alertChannelController,
+		EventsController:                 eventsController,
 		NotificationController:           notificationController,
 		MonitorScheduler:                 monitorSchedulerService,
 		AgentThunderReconciler:           agentThunderReconcilerService,
@@ -454,7 +457,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 		AgentTokenManagerService:         agentTokenManagerService,
 		AgentIdentityInjectionService:    agentIdentityInjectionService,
 		EnvironmentService:               environmentService,
-		AlertDispatcher:                  alertDispatcherService,
+		EventDispatcher:                  eventDispatcherService,
 		NotificationCenter:               notificationCenterService,
 		EventBus:                         bus,
 		EventPublisher:                   publisher,
@@ -487,7 +490,7 @@ var clientProviderSet = wire.NewSet(
 )
 
 var serviceProviderSet = wire.NewSet(services.NewAgentManagerService, services.NewAgentKindService, services.NewInfraResourceManager, services.NewAgentTokenManagerService, ProvideGitCredentialsService, services.NewRepositoryService, services.NewMonitorExecutor, services.NewMonitorManagerService, ProvideThunderConfig, services.NewMonitorSchedulerService, ProvideAgentIdentityInjectionService, services.NewAgentThunderReconcilerService, services.NewA2APublicationReconcilerService, services.NewA2ACardFetcher, services.NewA2ACardReconcilerService, services.NewA2AAgentCardService, services.NewEvaluatorManagerService, services.NewEnvironmentService, services.NewPlatformGatewayService, services.NewLLMProviderTemplateService, services.NewLLMProviderService, services.NewLLMProxyService, services.NewLLMProviderDeploymentService, services.NewLLMProviderAPIKeyService, services.NewLLMProxyAPIKeyService, services.NewAgentAPIKeyService, services.NewLLMProxyDeploymentService, services.NewMCPProxyService, services.NewMCPProxyScopeService, wire.Bind(new(services.MCPProxyRedeployer), new(*services.MCPProxyService)), wire.Bind(new(controllers.MCPResourceServerIdentifierResolver), new(*services.MCPProxyService)), services.NewGatewayInternalAPIService, services.NewMonitorScoresService, services.NewCatalogService, services.NewLLMProxyProvisioner, services.NewAgentConfigurationService, services.NewLLMTemplateStore, services.NewGitSecretService, services.NewAIApplicationService, ProvideEventBus,
-	ProvideEventPublisher, services.NewMonitorRunEvents, ProvideAlertChannelDrivers, services.NewAlertChannelService, wire.Bind(new(services.AlertChannelCleaner), new(services.AlertChannelService)), wire.Bind(new(services.AlertChannelResolver), new(services.AlertChannelService)), services.NewAlertDispatcherService, services.NewNotificationService, services.NewNotificationCenterService,
+	ProvideEventPublisher, services.NewMonitorRunEvents, ProvideDestinationDrivers, services.NewEventDestinationService, services.NewEventSubscriptionService, wire.Bind(new(services.EventsCleaner), new(services.EventSubscriptionService)), wire.Bind(new(services.DestinationResolver), new(services.EventDestinationService)), services.NewEventDispatcherService, services.NewNotificationService, services.NewNotificationCenterService,
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -496,7 +499,7 @@ var instrumentationProviderSet = wire.NewSet(
 	ProvideDefaultPythonVersion,
 )
 
-var controllerProviderSet = wire.NewSet(controllers.NewAgentController, controllers.NewAgentKindController, controllers.NewInfraResourceController, controllers.NewAgentTokenController, controllers.NewRepositoryController, controllers.NewEnvironmentController, controllers.NewGatewayController, controllers.NewLLMController, controllers.NewLLMDeploymentController, controllers.NewLLMProviderAPIKeyController, controllers.NewLLMProxyAPIKeyController, controllers.NewAgentAPIKeyController, controllers.NewA2AAgentCardController, controllers.NewLLMProxyDeploymentController, controllers.NewMCPProxyController, ProvideWebSocketController, controllers.NewGatewayInternalController, controllers.NewMonitorController, controllers.NewMonitorScoresController, controllers.NewMonitorScoresPublisherController, controllers.NewEvaluatorController, controllers.NewCatalogController, ProvideAgentBuildOptionsController, controllers.NewAgentConfigurationController, controllers.NewGitSecretController, controllers.NewIdentityController, controllers.NewMCPProxyScopeController, controllers.NewAgentIdentityController, controllers.NewAlertChannelController, controllers.NewNotificationController)
+var controllerProviderSet = wire.NewSet(controllers.NewAgentController, controllers.NewAgentKindController, controllers.NewInfraResourceController, controllers.NewAgentTokenController, controllers.NewRepositoryController, controllers.NewEnvironmentController, controllers.NewGatewayController, controllers.NewLLMController, controllers.NewLLMDeploymentController, controllers.NewLLMProviderAPIKeyController, controllers.NewLLMProxyAPIKeyController, controllers.NewAgentAPIKeyController, controllers.NewA2AAgentCardController, controllers.NewLLMProxyDeploymentController, controllers.NewMCPProxyController, ProvideWebSocketController, controllers.NewGatewayInternalController, controllers.NewMonitorController, controllers.NewMonitorScoresController, controllers.NewMonitorScoresPublisherController, controllers.NewEvaluatorController, controllers.NewCatalogController, ProvideAgentBuildOptionsController, controllers.NewAgentConfigurationController, controllers.NewGitSecretController, controllers.NewIdentityController, controllers.NewMCPProxyScopeController, controllers.NewAgentIdentityController, controllers.NewEventsController, controllers.NewNotificationController)
 
 var testClientProviderSet = wire.NewSet(
 	ProvideTestOpenChoreoClient,
@@ -723,7 +726,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
 	ProvideEnvThunderSystemClientRepository,
-	ProvideEnvThunderURLRepository, repositories.NewMCPProxyScopeRepository, repositories.NewAlertChannelRepository, repositories.NewNotificationRepository,
+	ProvideEnvThunderURLRepository, repositories.NewMCPProxyScopeRepository, repositories.NewEventRepository, repositories.NewNotificationRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
@@ -919,10 +922,10 @@ func ProvideAgentIdentityInjectionService(
 	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyScopeRepo, ocClient, cfg.SecretManager.AgentIdentityRefreshInterval, logger)
 }
 
-// ProvideAlertChannelDrivers registers the driver of each supported alert
-// channel kind. Add a kind here once its driver exists.
-func ProvideAlertChannelDrivers(cfg config.Config) *alertchannels.Registry {
-	return alertchannels.NewRegistry(webhook.New(cfg.Alerting.AllowPrivateEndpoints), notify.New(cfg.Alerting.AllowPrivateEndpoints))
+// ProvideDestinationDrivers registers the driver of each supported event
+// destination kind. Add a kind here once its driver exists.
+func ProvideDestinationDrivers(cfg config.Config) *eventdestinations.Registry {
+	return eventdestinations.NewRegistry(webhook.New(cfg.Events.AllowPrivateDestinations), notify.New(cfg.Events.AllowPrivateDestinations))
 }
 
 // ProvideEventBus connects to NATS, or starts the embedded in-memory server,

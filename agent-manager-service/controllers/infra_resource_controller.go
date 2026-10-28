@@ -50,16 +50,16 @@ type InfraResourceController interface {
 
 type infraResourceController struct {
 	infraResourceManager services.InfraResourceManager
-	alertChannels        services.AlertChannelCleaner
+	eventsCleaner        services.EventsCleaner
 }
 
 // NewInfraResourceController returns a new InfraResourceController instance.
 func NewInfraResourceController(
-	infraResourceManager services.InfraResourceManager, alertChannels services.AlertChannelCleaner,
+	infraResourceManager services.InfraResourceManager, eventsCleaner services.EventsCleaner,
 ) InfraResourceController {
 	return &infraResourceController{
 		infraResourceManager: infraResourceManager,
-		alertChannels:        alertChannels,
+		eventsCleaner:        eventsCleaner,
 	}
 }
 
@@ -278,8 +278,8 @@ func (c *infraResourceController) DeleteProject(w http.ResponseWriter, r *http.R
 		handleCommonErrors(w, err, "Failed to delete project")
 		return
 	}
-	if c.alertChannels != nil {
-		c.alertChannels.RemoveForProject(ctx, ouID, projectName)
+	if c.eventsCleaner != nil {
+		c.eventsCleaner.RemoveForProject(ctx, ouID, projectName)
 	}
 
 	utils.WriteSuccessResponse(w, http.StatusNoContent, "")

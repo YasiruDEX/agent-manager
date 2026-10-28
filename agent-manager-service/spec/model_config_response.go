@@ -23,9 +23,9 @@ type ConfigResponse struct {
 	ObserverBaseUrl string `json:"observerBaseUrl"`
 	// Whether this deployment accepts console usage analytics. The console buffers and sends nothing when false, so CONSOLE_ANALYTICS_ENABLED on the service is the single switch for the whole path rather than one half of it. Absent is treated as false.
 	ConsoleAnalyticsEnabled *bool `json:"consoleAnalyticsEnabled,omitempty"`
-	// Whether this deployment delivers platform events to alert channels, that is, whether it runs an event bus (EVENTS_MODE is not off). The console hides alerting when false. Absent is treated as false.
-	AlertingEnabled *bool `json:"alertingEnabled,omitempty"`
-	// Whether this deployment notifies users in the console about the monitors they watch. Like alerting it needs an event bus; the console hides watching and the notification bell when false. Absent is treated as false.
+	// Whether this deployment delivers platform events to event destinations, that is, whether it runs an event bus (EVENTS_MODE is not off). The console hides Events when false. Absent is treated as false.
+	EventsEnabled *bool `json:"eventsEnabled,omitempty"`
+	// Whether this deployment notifies users in the console about the monitors they watch. Like Events it needs an event bus; the console hides watching and the notification bell when false. Absent is treated as false.
 	NotificationsEnabled *bool `json:"notificationsEnabled,omitempty"`
 }
 
@@ -103,36 +103,36 @@ func (o *ConfigResponse) SetConsoleAnalyticsEnabled(v bool) {
 	o.ConsoleAnalyticsEnabled = &v
 }
 
-// GetAlertingEnabled returns the AlertingEnabled field value if set, zero value otherwise.
-func (o *ConfigResponse) GetAlertingEnabled() bool {
-	if o == nil || IsNil(o.AlertingEnabled) {
+// GetEventsEnabled returns the EventsEnabled field value if set, zero value otherwise.
+func (o *ConfigResponse) GetEventsEnabled() bool {
+	if o == nil || IsNil(o.EventsEnabled) {
 		var ret bool
 		return ret
 	}
-	return *o.AlertingEnabled
+	return *o.EventsEnabled
 }
 
-// GetAlertingEnabledOk returns a tuple with the AlertingEnabled field value if set, nil otherwise
+// GetEventsEnabledOk returns a tuple with the EventsEnabled field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *ConfigResponse) GetAlertingEnabledOk() (*bool, bool) {
-	if o == nil || IsNil(o.AlertingEnabled) {
+func (o *ConfigResponse) GetEventsEnabledOk() (*bool, bool) {
+	if o == nil || IsNil(o.EventsEnabled) {
 		return nil, false
 	}
-	return o.AlertingEnabled, true
+	return o.EventsEnabled, true
 }
 
-// HasAlertingEnabled returns a boolean if a field has been set.
-func (o *ConfigResponse) HasAlertingEnabled() bool {
-	if o != nil && !IsNil(o.AlertingEnabled) {
+// HasEventsEnabled returns a boolean if a field has been set.
+func (o *ConfigResponse) HasEventsEnabled() bool {
+	if o != nil && !IsNil(o.EventsEnabled) {
 		return true
 	}
 
 	return false
 }
 
-// SetAlertingEnabled gets a reference to the given bool and assigns it to the AlertingEnabled field.
-func (o *ConfigResponse) SetAlertingEnabled(v bool) {
-	o.AlertingEnabled = &v
+// SetEventsEnabled gets a reference to the given bool and assigns it to the EventsEnabled field.
+func (o *ConfigResponse) SetEventsEnabled(v bool) {
+	o.EventsEnabled = &v
 }
 
 // GetNotificationsEnabled returns the NotificationsEnabled field value if set, zero value otherwise.
@@ -181,8 +181,8 @@ func (o ConfigResponse) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.ConsoleAnalyticsEnabled) {
 		toSerialize["consoleAnalyticsEnabled"] = o.ConsoleAnalyticsEnabled
 	}
-	if !IsNil(o.AlertingEnabled) {
-		toSerialize["alertingEnabled"] = o.AlertingEnabled
+	if !IsNil(o.EventsEnabled) {
+		toSerialize["eventsEnabled"] = o.EventsEnabled
 	}
 	if !IsNil(o.NotificationsEnabled) {
 		toSerialize["notificationsEnabled"] = o.NotificationsEnabled

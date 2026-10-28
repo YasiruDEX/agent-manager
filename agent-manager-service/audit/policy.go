@@ -207,23 +207,23 @@ var sensitiveReadPaths = map[string]bool{
 // Keys are matched against the path with the method prefix stripped, so the
 // same path under different methods maps through methodActionOverrides first.
 var actionOverrides = map[string]Action{
-	// Alert channels are gated by the permission of the scope they belong to
-	// (alerting, project or agent), which says nothing about the operation.
-	"POST /orgs/{orgName}/alerting/channels":                                                                  "alert-channel:create",
-	"PUT /orgs/{orgName}/alerting/channels/{channelId}":                                                       "alert-channel:update",
-	"DELETE /orgs/{orgName}/alerting/channels/{channelId}":                                                    "alert-channel:delete",
-	"POST /orgs/{orgName}/alerting/channels/{channelId}/rotate-secret":                                        "alert-channel:rotate-secret",
-	"POST /orgs/{orgName}/alerting/channels/{channelId}/test":                                                 "alert-channel:test",
-	"POST /orgs/{orgName}/projects/{projName}/alerting/channels":                                              "alert-channel:create",
-	"PUT /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}":                                   "alert-channel:update",
-	"DELETE /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}":                                "alert-channel:delete",
-	"POST /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/rotate-secret":                    "alert-channel:rotate-secret",
-	"POST /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/test":                             "alert-channel:test",
-	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels":                           "alert-channel:create",
-	"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}":                "alert-channel:update",
-	"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}":             "alert-channel:delete",
-	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/rotate-secret": "alert-channel:rotate-secret",
-	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/test":          "alert-channel:test",
+	// Event destinations and subscriptions are gated by the permission of
+	// the scope they belong to (events, project or agent), which says nothing
+	// about the operation.
+	"POST /orgs/{orgName}/events/destinations":                                                            "event-destination:create",
+	"PUT /orgs/{orgName}/events/destinations/{destinationId}":                                             "event-destination:update",
+	"DELETE /orgs/{orgName}/events/destinations/{destinationId}":                                          "event-destination:delete",
+	"POST /orgs/{orgName}/events/destinations/{destinationId}/rotate-secret":                              "event-destination:rotate-secret",
+	"POST /orgs/{orgName}/events/destinations/{destinationId}/test":                                       "event-destination:test",
+	"POST /orgs/{orgName}/events/subscriptions":                                                           "event-subscription:create",
+	"PUT /orgs/{orgName}/events/subscriptions/{subscriptionId}":                                           "event-subscription:update",
+	"DELETE /orgs/{orgName}/events/subscriptions/{subscriptionId}":                                        "event-subscription:delete",
+	"POST /orgs/{orgName}/projects/{projName}/events/subscriptions":                                       "event-subscription:create",
+	"PUT /orgs/{orgName}/projects/{projName}/events/subscriptions/{subscriptionId}":                       "event-subscription:update",
+	"DELETE /orgs/{orgName}/projects/{projName}/events/subscriptions/{subscriptionId}":                    "event-subscription:delete",
+	"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/subscriptions":                    "event-subscription:create",
+	"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/subscriptions/{subscriptionId}":    "event-subscription:update",
+	"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/subscriptions/{subscriptionId}": "event-subscription:delete",
 	// Watching a monitor and reading notifications are gated by what the
 	// caller can see, but change the caller's own settings.
 	"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/watch":    "monitor-watch:update",

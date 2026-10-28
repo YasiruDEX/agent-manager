@@ -46,15 +46,15 @@ func registerConfigRoutes(mux *http.ServeMux) {
 		// whether to report at all, rather than carrying a second flag of its
 		// own that could disagree with this one.
 		consoleAnalytics := growthanalytics.ConsoleEnabled(cfg.GrowthAnalytics)
-		// Alerting and notifications need the event bus; the console hides
+		// Events and notifications need the event bus; the console hides
 		// them otherwise.
-		alerting := cfg.Events.Mode != config.EventsModeOff
+		eventsOn := cfg.Events.Mode != config.EventsModeOff
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(spec.ConfigResponse{
 			ObserverBaseUrl:         cfg.Observer.PublicURL,
 			ConsoleAnalyticsEnabled: &consoleAnalytics,
-			AlertingEnabled:         &alerting,
-			NotificationsEnabled:    &alerting,
+			EventsEnabled:           &eventsOn,
+			NotificationsEnabled:    &eventsOn,
 		}); err != nil {
 			logger.GetLogger(r.Context()).Error("failed to encode config response", "error", err)
 		}

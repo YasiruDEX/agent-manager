@@ -47,9 +47,9 @@ import {
   LazyGatewaysOrg,
   LazyThunderInstancesOrg,
   LazySettingsOrg,
-  LazyOrgAlerting,
-  LazyProjectAlerting,
-  LazyAgentAlerting,
+  LazyOrgEvents,
+  LazyProjectEvents,
+  LazyAgentEvents,
   LazyDeploymentPipelinesOrg,
   LazyEnvironmentsOrg,
   LazyCatalogOrg,
@@ -291,10 +291,10 @@ export function RootRouter() {
               element={<LazySettingsOrg />}
             />
             <Route
-              path={relativeRouteMap.children.org.children.alerting.path + "/*"}
+              path={relativeRouteMap.children.org.children.events.path + "/*"}
               element={
                 <Suspense fallback={<LoadingFallback />}>
-                  <LazyOrgAlerting />
+                  <LazyOrgEvents />
                 </Suspense>
               }
             />
@@ -400,11 +400,11 @@ export function RootRouter() {
               <Route
                 path={
                   relativeRouteMap.children.org.children.projects.children
-                    .alerting.path + "/*"
+                    .events.path + "/*"
                 }
                 element={
                   <Suspense fallback={<LoadingFallback />}>
-                    <LazyProjectAlerting />
+                    <LazyProjectEvents />
                   </Suspense>
                 }
               />
@@ -576,6 +576,17 @@ export function RootRouter() {
                 <Route
                   path={
                     relativeRouteMap.children.org.children.projects.children
+                      .agents.children.events.path + "/*"
+                  }
+                  element={
+                    <Suspense fallback={<LoadingFallback />}>
+                      <LazyAgentEvents />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path={
+                    relativeRouteMap.children.org.children.projects.children
                       .agents.children.environment.path
                   }
                 >
@@ -609,23 +620,6 @@ export function RootRouter() {
                         .children.logs.path
                     }
                     element={<LazyLogsComponent />}
-                  />
-                  <Route
-                    path={
-                      relativeRouteMap.children.org.children.projects.children
-                        .agents.children.environment.children.observability
-                        .path +
-                      "/" +
-                      relativeRouteMap.children.org.children.projects.children
-                        .agents.children.environment.children.observability
-                        .children.alerting.path +
-                      "/*"
-                    }
-                    element={
-                      <Suspense fallback={<LoadingFallback />}>
-                        <LazyAgentAlerting />
-                      </Suspense>
-                    }
                   />
                   <Route
                     path={

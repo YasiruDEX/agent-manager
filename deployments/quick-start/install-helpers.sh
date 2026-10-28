@@ -207,7 +207,7 @@ install_registry_credentials() {
 
 # Quick start runs the event bus inside the service (embedded NATS, in memory)
 # instead of a NATS pod: one less workload on a laptop cluster, at the cost of
-# losing queued alert deliveries on a restart. Production installs keep the
+# losing queued event deliveries on a restart. Production installs keep the
 # chart default (a NATS server). AMP_HELM_ARGS comes last, so passing
 # --set agentManagerService.config.events.mode=nats there switches a
 # quick-start install back to a NATS server.

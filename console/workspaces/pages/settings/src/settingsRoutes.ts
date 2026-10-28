@@ -62,25 +62,3 @@ export function useIdentityVisibility(): IdentityVisibility {
     };
   }, [userInfo?.scope]);
 }
-
-export interface AlertingAccess {
-  canRead: boolean;
-  canManage: boolean;
-}
-
-/**
- * Org alerting is gated by the alerting scopes, granted to the Admin role
- * only. Manage implies read: the manage-only routes are useless without seeing
- * the channels.
- */
-export function useAlertingAccess(): AlertingAccess {
-  const { userInfo } = useAuthHooks();
-  return useMemo(() => {
-    if (globalConfig.disableAuth) {
-      return { canRead: true, canManage: true };
-    }
-    const s = new Set((userInfo?.scope ?? "").split(" ").filter(Boolean));
-    const canManage = s.has("amp:alerting:manage");
-    return { canRead: canManage || s.has("amp:alerting:read"), canManage };
-  }, [userInfo?.scope]);
-}

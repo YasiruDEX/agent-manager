@@ -204,8 +204,8 @@ export const rootRouteMap: AppRoute = {
                         },
                     },
                 },
-                alerting: {
-                    path: 'alerting',
+                events: {
+                    path: 'events',
                     index: true,
                     children: {},
                 },
@@ -251,8 +251,8 @@ export const rootRouteMap: AppRoute = {
                     path: 'project/:projectId',
                     index: true,
                     children: {
-                        alerting: {
-                            path: 'alerting',
+                        events: {
+                            path: 'events',
                             index: true,
                             children: {},
                         },
@@ -343,6 +343,11 @@ export const rootRouteMap: AppRoute = {
                                 },
                                 build: {
                                     path: 'build',
+                                    index: true,
+                                    children: {},
+                                },
+                                events: {
+                                    path: 'events',
                                     index: true,
                                     children: {},
                                 },
@@ -456,11 +461,6 @@ export const rootRouteMap: AppRoute = {
                                                 },
                                                 metrics: {
                                                     path: 'metrics',
-                                                    index: true,
-                                                    children: {},
-                                                },
-                                                alerting: {
-                                                    path: 'alerting',
                                                     index: true,
                                                     children: {},
                                                 },

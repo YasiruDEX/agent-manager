@@ -27,14 +27,14 @@ export interface ConfigResponse {
    */
   consoleAnalyticsEnabled?: boolean;
   /**
-   * Whether this deployment delivers events to alert channels, that is,
-   * whether the service runs an event bus. The console hides alerting when
+   * Whether this deployment delivers events to event destinations, that is,
+   * whether the service runs an event bus. The console hides Events when
    * false. Absent is treated as false.
    */
-  alertingEnabled?: boolean;
+  eventsEnabled?: boolean;
   /**
    * Whether this deployment notifies users in the console about the monitors
-   * they watch. Like alerting it needs the event bus; the console hides
+   * they watch. Like Events it needs the event bus; the console hides
    * watching and the notification bell when false. Absent is treated as false.
    */
   notificationsEnabled?: boolean;

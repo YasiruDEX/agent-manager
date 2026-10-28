@@ -11193,7 +11193,7 @@ paths:
         "404":
           description: Environment not found
 
-  /orgs/{orgName}/alerting/channel-kinds:
+  /orgs/{orgName}/events/event-types:
     parameters:
       - name: orgName
         in: path
@@ -11203,38 +11203,17 @@ paths:
           type: string
     get:
       tags:
-        - Alerting
-      summary: List the kinds of alert channel and the services each delivers to
-      description: |
-        The console builds its channel form from this list, so a service added
-        to a kind's driver needs no console change.
-      operationId: listAlertChannelKinds
-      responses:
-        "200":
-          description: Channel kinds
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelKindListResponse"
-
-  /orgs/{orgName}/alerting/event-types:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-    get:
-      tags:
-        - Alerting
-      summary: List the event types alert channels can subscribe to
-      operationId: listAlertEventTypes
+        - Events
+      summary: List the event types subscriptions can name
+      operationId: listEventTypes
       parameters:
         - name: scope
           in: query
           required: false
-          description: Only event types of this scope.
+          description: |
+            The event types a subscription at this scope can name: an org
+            subscription any type, a project subscription project and agent
+            types, an agent subscription agent types. Every type when absent.
           schema:
             type: string
             enum: [org, project, agent]
@@ -11244,7 +11223,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertEventTypeListResponse"
+                $ref: "#/components/schemas/EventTypeListResponse"
         "400":
           description: Invalid scope
           content:
@@ -11252,7 +11231,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/alerting/channels:
+  /orgs/{orgName}/events/destination-kinds:
     parameters:
       - name: orgName
         in: path
@@ -11262,17 +11241,44 @@ paths:
           type: string
     get:
       tags:
-        - Alerting
-      summary: List organization alert channels
-      description: Organization-level events, such as projects, MCP servers and LLM providers being created or changed. Organization administrators only.
-      operationId: listOrgAlertChannels
+        - Events
+      summary: List the kinds of event destination and the services each delivers to
+      description: |
+        The console builds its destination form from this list, so a service
+        added to a kind's driver needs no console change.
+      operationId: listEventDestinationKinds
       responses:
         "200":
-          description: Alert channels
+          description: Destination kinds
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelListResponse"
+                $ref: "#/components/schemas/EventDestinationKindListResponse"
+
+  /orgs/{orgName}/events/destinations:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+    get:
+      tags:
+        - Events
+      summary: List the organization's event destinations
+      description: |
+        Every destination with how many subscriptions use it and how its recent
+        deliveries went. Callers who cannot manage destinations see their
+        settings masked.
+      operationId: listEventDestinations
+      responses:
+        "200":
+          description: Event destinations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventDestinationListResponse"
         "500":
           description: Internal server error
           content:
@@ -11281,29 +11287,35 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
     post:
       tags:
-        - Alerting
-      summary: Create an organization alert channel
+        - Events
+      summary: Add an event destination
       description: |
-        Creates a channel that receives the selected events. The channel's
-        kind decides how events are delivered; "webhook" sends each event as a
-        signed CloudEvents JSON POST (Standard Webhooks headers). A generated
-        secret, if the kind uses one, is returned only in this response.
-      operationId: createOrgAlertChannel
+        Registers where events can be sent. Subscriptions at org, project and
+        agent level pick a destination; availability decides which projects'
+        subscriptions may. A generated secret, if the kind uses one, is
+        returned only in this response.
+      operationId: createEventDestination
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AlertChannelRequest"
+              $ref: "#/components/schemas/EventDestinationRequest"
       responses:
         "201":
-          description: Alert channel created
+          description: Event destination added
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
+                $ref: "#/components/schemas/EventDestinationResponse"
         "400":
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The name is taken
           content:
             application/json:
               schema:
@@ -11315,7 +11327,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/alerting/channels/{channelId}:
+  /orgs/{orgName}/events/destinations/{destinationId}:
     parameters:
       - name: orgName
         in: path
@@ -11323,49 +11335,51 @@ paths:
         description: Organization name
         schema:
           type: string
-      - name: channelId
+      - name: destinationId
         in: path
         required: true
-        description: Alert channel ID
+        description: Event destination ID
         schema:
           type: string
     get:
       tags:
-        - Alerting
-      summary: Get an organization alert channel
-      operationId: getOrgAlertChannel
+        - Events
+      summary: Get an event destination
+      operationId: getEventDestination
       responses:
         "200":
-          description: Alert channel
+          description: Event destination, with the subscriptions that use it
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
+                $ref: "#/components/schemas/EventDestinationResponse"
         "404":
-          description: Alert channel not found
+          description: Event destination not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     put:
       tags:
-        - Alerting
-      summary: Update an organization alert channel
-      description: The channel's kind cannot be changed.
-      operationId: updateOrgAlertChannel
+        - Events
+      summary: Update an event destination
+      description: |
+        The kind cannot change. Narrowing availability so that subscriptions
+        using the destination could no longer use it is refused.
+      operationId: updateEventDestination
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AlertChannelRequest"
+              $ref: "#/components/schemas/EventDestinationRequest"
       responses:
         "200":
-          description: Alert channel updated
+          description: Event destination updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
+                $ref: "#/components/schemas/EventDestinationResponse"
         "400":
           description: Invalid request
           content:
@@ -11373,27 +11387,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Alert channel not found
+          description: Event destination not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The name is taken, or subscriptions that use it would lose access
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags:
-        - Alerting
-      summary: Delete an organization alert channel
-      operationId: deleteOrgAlertChannel
+        - Events
+      summary: Delete an event destination
+      description: |
+        Refused while subscriptions send to it: delete them, or move them to another destination, first.
+      operationId: deleteEventDestination
       responses:
         "204":
-          description: Alert channel deleted
+          description: Event destination deleted
         "404":
-          description: Alert channel not found
+          description: Event destination not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Subscriptions still send to it
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/alerting/channels/{channelId}/rotate-secret:
+  /orgs/{orgName}/events/destinations/{destinationId}/rotate-secret:
     parameters:
       - name: orgName
         in: path
@@ -11401,39 +11429,38 @@ paths:
         description: Organization name
         schema:
           type: string
-      - name: channelId
+      - name: destinationId
         in: path
         required: true
-        description: Alert channel ID
+        description: Event destination ID
         schema:
           type: string
     post:
       tags:
-        - Alerting
-      summary: Rotate an organization alert channel's secret
-      description: Replaces the channel's generated secret (the signing secret of a webhook channel). The new secret is returned only in this response.
-      operationId: rotateOrgAlertChannelSecret
+        - Events
+      summary: Rotate an event destination's signing secret
+      operationId: rotateEventDestinationSecret
       responses:
         "200":
-          description: New secret
+          description: The new secret, shown once
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelSecretResponse"
+                $ref: "#/components/schemas/EventDestinationSecretResponse"
         "400":
-          description: The channel's kind has no generated secret
+          description: The kind has no generated secret
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Alert channel not found
+          description: Event destination not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/alerting/channels/{channelId}/test:
+  /orgs/{orgName}/events/destinations/{destinationId}/test:
     parameters:
       - name: orgName
         in: path
@@ -11441,33 +11468,34 @@ paths:
         description: Organization name
         schema:
           type: string
-      - name: channelId
+      - name: destinationId
         in: path
         required: true
-        description: Alert channel ID
+        description: Event destination ID
         schema:
           type: string
     post:
       tags:
-        - Alerting
-      summary: Send a test event to an organization alert channel
-      description: Sends an alerting.test event straight to the channel and reports the result.
-      operationId: testOrgAlertChannel
+        - Events
+      summary: Send a test event to an event destination
+      description: |
+        Sends a destination.test event straight to the destination and reports the result.
+      operationId: testEventDestination
       responses:
         "200":
           description: Test result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelTestResponse"
+                $ref: "#/components/schemas/EventDestinationTestResponse"
         "404":
-          description: Alert channel not found
+          description: Event destination not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/projects/{projName}/alerting/channels:
+  /orgs/{orgName}/events/subscriptions:
     parameters:
       - name: orgName
         in: path
@@ -11475,25 +11503,20 @@ paths:
         description: Organization name
         schema:
           type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
     get:
       tags:
-        - Alerting
-      summary: List project alert channels
-      description: Events about the project and its agents being created or deleted.
-      operationId: listProjectAlertChannels
+        - Events
+      summary: List the organization's event subscriptions
+      description: |
+        Organization subscriptions receive the events of every project and agent.
+      operationId: listOrgEventSubscriptions
       responses:
         "200":
-          description: Alert channels
+          description: Event subscriptions
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelListResponse"
+                $ref: "#/components/schemas/EventSubscriptionListResponse"
         "500":
           description: Internal server error
           content:
@@ -11502,27 +11525,22 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
     post:
       tags:
-        - Alerting
-      summary: Create a project alert channel
-      description: |
-        Creates a channel that receives the selected events. The channel's
-        kind decides how events are delivered; "webhook" sends each event as a
-        signed CloudEvents JSON POST (Standard Webhooks headers). A generated
-        secret, if the kind uses one, is returned only in this response.
-      operationId: createProjectAlertChannel
+        - Events
+      summary: Create an organization event subscription
+      operationId: createOrgEventSubscription
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AlertChannelRequest"
+              $ref: "#/components/schemas/EventSubscriptionRequest"
       responses:
         "201":
-          description: Alert channel created
+          description: Event subscription created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
+                $ref: "#/components/schemas/EventSubscriptionResponse"
         "400":
           description: Invalid request
           content:
@@ -11536,7 +11554,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}:
+  /orgs/{orgName}/events/subscriptions/{subscriptionId}:
     parameters:
       - name: orgName
         in: path
@@ -11544,55 +11562,48 @@ paths:
         description: Organization name
         schema:
           type: string
-      - name: projName
+      - name: subscriptionId
         in: path
         required: true
-        description: Project name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
+        description: Event subscription ID
         schema:
           type: string
     get:
       tags:
-        - Alerting
-      summary: Get a project alert channel
-      operationId: getProjectAlertChannel
+        - Events
+      summary: Get an event subscription
+      operationId: getOrgEventSubscription
       responses:
         "200":
-          description: Alert channel
+          description: Event subscription
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
+                $ref: "#/components/schemas/EventSubscriptionResponse"
         "404":
-          description: Alert channel not found
+          description: Event subscription not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     put:
       tags:
-        - Alerting
-      summary: Update a project alert channel
-      description: The channel's kind cannot be changed.
-      operationId: updateProjectAlertChannel
+        - Events
+      summary: Update an event subscription
+      operationId: updateOrgEventSubscription
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AlertChannelRequest"
+              $ref: "#/components/schemas/EventSubscriptionRequest"
       responses:
         "200":
-          description: Alert channel updated
+          description: Event subscription updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
+                $ref: "#/components/schemas/EventSubscriptionResponse"
         "400":
           description: Invalid request
           content:
@@ -11600,396 +11611,61 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Alert channel not found
+          description: Event subscription not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags:
-        - Alerting
-      summary: Delete a project alert channel
-      operationId: deleteProjectAlertChannel
+        - Events
+      summary: Delete an event subscription
+      operationId: deleteOrgEventSubscription
       responses:
         "204":
-          description: Alert channel deleted
+          description: Event subscription deleted
         "404":
-          description: Alert channel not found
+          description: Event subscription not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/rotate-secret:
+  /orgs/{orgName}/events/deliveries:
     parameters:
       - name: orgName
         in: path
         required: true
         description: Organization name
-        schema:
-          type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
-        schema:
-          type: string
-    post:
-      tags:
-        - Alerting
-      summary: Rotate a project alert channel's secret
-      description: Replaces the channel's generated secret (the signing secret of a webhook channel). The new secret is returned only in this response.
-      operationId: rotateProjectAlertChannelSecret
-      responses:
-        "200":
-          description: New secret
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelSecretResponse"
-        "400":
-          description: The channel's kind has no generated secret
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/test:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
-        schema:
-          type: string
-    post:
-      tags:
-        - Alerting
-      summary: Send a test event to a project alert channel
-      description: Sends an alerting.test event straight to the channel and reports the result.
-      operationId: testProjectAlertChannel
-      responses:
-        "200":
-          description: Test result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelTestResponse"
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
-      - name: agentName
-        in: path
-        required: true
-        description: Agent name
         schema:
           type: string
     get:
       tags:
-        - Alerting
-      summary: List agent alert channels
-      description: The agent's events, such as builds, deployments and monitor runs, in the environments each channel selects.
-      operationId: listAgentAlertChannels
-      responses:
-        "200":
-          description: Alert channels
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelListResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    post:
-      tags:
-        - Alerting
-      summary: Create an agent alert channel
+        - Events
+      summary: List the organization's event deliveries
       description: |
-        Creates a channel that receives the selected events. The channel's
-        kind decides how events are delivered; "webhook" sends each event as a
-        signed CloudEvents JSON POST (Standard Webhooks headers). A generated
-        secret, if the kind uses one, is returned only in this response.
-      operationId: createAgentAlertChannel
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AlertChannelRequest"
-      responses:
-        "201":
-          description: Alert channel created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
-      - name: agentName
-        in: path
-        required: true
-        description: Agent name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
-        schema:
-          type: string
-    get:
-      tags:
-        - Alerting
-      summary: Get an agent alert channel
-      operationId: getAgentAlertChannel
-      responses:
-        "200":
-          description: Alert channel
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    put:
-      tags:
-        - Alerting
-      summary: Update an agent alert channel
-      description: The channel's kind cannot be changed.
-      operationId: updateAgentAlertChannel
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AlertChannelRequest"
-      responses:
-        "200":
-          description: Alert channel updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelResponse"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    delete:
-      tags:
-        - Alerting
-      summary: Delete an agent alert channel
-      operationId: deleteAgentAlertChannel
-      responses:
-        "204":
-          description: Alert channel deleted
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/rotate-secret:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
-      - name: agentName
-        in: path
-        required: true
-        description: Agent name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
-        schema:
-          type: string
-    post:
-      tags:
-        - Alerting
-      summary: Rotate an agent alert channel's secret
-      description: Replaces the channel's generated secret (the signing secret of a webhook channel). The new secret is returned only in this response.
-      operationId: rotateAgentAlertChannelSecret
-      responses:
-        "200":
-          description: New secret
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelSecretResponse"
-        "400":
-          description: The channel's kind has no generated secret
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/test:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-      - name: projName
-        in: path
-        required: true
-        description: Project name
-        schema:
-          type: string
-      - name: agentName
-        in: path
-        required: true
-        description: Agent name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
-        schema:
-          type: string
-    post:
-      tags:
-        - Alerting
-      summary: Send a test event to an agent alert channel
-      description: Sends an alerting.test event straight to the channel and reports the result.
-      operationId: testAgentAlertChannel
-      responses:
-        "200":
-          description: Test result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AlertChannelTestResponse"
-        "404":
-          description: Alert channel not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/alerting/channels/{channelId}/deliveries:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name
-        schema:
-          type: string
-      - name: channelId
-        in: path
-        required: true
-        description: Alert channel ID
-        schema:
-          type: string
-    get:
-      tags:
-        - Alerting
-      summary: List recent deliveries of an organization alert channel
-      description: Most recent first. Delivery history is kept for ALERTING_DELIVERY_RETENTION_DAYS.
-      operationId: listOrgAlertChannelDeliveries
+        Every delivery in the organization.
+      operationId: listOrgEventDeliveries
       parameters:
+        - name: destinationId
+          in: query
+          required: false
+          description: Only deliveries to this destination.
+          schema:
+            type: string
+        - name: subscriptionId
+          in: query
+          required: false
+          description: Only deliveries this subscription queued.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Only deliveries with this status.
+          schema:
+            type: string
+            enum: [pending, delivered, failed, skipped]
         - name: limit
           in: query
           required: false
@@ -11998,27 +11674,28 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - name: offset
+          in: query
+          required: false
+          description: Number of deliveries to skip.
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
-          description: Deliveries
+          description: Event deliveries, newest first
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertDeliveryListResponse"
+                $ref: "#/components/schemas/EventDeliveryListResponse"
         "400":
-          description: Invalid limit
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Alert channel not found
+          description: Invalid query
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/projects/{projName}/alerting/channels/{channelId}/deliveries:
+  /orgs/{orgName}/projects/{projName}/events/destinations:
     parameters:
       - name: orgName
         in: path
@@ -12032,19 +11709,212 @@ paths:
         description: Project name
         schema:
           type: string
-      - name: channelId
+    get:
+      tags:
+        - Events
+      summary: List the event destinations the project's subscriptions can use
+      description: |
+        Only destinations available to the project, without their settings.
+      operationId: listProjectEventDestinations
+      responses:
+        "200":
+          description: Available event destinations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventDestinationSummaryListResponse"
+
+  /orgs/{orgName}/projects/{projName}/events/subscriptions:
+    parameters:
+      - name: orgName
         in: path
         required: true
-        description: Alert channel ID
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
         schema:
           type: string
     get:
       tags:
-        - Alerting
-      summary: List recent deliveries of a project alert channel
-      description: Most recent first. Delivery history is kept for ALERTING_DELIVERY_RETENTION_DAYS.
-      operationId: listProjectAlertChannelDeliveries
+        - Events
+      summary: List the project's event subscriptions
+      description: |
+        Project subscriptions receive the events of the project and its agents.
+        inherited lists the wider levels' subscriptions that also send this
+        level's events; they are managed where they belong.
+      operationId: listProjectEventSubscriptions
+      responses:
+        "200":
+          description: Event subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Events
+      summary: Create a project event subscription
+      operationId: createProjectEventSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSubscriptionRequest"
+      responses:
+        "201":
+          description: Event subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/events/subscriptions/{subscriptionId}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: subscriptionId
+        in: path
+        required: true
+        description: Event subscription ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Events
+      summary: Get an event subscription
+      operationId: getProjectEventSubscription
+      responses:
+        "200":
+          description: Event subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionResponse"
+        "404":
+          description: Event subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Events
+      summary: Update an event subscription
+      operationId: updateProjectEventSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSubscriptionRequest"
+      responses:
+        "200":
+          description: Event subscription updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Event subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Events
+      summary: Delete an event subscription
+      operationId: deleteProjectEventSubscription
+      responses:
+        "204":
+          description: Event subscription deleted
+        "404":
+          description: Event subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/events/deliveries:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+    get:
+      tags:
+        - Events
+      summary: List the project's event deliveries
+      description: |
+        Deliveries of the project's events and its agents' events.
+      operationId: listProjectEventDeliveries
       parameters:
+        - name: destinationId
+          in: query
+          required: false
+          description: Only deliveries to this destination.
+          schema:
+            type: string
+        - name: subscriptionId
+          in: query
+          required: false
+          description: Only deliveries this subscription queued.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Only deliveries with this status.
+          schema:
+            type: string
+            enum: [pending, delivered, failed, skipped]
         - name: limit
           in: query
           required: false
@@ -12053,27 +11923,28 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - name: offset
+          in: query
+          required: false
+          description: Number of deliveries to skip.
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
-          description: Deliveries
+          description: Event deliveries, newest first
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertDeliveryListResponse"
+                $ref: "#/components/schemas/EventDeliveryListResponse"
         "400":
-          description: Invalid limit
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Alert channel not found
+          description: Invalid query
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/projects/{projName}/agents/{agentName}/alerting/channels/{channelId}/deliveries:
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/destinations:
     parameters:
       - name: orgName
         in: path
@@ -12093,19 +11964,230 @@ paths:
         description: Agent name
         schema:
           type: string
-      - name: channelId
+    get:
+      tags:
+        - Events
+      summary: List the event destinations the agent's subscriptions can use
+      description: |
+        Only destinations available to the project, without their settings.
+      operationId: listAgentEventDestinations
+      responses:
+        "200":
+          description: Available event destinations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventDestinationSummaryListResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/subscriptions:
+    parameters:
+      - name: orgName
         in: path
         required: true
-        description: Alert channel ID
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
         schema:
           type: string
     get:
       tags:
-        - Alerting
-      summary: List recent deliveries of an agent alert channel
-      description: Most recent first. Delivery history is kept for ALERTING_DELIVERY_RETENTION_DAYS.
-      operationId: listAgentAlertChannelDeliveries
+        - Events
+      summary: List the agent's event subscriptions
+      description: |
+        Agent subscriptions receive the agent's events.
+        inherited lists the wider levels' subscriptions that also send this
+        level's events; they are managed where they belong.
+      operationId: listAgentEventSubscriptions
+      responses:
+        "200":
+          description: Event subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Events
+      summary: Create an agent event subscription
+      operationId: createAgentEventSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSubscriptionRequest"
+      responses:
+        "201":
+          description: Event subscription created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/subscriptions/{subscriptionId}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+      - name: subscriptionId
+        in: path
+        required: true
+        description: Event subscription ID
+        schema:
+          type: string
+    get:
+      tags:
+        - Events
+      summary: Get an event subscription
+      operationId: getAgentEventSubscription
+      responses:
+        "200":
+          description: Event subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionResponse"
+        "404":
+          description: Event subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Events
+      summary: Update an event subscription
+      operationId: updateAgentEventSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventSubscriptionRequest"
+      responses:
+        "200":
+          description: Event subscription updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSubscriptionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Event subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Events
+      summary: Delete an event subscription
+      operationId: deleteAgentEventSubscription
+      responses:
+        "204":
+          description: Event subscription deleted
+        "404":
+          description: Event subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/events/deliveries:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+    get:
+      tags:
+        - Events
+      summary: List the agent's event deliveries
+      description: |
+        Deliveries of the agent's events.
+      operationId: listAgentEventDeliveries
       parameters:
+        - name: destinationId
+          in: query
+          required: false
+          description: Only deliveries to this destination.
+          schema:
+            type: string
+        - name: subscriptionId
+          in: query
+          required: false
+          description: Only deliveries this subscription queued.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Only deliveries with this status.
+          schema:
+            type: string
+            enum: [pending, delivered, failed, skipped]
         - name: limit
           in: query
           required: false
@@ -12114,21 +12196,22 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - name: offset
+          in: query
+          required: false
+          description: Number of deliveries to skip.
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
-          description: Deliveries
+          description: Event deliveries, newest first
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AlertDeliveryListResponse"
+                $ref: "#/components/schemas/EventDeliveryListResponse"
         "400":
-          description: Invalid limit
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Alert channel not found
+          description: Invalid query
           content:
             application/json:
               schema:
@@ -12627,17 +12710,18 @@ components:
             console buffers and sends nothing when false, so CONSOLE_ANALYTICS_ENABLED
             on the service is the single switch for the whole path rather than
             one half of it. Absent is treated as false.
-        alertingEnabled:
+        eventsEnabled:
           type: boolean
           description: |
-            Whether this deployment delivers platform events to alert channels,
-            that is, whether it runs an event bus (EVENTS_MODE is not off). The
-            console hides alerting when false. Absent is treated as false.
+            Whether this deployment delivers platform events to event
+            destinations, that is, whether it runs an event bus (EVENTS_MODE is
+            not off). The console hides Events when false. Absent is treated as
+            false.
         notificationsEnabled:
           type: boolean
           description: |
             Whether this deployment notifies users in the console about the
-            monitors they watch. Like alerting it needs an event bus; the
+            monitors they watch. Like Events it needs an event bus; the
             console hides watching and the notification bell when false.
             Absent is treated as false.
 
@@ -20184,34 +20268,42 @@ components:
             The workload may keep referencing the revoked credential until this is confirmed
             or the workload is redeployed.
           example: Could not confirm whether this is the deployment pipeline's lowest environment, so its shared workload-level credentials were left untouched as a precaution.
-    AlertEventType:
+    EventType:
       type: object
       required: [type, scope, category, description]
       properties:
         type:
           type: string
-          example: agent.deployed
+          description: The catalog name, e.g. agent.deployed.
         scope:
           type: string
           enum: [org, project, agent]
+          description: The level the event happens at.
         category:
           type: string
         description:
           type: string
 
-    AlertChannelKindService:
+    EventTypeListResponse:
+      type: object
+      required: [eventTypes]
+      properties:
+        eventTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventType"
+
+    EventDestinationKindService:
       type: object
       required: [id, label, category, urlFormat, docsUrl]
       properties:
         id:
           type: string
-          example: slack
+          description: The service, and the scheme of its URL, e.g. slack.
         label:
           type: string
-          example: Slack
         category:
           type: string
-          example: Chat
         urlFormat:
           type: string
           description: The shape of the service URL.
@@ -20219,146 +20311,170 @@ components:
           type: string
           description: How to get the values the URL needs.
 
-    AlertChannelKind:
+    EventDestinationKind:
       type: object
       required: [kind, generatedSecret, suppliedCredential, services]
       properties:
         kind:
           type: string
-          example: notify
+          description: webhook or notify.
         generatedSecret:
           type: boolean
-          description: Channels of this kind get a generated secret that can be rotated.
+          description: Destinations of this kind get a generated secret that can be rotated.
         suppliedCredential:
           type: boolean
-          description: Channels of this kind take a credential the user supplies, which is never returned.
+          description: The kind's settings include a credential that is never returned.
         services:
           type: array
-          description: The services the kind delivers to; empty for kinds with one destination type.
+          description: The services the kind delivers to, if it has several.
           items:
-            $ref: "#/components/schemas/AlertChannelKindService"
+            $ref: "#/components/schemas/EventDestinationKindService"
 
-    AlertChannelKindListResponse:
+    EventDestinationKindListResponse:
       type: object
       required: [kinds]
       properties:
         kinds:
           type: array
           items:
-            $ref: "#/components/schemas/AlertChannelKind"
+            $ref: "#/components/schemas/EventDestinationKind"
 
-    AlertEventTypeListResponse:
+    EventDestinationRequest:
       type: object
-      required: [eventTypes]
-      properties:
-        eventTypes:
-          type: array
-          items:
-            $ref: "#/components/schemas/AlertEventType"
-
-    AlertChannelRequest:
-      type: object
-      required: [name, kind, config, eventTypes]
+      required: [name, kind, config, availability]
       properties:
         name:
           type: string
           maxLength: 100
+          description: Unique in the organization, ignoring case.
         description:
           type: string
           maxLength: 500
         kind:
           type: string
-          description: |
-            How events are delivered: "webhook" posts each event as a signed
-            CloudEvent; "notify" sends a text notification to a chat, email,
-            paging or push service.
-          enum: [webhook, notify]
+          description: webhook or notify. Cannot change on update.
         config:
           type: object
           additionalProperties: true
           description: |
-            Settings of the channel's kind. For "webhook": {"url": "https://…"},
-            the HTTPS URL that receives event POST requests. For "notify":
-            {"service": "slack", "url": "slack://…"}, a service from
-            /alerting/channel-kinds and its Shoutrrr service URL. The URL is a
-            credential: it is stored encrypted and never returned. Leave it out
-            when updating to keep the current one.
-          example:
-            url: https://hooks.example.com/amp
-        environments:
-          type: array
+            The kind's settings. webhook: {"url"}. notify: {"service", "url"},
+            where url is the Shoutrrr service URL; it is stored encrypted and
+            never returned. Leave url out on update to keep it.
+        availability:
+          type: string
+          enum: [all, org, projects]
           description: |
-            Environments whose agent events the channel receives. At least one
-            is required for agent channels; ignored for org and project
-            channels. Agent events not tied to an environment, such as builds,
-            are sent to every agent channel.
-          items:
-            type: string
-        eventTypes:
+            Which subscriptions below the organization may use the destination:
+            those of every project, none, or those of the listed projects.
+            Organization subscriptions may use any destination.
+        projects:
           type: array
-          description: Event types to send. Every type must belong to the channel's scope. Empty sends nothing.
           items:
             type: string
-        enabled:
-          type: boolean
-          default: true
+          description: The projects whose subscriptions may use it, for availability projects.
 
-    AlertChannelResponse:
+    EventDestinationResponse:
       type: object
-      required: [id, scope, kind, name, description, config, environments, eventTypes, enabled, createdAt, updatedAt]
+      required: [id, name, description, kind, config, availability, projects, usedBy, health, consecutiveFailures, createdBy, createdAt, updatedAt]
       properties:
         id:
-          type: string
-        scope:
-          type: string
-          enum: [org, project, agent]
-        kind:
           type: string
         name:
           type: string
         description:
           type: string
+        kind:
+          type: string
+        service:
+          type: string
+          description: The notification service, for notify destinations.
         config:
           type: object
           additionalProperties: true
-          description: Settings of the channel's kind. Parts that may carry a credential are masked for callers who cannot change the channel.
-        environments:
-          type: array
-          items:
-            type: string
-        eventTypes:
-          type: array
-          items:
-            type: string
-        enabled:
-          type: boolean
-        secret:
+          description: The kind's settings, masked for callers who cannot manage destinations.
+        availability:
           type: string
-          description: Present only in the response that created the channel, for kinds with a generated secret. For "webhook" it verifies the webhook-signature header.
+          enum: [all, org, projects]
+        projects:
+          type: array
+          items:
+            type: string
+        usedBy:
+          type: integer
+          description: The number of subscriptions that send to it.
+        lastDeliveryAt:
+          type: string
+          format: date-time
+        health:
+          type: string
+          enum: [healthy, failing, idle]
+          description: |
+            healthy: the latest delivery succeeded. failing: deliveries failed,
+            or are being retried, since the latest success. idle: nothing was
+            delivered yet.
+        consecutiveFailures:
+          type: integer
+          description: Deliveries that failed or are being retried since the latest success.
+        createdBy:
+          type: string
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+        secret:
+          type: string
+          description: The generated secret. Only in the response that creates it.
+        subscriptions:
+          type: array
+          description: The subscriptions that send to it. Only when getting one destination.
+          items:
+            $ref: "#/components/schemas/EventSubscriptionRef"
 
-    AlertChannelListResponse:
+    EventDestinationListResponse:
       type: object
-      required: [channels]
+      required: [destinations]
       properties:
-        channels:
+        destinations:
           type: array
           items:
-            $ref: "#/components/schemas/AlertChannelResponse"
+            $ref: "#/components/schemas/EventDestinationResponse"
 
-    AlertChannelSecretResponse:
+    EventDestinationSummary:
+      type: object
+      description: A destination as subscriptions below the organization see it, without its settings.
+      required: [id, name, kind, health]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+        service:
+          type: string
+        health:
+          type: string
+          enum: [healthy, failing, idle]
+
+    EventDestinationSummaryListResponse:
+      type: object
+      required: [destinations]
+      properties:
+        destinations:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventDestinationSummary"
+
+    EventDestinationSecretResponse:
       type: object
       required: [secret]
       properties:
         secret:
           type: string
 
-    AlertChannelTestResponse:
+    EventDestinationTestResponse:
       type: object
       required: [delivered]
       properties:
@@ -20366,12 +20482,134 @@ components:
           type: boolean
         statusCode:
           type: integer
+          format: int32
         error:
           type: string
 
-    AlertDeliveryResponse:
+    EventSubscriptionRef:
       type: object
-      required: [id, eventId, eventType, status, attempts, createdAt, updatedAt]
+      required: [id, name, scope]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        scope:
+          type: string
+          enum: [org, project, agent]
+        projectName:
+          type: string
+        agentName:
+          type: string
+
+    EventSubscriptionRequest:
+      type: object
+      required: [name, destinationId, eventTypes]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        destinationId:
+          type: string
+          description: A destination available to the subscription's project.
+        eventTypes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: |
+            Event types the subscription's scope can receive, or just "*" for
+            every one, including types added later.
+        environments:
+          type: array
+          items:
+            type: string
+          description: |
+            Only events in these environments; empty or absent for every
+            environment. Events tied to no environment, such as a build, are
+            sent whatever it holds.
+        enabled:
+          type: boolean
+          description: Defaults to true.
+
+    EventDeliveryCounts:
+      type: object
+      required: [delivered, failed, pending, skipped]
+      properties:
+        delivered:
+          type: integer
+        failed:
+          type: integer
+        pending:
+          type: integer
+        skipped:
+          type: integer
+
+    EventSubscriptionResponse:
+      type: object
+      required: [id, scope, projectName, agentName, name, description, destination, eventTypes, environments, enabled, createdBy, createdAt, updatedAt, last24h]
+      properties:
+        id:
+          type: string
+        scope:
+          type: string
+          enum: [org, project, agent]
+        projectName:
+          type: string
+        agentName:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        destination:
+          $ref: "#/components/schemas/EventDestinationSummary"
+        eventTypes:
+          type: array
+          items:
+            type: string
+        environments:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        createdBy:
+          type: string
+          description: The ID of the user who created it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        last24h:
+          $ref: "#/components/schemas/EventDeliveryCounts"
+
+    EventSubscriptionListResponse:
+      type: object
+      required: [subscriptions, inherited]
+      properties:
+        subscriptions:
+          type: array
+          description: The subscriptions this level owns.
+          items:
+            $ref: "#/components/schemas/EventSubscriptionResponse"
+        inherited:
+          type: array
+          description: |
+            Wider levels' subscriptions that also send this level's events,
+            read-only here. Their event types are narrowed to those that can
+            happen at this level, and their counts to this level's events.
+          items:
+            $ref: "#/components/schemas/EventSubscriptionResponse"
+
+    EventDeliveryResponse:
+      type: object
+      required: [id, eventId, eventType, eventScope, status, attempts, subscriptions, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -20379,13 +20617,30 @@ components:
           type: string
         eventType:
           type: string
+        eventScope:
+          type: string
+        projectName:
+          type: string
+        agentName:
+          type: string
+        environment:
+          type: string
+        destination:
+          $ref: "#/components/schemas/EventDestinationSummary"
+        subscriptions:
+          type: array
+          description: The subscriptions that sent the event to the destination.
+          items:
+            $ref: "#/components/schemas/EventSubscriptionRef"
         status:
           type: string
-          enum: [pending, delivered, failed]
+          enum: [pending, delivered, failed, skipped]
         attempts:
           type: integer
+          format: int32
         responseCode:
           type: integer
+          format: int32
         lastError:
           type: string
         deliveredAt:
@@ -20398,14 +20653,17 @@ components:
           type: string
           format: date-time
 
-    AlertDeliveryListResponse:
+    EventDeliveryListResponse:
       type: object
-      required: [deliveries]
+      required: [deliveries, total]
       properties:
         deliveries:
           type: array
           items:
-            $ref: "#/components/schemas/AlertDeliveryResponse"
+            $ref: "#/components/schemas/EventDeliveryResponse"
+        total:
+          type: integer
+          description: Deliveries matching the query, ignoring limit and offset.
 
     MonitorScoreThreshold:
       type: object

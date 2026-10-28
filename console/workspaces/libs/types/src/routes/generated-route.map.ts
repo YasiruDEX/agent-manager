@@ -185,9 +185,9 @@ export const generatedRouteMap =  {
             }
           }
         },
-        "alerting": {
-          "path": "/org/:orgId/alerting",
-          "wildPath": "/org/:orgId/alerting/*",
+        "events": {
+          "path": "/org/:orgId/events",
+          "wildPath": "/org/:orgId/events/*",
           "children": {}
         },
         "deploymentPipelines": {
@@ -232,9 +232,9 @@ export const generatedRouteMap =  {
           "path": "/org/:orgId/project/:projectId",
           "wildPath": "/org/:orgId/project/:projectId/*",
           "children": {
-            "alerting": {
-              "path": "/org/:orgId/project/:projectId/alerting",
-              "wildPath": "/org/:orgId/project/:projectId/alerting/*",
+            "events": {
+              "path": "/org/:orgId/project/:projectId/events",
+              "wildPath": "/org/:orgId/project/:projectId/events/*",
               "children": {}
             },
             "newAgent": {
@@ -325,6 +325,11 @@ export const generatedRouteMap =  {
                 "build": {
                   "path": "/org/:orgId/project/:projectId/agents/:agentId/build",
                   "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/build/*",
+                  "children": {}
+                },
+                "events": {
+                  "path": "/org/:orgId/project/:projectId/agents/:agentId/events",
+                  "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/events/*",
                   "children": {}
                 },
                 "deployment": {
@@ -438,11 +443,6 @@ export const generatedRouteMap =  {
                         "metrics": {
                           "path": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/metrics",
                           "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/metrics/*",
-                          "children": {}
-                        },
-                        "alerting": {
-                          "path": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/alerting",
-                          "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/observability/alerting/*",
                           "children": {}
                         }
                       }

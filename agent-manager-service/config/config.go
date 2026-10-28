@@ -145,11 +145,10 @@ type Config struct {
 	// Audit configures the audit trail.
 	Audit AuditConfig
 
-	// Events configures the platform event bus.
+	// Events configures the platform event bus and the delivery of events to
+	// event destinations.
 	Events EventsConfig
 
-	// Alerting configures delivering events to alert channels.
-	Alerting AlertingConfig
 	// Notifications configures the console notifications of watched monitors.
 	Notifications NotificationsConfig
 
@@ -192,25 +191,22 @@ const (
 	EventsModeOff = "off"
 )
 
-// EventsConfig configures the platform event bus.
+// EventsConfig configures the platform event bus and the delivery of events
+// to event destinations.
 type EventsConfig struct {
 	// Mode is nats, embedded or off. When unset it is nats if NATSURL is set,
 	// off otherwise.
 	Mode string
 	// NATSURL is the NATS server for nats mode, e.g. nats://nats:4222.
 	NATSURL string
-}
-
-// AlertingConfig configures delivering events to alert channels.
-type AlertingConfig struct {
-	// AllowPrivateEndpoints lets channel URLs resolve to private, loopback or
-	// link-local addresses, and allows plain http. Off by default so an admin
-	// cannot point the service at internal infrastructure; enable only for
-	// local development.
-	AllowPrivateEndpoints bool
-	// MaxAttempts is how many times a delivery is tried before it is marked
-	// failed.
-	MaxAttempts int
+	// AllowPrivateDestinations lets destination URLs resolve to private,
+	// loopback or link-local addresses, and allows plain http. Off by default
+	// so an admin cannot point the service at internal infrastructure; enable
+	// only for local development.
+	AllowPrivateDestinations bool
+	// DeliveryMaxAttempts is how many times a delivery is tried before it is
+	// marked failed.
+	DeliveryMaxAttempts int
 	// DeliveryRetentionDays is how long the delivery log is kept.
 	DeliveryRetentionDays int
 }

@@ -1,6 +1,6 @@
 {{- if include "agent-management-platform.bundledNats" . }}
 # NATS with JetStream: the event bus the service publishes platform events to
-# and its alert dispatcher consumes. Deployed when events.mode is nats and no
+# and its event dispatcher consumes. Deployed when events.mode is nats and no
 # external events.natsUrl is set. A single node; JetStream keeps events and
 # pending deliveries on the volume so a restart does not lose them.
 apiVersion: v1

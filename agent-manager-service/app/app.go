@@ -440,7 +440,7 @@ func loadBuiltInLLMTemplates(dependencies *wiring.AppParams) error {
 }
 
 // startEvents sets up the event bus, retrying until it answers, then starts
-// the publisher, the alert dispatcher and the notification center. A no-op
+// the publisher, the event dispatcher and the notification center. A no-op
 // with events off.
 func startEvents(ctx context.Context, deps *wiring.AppParams) {
 	if deps.EventBus == nil {
@@ -466,8 +466,8 @@ func startEvents(ctx context.Context, deps *wiring.AppParams) {
 		if publisher != nil {
 			publisher.Start()
 		}
-		if err := deps.AlertDispatcher.Start(ctx); err != nil {
-			slog.Error("Failed to start the alert dispatcher", "error", err)
+		if err := deps.EventDispatcher.Start(ctx); err != nil {
+			slog.Error("Failed to start the event dispatcher", "error", err)
 		}
 		if err := deps.NotificationCenter.Start(ctx); err != nil {
 			slog.Error("Failed to start the notification center", "error", err)
@@ -475,14 +475,14 @@ func startEvents(ctx context.Context, deps *wiring.AppParams) {
 	}()
 }
 
-// stopEvents stops the alert dispatcher and the notification center, flushes
+// stopEvents stops the event dispatcher and the notification center, flushes
 // queued events and closes the bus.
 func stopEvents(deps *wiring.AppParams) {
 	if deps.EventBus == nil {
 		return
 	}
-	if err := deps.AlertDispatcher.Stop(); err != nil {
-		slog.Error("Failed to stop the alert dispatcher", "error", err)
+	if err := deps.EventDispatcher.Stop(); err != nil {
+		slog.Error("Failed to stop the event dispatcher", "error", err)
 	}
 	if err := deps.NotificationCenter.Stop(); err != nil {
 		slog.Error("Failed to stop the notification center", "error", err)

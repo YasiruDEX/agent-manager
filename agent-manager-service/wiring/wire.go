@@ -41,9 +41,9 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
-	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels"
-	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/notify"
-	"github.com/wso2/agent-manager/agent-manager-service/services/alertchannels/webhook"
+	"github.com/wso2/agent-manager/agent-manager-service/services/eventdestinations"
+	"github.com/wso2/agent-manager/agent-manager-service/services/eventdestinations/notify"
+	"github.com/wso2/agent-manager/agent-manager-service/services/eventdestinations/webhook"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 )
@@ -118,11 +118,12 @@ var serviceProviderSet = wire.NewSet(
 	ProvideEventBus,
 	ProvideEventPublisher,
 	services.NewMonitorRunEvents,
-	ProvideAlertChannelDrivers,
-	services.NewAlertChannelService,
-	wire.Bind(new(services.AlertChannelCleaner), new(services.AlertChannelService)),
-	wire.Bind(new(services.AlertChannelResolver), new(services.AlertChannelService)),
-	services.NewAlertDispatcherService,
+	ProvideDestinationDrivers,
+	services.NewEventDestinationService,
+	services.NewEventSubscriptionService,
+	wire.Bind(new(services.EventsCleaner), new(services.EventSubscriptionService)),
+	wire.Bind(new(services.DestinationResolver), new(services.EventDestinationService)),
+	services.NewEventDispatcherService,
 	services.NewNotificationService,
 	services.NewNotificationCenterService,
 )
@@ -162,7 +163,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewIdentityController,
 	controllers.NewMCPProxyScopeController,
 	controllers.NewAgentIdentityController,
-	controllers.NewAlertChannelController,
+	controllers.NewEventsController,
 	controllers.NewNotificationController,
 )
 
@@ -407,7 +408,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideEnvThunderSystemClientRepository,
 	ProvideEnvThunderURLRepository,
 	repositories.NewMCPProxyScopeRepository,
-	repositories.NewAlertChannelRepository,
+	repositories.NewEventRepository,
 	repositories.NewNotificationRepository,
 )
 
@@ -606,12 +607,12 @@ func ProvideAgentIdentityInjectionService(
 	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyScopeRepo, ocClient, cfg.SecretManager.AgentIdentityRefreshInterval, logger)
 }
 
-// ProvideAlertChannelDrivers registers the driver of each supported alert
-// channel kind. Add a kind here once its driver exists.
-func ProvideAlertChannelDrivers(cfg config.Config) *alertchannels.Registry {
-	return alertchannels.NewRegistry(
-		webhook.New(cfg.Alerting.AllowPrivateEndpoints),
-		notify.New(cfg.Alerting.AllowPrivateEndpoints),
+// ProvideDestinationDrivers registers the driver of each supported event
+// destination kind. Add a kind here once its driver exists.
+func ProvideDestinationDrivers(cfg config.Config) *eventdestinations.Registry {
+	return eventdestinations.NewRegistry(
+		webhook.New(cfg.Events.AllowPrivateDestinations),
+		notify.New(cfg.Events.AllowPrivateDestinations),
 	)
 }
 

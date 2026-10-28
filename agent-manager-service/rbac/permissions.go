@@ -216,12 +216,12 @@ const (
 	MonitorScorePublish Permission = "monitor:score-publish"
 )
 
-// Alerting permissions — org-level alert channels, granted to Admin only.
-// Project and agent alert channels are part of the project or agent and use
-// their read and update permissions.
+// Events permissions — event destinations, org subscriptions and the org's
+// delivery log, granted to Admin only. Project and agent subscriptions are
+// part of the project or agent and use their read and update permissions.
 const (
-	AlertingRead   Permission = "alerting:read"
-	AlertingManage Permission = "alerting:manage"
+	EventsRead   Permission = "events:read"
+	EventsManage Permission = "events:manage"
 )
 
 // Observability permissions — data-read scopes enforced by agent-manager-observer
