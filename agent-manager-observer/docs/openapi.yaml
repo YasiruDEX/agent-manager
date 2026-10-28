@@ -684,6 +684,7 @@ components:
           (400).
       schema:
         type: array
+        maxItems: 1
         items:
           type: string
           enum: [conversationId]

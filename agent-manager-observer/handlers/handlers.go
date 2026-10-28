@@ -685,8 +685,15 @@ func parseTraceFilters(query url.Values) (controllers.TraceFilters, error) {
 // parseMissing parses the comma-separated missing query parameter; unknown values are an error.
 func parseMissing(raw []string) (controllers.MissingFields, error) {
 	var missing controllers.MissingFields
+	items := 0
 	for _, list := range raw {
 		for _, item := range strings.Split(list, ",") {
+			if strings.TrimSpace(item) != "" {
+				items++
+				if items > 1 {
+					return controllers.MissingFields{}, fmt.Errorf("at most one missing value is allowed")
+				}
+			}
 			if err := controllers.ParseMissingField(&missing, item, "conversationId"); err != nil {
 				return controllers.MissingFields{}, err
 			}

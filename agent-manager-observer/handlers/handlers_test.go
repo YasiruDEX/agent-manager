@@ -463,6 +463,8 @@ func TestTraceEndpoints_InvalidFilters(t *testing.T) {
 		{name: "fractional minDurationMs", query: "&minDurationMs=1.5"},
 		{name: "negative minSpanCount", query: "&minSpanCount=-2"},
 		{name: "unknown missing value", query: "&missing=model"},
+		{name: "too many missing values", query: "&missing=conversationId,conversationId"},
+		{name: "repeated missing parameters", query: "&missing=conversationId&missing=conversationId"},
 		{name: "conversationId with missing=conversationId", query: "&conversationId=conv-42&missing=conversationId"},
 	}
 	endpoints := map[string]func(*Handler) http.HandlerFunc{
