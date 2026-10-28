@@ -11653,10 +11653,11 @@ components:
       properties:
         name:
           type: string
+          minLength: 3
           description: Unique identifier for the API key. If omitted, generated from displayName.
         displayName:
           type: string
-          description: Human-readable display name for the API key.
+          description: Human-readable display name for the API key. When name is omitted, the name generated from it (lowercase letters, digits and hyphens) must be at least 3 characters long.
         expiresAt:
           type: string
           description: Optional expiration time in ISO 8601 format (e.g. 2026-12-31T23:59:59Z).
@@ -12028,8 +12029,9 @@ components:
           type: array
           description: >-
             Optional MCP proxy configurations to create atomically with the
-            agent. Applied to the component's initial (lowest) environment. Name
-            and type are auto-generated.
+            agent. Applied to every environment in the project's deployment
+            pipeline, so the agent can be promoted without reconfiguring each
+            one. Name and type are auto-generated.
           items:
             $ref: "#/components/schemas/MCPConfigRequest"
         labels:
@@ -12098,8 +12100,10 @@ components:
         proxyName:
           type: string
           description: >-
-            Handle of an already-configured MCP proxy. Applied to the
-            component's initial (lowest) environment.
+            Handle of an already-configured MCP proxy. Applied to every
+            environment in the project's deployment pipeline. An environment
+            the proxy has no endpoint in yet is still recorded, and is bound
+            automatically once the proxy becomes available there.
         environmentVariables:
           type: array
           description: Optional custom environment variable names exposed to the agent
@@ -13497,6 +13501,9 @@ components:
         name:
           type: string
           description: Name of the organization
+        displayName:
+          type: string
+          description: Display name of the organization
         createdAt:
           type: string
           format: date-time
@@ -13504,6 +13511,7 @@ components:
       required:
         - name
         - createdAt
+        - displayName
 
     OrganizationListResponse:
       type: object

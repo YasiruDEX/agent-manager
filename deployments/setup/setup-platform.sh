@@ -43,18 +43,22 @@ check_command go
 
 if ! command -v node &> /dev/null; then
     echo "❌ Node.js is not installed."
-    echo "   Please install Node.js version >=20.19.0 or >=22.12.0."
+    echo "   Please install Node.js 22.x (>=22.23.4), 24.x (>=24.22.1) or >=26.12.1."
     exit 1
 fi
 
-# Check Node.js version: must be >=20.19.0 or >=22.12.0
+# Check Node.js version: 22.x >=22.23.4, 24.x >=24.22.1, or >=26.12.1
 NODE_MAJOR=$(node -v | sed 's/^v//' | cut -d'.' -f1)
 NODE_MINOR=$(node -v | sed 's/^v//' | cut -d'.' -f2)
+NODE_PATCH=$(node -v | sed 's/^v//' | cut -d'.' -f3)
+NODE_VER=$((NODE_MINOR * 1000 + NODE_PATCH))
 
-if ! { [ "$NODE_MAJOR" -eq 20 ] && [ "$NODE_MINOR" -ge 19 ]; } && \
-   ! { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -ge 12 ]; } && \
-   ! [ "$NODE_MAJOR" -gt 22 ]; then
-    echo "❌ Node.js version must be >=20.19.0 or >=22.12.0."
+if ! { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_VER" -ge 23004 ]; } && \
+   ! { [ "$NODE_MAJOR" -eq 24 ] && [ "$NODE_VER" -ge 22001 ]; } && \
+   ! { [ "$NODE_MAJOR" -eq 26 ] && [ "$NODE_VER" -ge 12001 ]; } && \
+   ! [ "$NODE_MAJOR" -gt 26 ]; then
+    echo "❌ Node.js must be 22.x (>=22.23.4), 24.x (>=24.22.1) or >=26.12.1."
+    echo "   Node 20, 23 and 25, and older patch releases of 22.x, 24.x and 26.x, are not supported."
     echo "   Current version: $(node -v)"
     exit 1
 fi
@@ -83,19 +87,6 @@ fi
 # ============================================================================
 echo ""
 echo "2️⃣  Start platform services"
-# Export console host path so docker-compose can align WORKDIR with the host,
-# preventing pnpm virtual-store / node_modules path mismatches.
-export CONSOLE_HOST_PATH="$(cd "$SCRIPT_DIR/../../console" && pwd)"
-
-# The console service mounts named volumes at these two paths inside the
-# bind-mounted console directory. Any that do not exist yet, Docker creates as
-# the container's user — root — and on Linux that ownership lands on the host
-# verbatim, so the later host-side `rush install` gets EACCES. (macOS remaps
-# bind-mount ownership to the invoking user, which is why it only bites here.)
-# Creating them first leaves them owned by this user; Docker never re-chowns an
-# existing mountpoint.
-mkdir -p "$CONSOLE_HOST_PATH/node_modules" "$CONSOLE_HOST_PATH/common/temp"
-
 # Must migrate before agent-manager-service starts: it crashes on a fresh volume
 # (missing tables), and Air never auto-restarts a crash — only rebuilds on file changes.
 echo "🐘 Starting Postgres and waiting for it to be healthy..."
@@ -118,23 +109,13 @@ fi
 echo "✅ Migrations completed"
 
 echo "🚀 Starting Agent Manager platform services..."
-# COMPOSE_SERVICES optionally restricts the bring-up to a subset of services
-# (e.g. CI heavy tier skips the console). Unset = all services (local default).
-# Split on whitespace into an array so multiple services work without exposing
-# the value to glob expansion.
-#
 # --build is required, not an optimisation: plain `up -d` builds an image only
 # when none exists, so an image left over from an earlier checkout is reused
 # even after its Dockerfile changed. That silently runs a stale toolchain — a
 # pre-1.26 image against a go.mod requiring go >= 1.26.0 fails inside Air with
 # "GOTOOLCHAIN=local", and the only symptom is a health check timing out much
 # later. Layer caching makes the no-change case cost a couple of seconds.
-if [ -n "${COMPOSE_SERVICES:-}" ]; then
-    read -r -a compose_services <<< "${COMPOSE_SERVICES}"
-    docker compose -f "$COMPOSE_FILE" up -d --build "${compose_services[@]}"
-else
-    docker compose -f "$COMPOSE_FILE" up -d --build
-fi
+docker compose -f "$COMPOSE_FILE" up -d --build
 
 echo ""
 echo "⏳ Waiting for services to be healthy..."
@@ -152,7 +133,6 @@ echo ""
 echo "✅ Agent Manager platform is running!"
 echo ""
 echo "🌐 Access points:"
-echo "   Console:   http://localhost:3000"
 echo "   API:       http://localhost:9000"
 echo "   Database:  postgresql://agentmanager:agentmanager@localhost:5432/agentmanager"
 echo ""

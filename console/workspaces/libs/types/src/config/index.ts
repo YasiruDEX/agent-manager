@@ -123,6 +123,7 @@ export interface AppConfig {
   footerLinks?: {
     privacyPolicyUrl?: string;
     termsOfUseUrl?: string;
+    supportUrl?: string;
   };
   /** Documentation deep-link paths for AMP instrumentation, appended to docsUrl. */
   instrumentationDocLinks?: {
@@ -136,6 +137,8 @@ export interface AppConfig {
 }
 
 export type FeatureFlags = {
+  /** Hides the environment ThunderID console link; other Agent ID features are unchanged. */
+  disableThunderConsole?: boolean;
   /** Shows the private Git repository option when building agents from source. */
   enablePrivateRepoSupport?: boolean;
   /**
@@ -145,7 +148,10 @@ export type FeatureFlags = {
   enableIdentityProviderManagedMode?: boolean;
   /**
    * When false, the Profile Settings text fields and Save Changes button are
-   * hidden/disabled, and the Change Password tab is disabled.
+   * hidden/disabled, and the Change Password tab is disabled. It also hides the
+   * organization Settings navigation (users, roles, groups) and the Profile
+   * Settings menu entry, for deployments where an external identity platform
+   * owns user and organization management.
    */
   enableProfileManagement?: boolean;
   /**
@@ -153,6 +159,12 @@ export type FeatureFlags = {
    * buttons on the Settings page are disabled.
    */
   enableUserManagement?: boolean;
+  /**
+   * Shows the Agent ID surfaces: the per-agent Agent ID page, the
+   * organization-level identity groups/roles pages, and the roles & groups
+   * section on the agent overview.
+   */
+  enableAgentIdentity?: boolean;
 };
 
 export type GuardrailCapabilities = {
@@ -176,6 +188,15 @@ declare global {
 }
 
 export const globalConfig: AppConfig = window.__RUNTIME_CONFIG__;
+
+/**
+ * Whether the Agent ID surfaces are shown. Read through this rather than the
+ * flag directly — the feature spans the nav, routes and the agent overview, and
+ * every "value missing" path (older hand-written config.js, unsubstituted
+ * template placeholder) has to land on disabled.
+ */
+export const isAgentIdentityEnabled = (): boolean =>
+  globalConfig.featureFlags?.enableAgentIdentity === true;
 
 /**
  * Normalised base path: no trailing slash, leading slash when non-empty.

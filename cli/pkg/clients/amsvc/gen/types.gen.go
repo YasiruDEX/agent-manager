@@ -2366,7 +2366,7 @@ type CreateAgentRequest struct {
 	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels *Labels `json:"labels,omitempty"`
 
-	// McpConfig Optional MCP proxy configurations to create atomically with the agent. Applied to the component's initial (lowest) environment. Name and type are auto-generated.
+	// McpConfig Optional MCP proxy configurations to create atomically with the agent. Applied to every environment in the project's deployment pipeline, so the agent can be promoted without reconfiguring each one. Name and type are auto-generated.
 	McpConfig *[]MCPConfigRequest `json:"mcpConfig,omitempty"`
 
 	// ModelConfig Optional LLM configurations to create atomically with the agent. Applied to the component's initial (lowest) environment. Name and type are auto-generated.
@@ -2511,7 +2511,7 @@ type CreateGroupRequest struct {
 
 // CreateLLMAPIKeyRequest defines model for CreateLLMAPIKeyRequest.
 type CreateLLMAPIKeyRequest struct {
-	// DisplayName Human-readable display name for the API key.
+	// DisplayName Human-readable display name for the API key. When name is omitted, the name generated from it (lowercase letters, digits and hyphens) must be at least 3 characters long.
 	DisplayName *string `json:"displayName,omitempty"`
 
 	// ExpiresAt Optional expiration time in ISO 8601 format (e.g. 2026-12-31T23:59:59Z).
@@ -4043,7 +4043,7 @@ type MCPConfigRequest struct {
 	// EnvironmentVariables Optional custom environment variable names exposed to the agent
 	EnvironmentVariables *[]EnvironmentVariableConfig `json:"environmentVariables,omitempty"`
 
-	// ProxyName Handle of an already-configured MCP proxy. Applied to the component's initial (lowest) environment.
+	// ProxyName Handle of an already-configured MCP proxy. Applied to every environment in the project's deployment pipeline. An environment the proxy has no endpoint in yet is still recorded, and is bound automatically once the proxy becomes available there.
 	ProxyName string `json:"proxyName"`
 }
 
@@ -4508,6 +4508,9 @@ type OidcDiscoveryResponse struct {
 type OrganizationListItem struct {
 	// CreatedAt Timestamp when the organization was created
 	CreatedAt time.Time `json:"createdAt"`
+
+	// DisplayName Display name of the organization
+	DisplayName string `json:"displayName"`
 
 	// Name Name of the organization
 	Name string `json:"name"`

@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/alpine:3.21
+FROM public.ecr.aws/docker/library/alpine:3.24
 
 # Version arguments for reproducibility and easy updates
 ARG KUBECTL_VERSION=v1.32.10
@@ -17,7 +17,7 @@ RUN apk add --no-cache \
   htop procps \
   vim \
   sudo \
-  wget ca-certificates ncurses && \
+  wget 'ca-certificates>=20261020' 'ca-certificates-bundle>=20261020' ncurses && \
   mkdir -p /etc/bash_completion.d
 
 # Install kubectl, helm, and k3d with completions
