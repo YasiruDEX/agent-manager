@@ -18,6 +18,7 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,9 @@ import (
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/notification_repository_mock.go . NotificationRepository:NotificationRepositoryMock
 type NotificationRepository interface {
+	// WithWatch evaluates a current watch under a row lock. All writes through
+	// txRepo commit atomically with the evaluation. A deleted watch is skipped.
+	WithWatch(ctx context.Context, id uuid.UUID, evaluate func(w *models.MonitorWatch, txRepo NotificationRepository) error) error
 	// GetWatch returns a user's watch on a monitor, or gorm.ErrRecordNotFound.
 	GetWatch(ctx context.Context, monitorID uuid.UUID, userID string) (*models.MonitorWatch, error)
 	// SaveWatch creates or replaces a user's watch on a monitor.
@@ -69,6 +73,20 @@ func NewNotificationRepository(db *gorm.DB) NotificationRepository {
 	return &notificationRepository{db: db}
 }
 
+func (r *notificationRepository) WithWatch(ctx context.Context, id uuid.UUID, evaluate func(*models.MonitorWatch, NotificationRepository) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var w models.MonitorWatch
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&w).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return evaluate(&w, &notificationRepository{db: tx})
+	})
+}
+
 func (r *notificationRepository) GetWatch(ctx context.Context, monitorID uuid.UUID, userID string) (*models.MonitorWatch, error) {
 	var w models.MonitorWatch
 	err := r.db.WithContext(ctx).Where("monitor_id = ? AND user_id = ?", monitorID, userID).First(&w).Error
@@ -79,14 +97,50 @@ func (r *notificationRepository) GetWatch(ctx context.Context, monitorID uuid.UU
 }
 
 func (r *notificationRepository) SaveWatch(ctx context.Context, w *models.MonitorWatch) error {
-	now := time.Now()
-	w.CreatedAt, w.UpdatedAt = now, now
-	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "monitor_id"}, {Name: "user_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"notify_on_failure", "notify_on_success", "thresholds", "breached", "updated_at",
-		}),
-	}).Create(w).Error
+	var saved models.MonitorWatch
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Insert only when absent, then lock the persisted row. ON CONFLICT
+		// also serializes two first-time saves for the same monitor/user.
+		initial := *w
+		initial.ID = uuid.New()
+		initial.CreatedAt = time.Now().UTC().Truncate(time.Microsecond)
+		initial.UpdatedAt = initial.CreatedAt
+		initial.Breached = []string{}
+		initial.LastEvaluatedAt = nil
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "monitor_id"}, {Name: "user_id"}},
+			DoNothing: true,
+		}).Create(&initial).Error; err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("monitor_id = ? AND user_id = ? AND ou_id = ?", w.MonitorID, w.UserID, w.OUID).
+			First(&saved).Error; err != nil {
+			return err
+		}
+		// The service's snapshot may precede an evaluation. Preserve the
+		// latest committed breaches only for thresholds that still exist.
+		keys := make(map[string]bool, len(w.Thresholds))
+		for _, threshold := range w.Thresholds {
+			keys[threshold.Key()] = true
+		}
+		breached := []string{}
+		for _, key := range saved.Breached {
+			if keys[key] {
+				breached = append(breached, key)
+			}
+		}
+		saved.NotifyOnFailure, saved.NotifyOnSuccess = w.NotifyOnFailure, w.NotifyOnSuccess
+		saved.Thresholds, saved.Breached = w.Thresholds, breached
+		saved.UpdatedAt = time.Now().UTC().Truncate(time.Microsecond)
+		return tx.Model(&models.MonitorWatch{}).Where("id = ?", saved.ID).
+			Select("notify_on_failure", "notify_on_success", "thresholds", "breached", "updated_at").
+			UpdateColumns(&saved).Error
+	})
+	if err == nil {
+		*w = saved
+	}
+	return err
 }
 
 func (r *notificationRepository) DeleteWatch(ctx context.Context, monitorID uuid.UUID, userID string) error {

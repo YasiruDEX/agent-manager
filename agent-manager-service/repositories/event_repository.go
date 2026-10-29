@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -203,7 +204,7 @@ func (r *eventRepository) DestinationsByID(ctx context.Context, ouID string, ids
 }
 
 func (r *eventRepository) CreateDestination(ctx context.Context, d *models.EventDestination) error {
-	now := time.Now()
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	d.CreatedAt, d.UpdatedAt = now, now
 	err := r.db.WithContext(ctx).Create(d).Error
 	if pgErrorCode(err) == pgUniqueViolation {
@@ -222,6 +223,11 @@ func (r *eventRepository) UpdateDestination(
 		if err != nil {
 			return err
 		}
+		// The caller loaded d before this transaction. A row lock alone does
+		// not prevent its stale settings or secret from undoing another write.
+		if !locked.UpdatedAt.Equal(d.UpdatedAt) {
+			return fmt.Errorf("%w: destination changed; reload it before saving", utils.ErrConflict)
+		}
 		var using []models.EventSubscription
 		if err := tx.Where("destination_id = ?", d.ID).Order("created_at ASC").Find(&using).Error; err != nil {
 			return err
@@ -231,12 +237,17 @@ func (r *eventRepository) UpdateDestination(
 				return err
 			}
 		}
-		d.UpdatedAt = time.Now()
+		// PostgreSQL stores microseconds. Keep the returned revision identical
+		// to the stored one and advance it even for writes in one clock tick.
+		d.UpdatedAt = time.Now().UTC().Truncate(time.Microsecond)
+		if !d.UpdatedAt.After(locked.UpdatedAt) {
+			d.UpdatedAt = locked.UpdatedAt.Add(time.Microsecond)
+		}
 		// Update from the struct, not a map, so the JSON columns go through
 		// their serializers; Select also writes zero values.
 		return tx.Model(&models.EventDestination{}).Where("id = ?", d.ID).
 			Select("name", "description", "config", "secret_encrypted", "availability", "projects", "updated_at").
-			Updates(d).Error
+			UpdateColumns(d).Error
 	})
 	if pgErrorCode(err) == pgUniqueViolation {
 		return utils.ErrEventDestinationNameTaken

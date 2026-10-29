@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/nicholas-fedor/shoutrrr/pkg/router"
+	shoutrrrsmtp "github.com/nicholas-fedor/shoutrrr/pkg/services/email/smtp"
 	"github.com/nicholas-fedor/shoutrrr/pkg/types"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -234,6 +235,10 @@ func (d *Driver) Deliver(ctx context.Context, dest eventdestinations.Destination
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
+		if smtpSender, ok := sender.(*shoutrrrsmtp.Service); ok {
+			done <- deliverSMTP(ctx, smtpSender.Config, body, &params, d.allowPrivate)
+			return
+		}
 		if cs, ok := sender.(types.ContextSender); ok {
 			done <- cs.SendContext(ctx, body, &params)
 			return

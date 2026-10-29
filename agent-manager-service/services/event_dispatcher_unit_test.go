@@ -356,6 +356,66 @@ func TestEventDispatcher_DeliveryDecisions(t *testing.T) {
 	assert.Equal(t, "drop", m.outcome)
 }
 
+func TestEventDispatcher_RetriesWhenOutcomeCannotBeStored(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		result     eventdestinations.Result
+		attempt    int
+		disable    bool
+		unreadable bool
+		status     string
+		outcome    string
+	}{
+		{name: "delivered", attempt: 1, status: models.EventDeliveryDelivered, outcome: "ack"},
+		{name: "permanent failure", result: eventdestinations.Result{Err: errors.New("invalid target")}, attempt: 1, status: models.EventDeliveryFailed, outcome: "drop"},
+		{name: "attempts exhausted", result: eventdestinations.Result{Err: errors.New("unavailable"), Retryable: true}, attempt: 3, status: models.EventDeliveryFailed, outcome: "drop"},
+		{name: "pending", result: eventdestinations.Result{Err: errors.New("unavailable"), Retryable: true}, attempt: 1, status: models.EventDeliveryPending, outcome: "retry"},
+		{name: "skipped", attempt: 1, disable: true, status: models.EventDeliverySkipped, outcome: "drop"},
+		{name: "unreadable destination", attempt: 1, unreadable: true, status: models.EventDeliveryFailed, outcome: "drop"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newDispatcherFixture(t)
+			dest := f.destination(models.DestinationAvailableAll)
+			sub := f.subscription("agent", "payments", "refund-agent", dest.ID, "agent.deployed")
+			ctx := context.Background()
+			evt := matcherEvent("agent.deployed", events.ScopeAgent, "payments", "refund-agent", "")
+			f.dispatcher.handleEvent(ctx, publish(t, evt))
+			body := f.bus.enqueued[evt.ID+":"+dest.ID.String()]
+			require.NotNil(t, body)
+			f.driver.result = tc.result
+			if tc.disable {
+				sub.Enabled = false
+				f.subscriptions[sub.ID] = sub
+			}
+			if tc.unreadable {
+				dest.Kind = "unknown"
+				f.destinations[dest.ID] = dest
+			}
+			persist := f.repo.RecordDeliveryFunc
+			f.repo.RecordDeliveryFunc = func(_ context.Context, delivery *models.EventDelivery) error {
+				assert.Equal(t, tc.status, delivery.Status)
+				return errors.New("database unavailable")
+			}
+			msg := &answeredMessage{data: body, attempt: tc.attempt}
+			f.dispatcher.handleDelivery(ctx, msg)
+			assert.Equal(t, "retry", msg.outcome, "failed persistence must not acknowledge or terminate the job")
+			assert.Equal(t, eventFanoutRetryDelay, msg.delay)
+			assert.Empty(t, f.recorded)
+
+			// Once persistence recovers, the redelivered job can finish.
+			f.repo.RecordDeliveryFunc = persist
+			msg = &answeredMessage{data: body, attempt: tc.attempt}
+			f.dispatcher.handleDelivery(ctx, msg)
+			assert.Equal(t, tc.outcome, msg.outcome)
+			require.Len(t, f.recorded, 1)
+			assert.Equal(t, tc.status, f.recorded[0].Status)
+			if tc.disable || tc.unreadable {
+				assert.Zero(t, f.driver.sends())
+			}
+		})
+	}
+}
+
 func TestEventDispatcher_SkipsWhenTheDestinationWasNarrowed(t *testing.T) {
 	f := newDispatcherFixture(t)
 	dest := f.destination(models.DestinationAvailableAll)
@@ -455,14 +515,13 @@ func TestEventDispatcher_EndToEndOverNATS(t *testing.T) {
 	require.NoError(t, d.Start(ctx))
 	defer func() { _ = d.Stop() }()
 
-	pub := events.NewAsyncPublisher(bus, discardSlog())
-	pub.Start()
 	evt := events.New("evt_"+uuid.NewString(), "agent.deployed", events.ScopeAgent, ou, "p1", "a1", time.Now())
 	evt.Environment = "dev"
 	evt.Data = map[string]any{"imageId": "img-1"}
-	pub.Publish(ctx, evt)
-	pub.Publish(ctx, evt) // a duplicate publish is dropped by JetStream
-	pub.Stop()
+	bodyBytes, err := json.Marshal(evt)
+	require.NoError(t, err)
+	require.NoError(t, bus.PublishEvent(ctx, evt, bodyBytes))
+	require.NoError(t, bus.PublishEvent(ctx, evt, bodyBytes)) // JetStream drops the duplicate.
 
 	require.Eventually(t, func() bool {
 		mu.Lock()

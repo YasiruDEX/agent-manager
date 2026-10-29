@@ -26,11 +26,12 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/events"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 )
 
 const (
-	notificationFanoutConsumer   = "notification-fanout"
+	notificationFanoutConsumer   = events.NotificationFanoutConsumer
 	notificationFanoutRetryDelay = 5 * time.Second
 	notificationPruneInterval    = time.Hour
 )
@@ -101,11 +102,11 @@ func (n *notificationCenter) Start(ctx context.Context) error {
 }
 
 func (n *notificationCenter) Stop() error {
-	if n.sub != nil {
-		n.sub.Stop()
-	}
 	if n.cancel != nil {
 		n.cancel()
+	}
+	if n.sub != nil {
+		n.sub.Stop()
 	}
 	n.wg.Wait()
 	return nil
@@ -137,22 +138,23 @@ func (n *notificationCenter) handleEvent(ctx context.Context, msg events.Message
 		if w.OUID != run.OrgID {
 			continue
 		}
-		outcome := evaluateWatch(w, run)
-		// Notifications first, then the breached state: if the state update
-		// fails the event is retried, finds the old state again and creates
-		// the same notifications, which are then skipped as duplicates. The
-		// other order could lose a notification.
-		if err := n.repo.CreateNotifications(ctx, outcome.Notifications); err != nil {
-			log.Error("Failed to create notifications; will retry", "watchId", w.ID, "error", err)
+		err := n.repo.WithWatch(ctx, w.ID, func(current *models.MonitorWatch, txRepo repositories.NotificationRepository) error {
+			if current.OUID != run.OrgID {
+				return nil
+			}
+			outcome := evaluateWatch(current, run)
+			if err := txRepo.CreateNotifications(ctx, outcome.Notifications); err != nil {
+				return err
+			}
+			if outcome.Evaluated {
+				return txRepo.UpdateWatchBreached(ctx, current.ID, outcome.Breached, run.Time)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Error("Failed to evaluate monitor watch; will retry", "watchId", w.ID, "error", err)
 			_ = msg.Retry(notificationFanoutRetryDelay)
 			return
-		}
-		if outcome.Evaluated {
-			if err := n.repo.UpdateWatchBreached(ctx, w.ID, outcome.Breached, run.Time); err != nil {
-				log.Error("Failed to record breached thresholds; will retry", "watchId", w.ID, "error", err)
-				_ = msg.Retry(notificationFanoutRetryDelay)
-				return
-			}
 		}
 	}
 	_ = msg.Ack()

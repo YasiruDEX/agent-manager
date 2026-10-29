@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
+	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 )
 
 // NotificationRepositoryMock is a mock implementation of repositories.NotificationRepository.
@@ -51,6 +52,9 @@ import (
 //			UpdateWatchBreachedFunc: func(ctx context.Context, watchID uuid.UUID, breached []string, evaluatedAt time.Time) error {
 //				panic("mock out the UpdateWatchBreached method")
 //			},
+//			WithWatchFunc: func(ctx context.Context, id uuid.UUID, evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error) error {
+//				panic("mock out the WithWatch method")
+//			},
 //		}
 //
 //		// use mockedNotificationRepository in code that requires repositories.NotificationRepository
@@ -90,6 +94,9 @@ type NotificationRepositoryMock struct {
 
 	// UpdateWatchBreachedFunc mocks the UpdateWatchBreached method.
 	UpdateWatchBreachedFunc func(ctx context.Context, watchID uuid.UUID, breached []string, evaluatedAt time.Time) error
+
+	// WithWatchFunc mocks the WithWatch method.
+	WithWatchFunc func(ctx context.Context, id uuid.UUID, evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -198,6 +205,15 @@ type NotificationRepositoryMock struct {
 			// EvaluatedAt is the evaluatedAt argument value.
 			EvaluatedAt time.Time
 		}
+		// WithWatch holds details about calls to the WithWatch method.
+		WithWatch []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ID is the id argument value.
+			ID uuid.UUID
+			// Evaluate is the evaluate argument value.
+			Evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error
+		}
 	}
 	lockCountUnread         sync.RWMutex
 	lockCreateNotifications sync.RWMutex
@@ -210,6 +226,7 @@ type NotificationRepositoryMock struct {
 	lockSaveWatch           sync.RWMutex
 	lockSetRead             sync.RWMutex
 	lockUpdateWatchBreached sync.RWMutex
+	lockWithWatch           sync.RWMutex
 }
 
 // CountUnread calls CountUnreadFunc.
@@ -661,5 +678,45 @@ func (mock *NotificationRepositoryMock) UpdateWatchBreachedCalls() []struct {
 	mock.lockUpdateWatchBreached.RLock()
 	calls = mock.calls.UpdateWatchBreached
 	mock.lockUpdateWatchBreached.RUnlock()
+	return calls
+}
+
+// WithWatch calls WithWatchFunc.
+func (mock *NotificationRepositoryMock) WithWatch(ctx context.Context, id uuid.UUID, evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error) error {
+	if mock.WithWatchFunc == nil {
+		panic("NotificationRepositoryMock.WithWatchFunc: method is nil but NotificationRepository.WithWatch was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		ID       uuid.UUID
+		Evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error
+	}{
+		Ctx:      ctx,
+		ID:       id,
+		Evaluate: evaluate,
+	}
+	mock.lockWithWatch.Lock()
+	mock.calls.WithWatch = append(mock.calls.WithWatch, callInfo)
+	mock.lockWithWatch.Unlock()
+	return mock.WithWatchFunc(ctx, id, evaluate)
+}
+
+// WithWatchCalls gets all the calls that were made to WithWatch.
+// Check the length with:
+//
+//	len(mockedNotificationRepository.WithWatchCalls())
+func (mock *NotificationRepositoryMock) WithWatchCalls() []struct {
+	Ctx      context.Context
+	ID       uuid.UUID
+	Evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error
+} {
+	var calls []struct {
+		Ctx      context.Context
+		ID       uuid.UUID
+		Evaluate func(w *models.MonitorWatch, txRepo repositories.NotificationRepository) error
+	}
+	mock.lockWithWatch.RLock()
+	calls = mock.calls.WithWatch
+	mock.lockWithWatch.RUnlock()
 	return calls
 }

@@ -42,6 +42,9 @@ Lower levels see the wider levels' subscriptions that reach them, read-only and 
 
 ## Delivery guarantees
 
+- **Durable acceptance.** Events accepted by the publisher are stored in PostgreSQL's `event_outbox` before returning. A background worker leases rows, publishes to NATS, and removes them only after confirmation. Bus failures retry without a fixed attempt limit; interrupted leases expire after two minutes.
+- **Monitor replay.** Terminal runs remain replayable until their complete event (including scores) is accepted by the outbox. A score-query or outbox-write failure retries on a later scheduler tick. Replay retains the run's completion time and event ID.
+- **Publication boundary.** Monitor outcomes have a durable source. Other route events are recorded after the operation completes; a crash or database failure between that operation and outbox insertion is still outside the delivery guarantee. The route logs an explicit persistence failure.
 - **At least once.** A receiver may see an event twice after a crash or a lost acknowledgement; it should drop duplicates by `webhook-id`, which is the same on every attempt.
 - **Retries** follow the driver: a webhook retries network errors, 408, 425, 429 and 5xx after 10s, 1m, 5m, 30m and 2h, up to `EVENTS_DELIVERY_MAX_ATTEMPTS`. Other responses fail at once. Shoutrrr reports no status codes, so a failed `notify` send is always retried; an invalid URL is refused when the destination is saved.
 - **A delivery already recorded as delivered is not sent again** when its job comes back.
@@ -86,7 +89,7 @@ Project and agent callers see only the destinations available to them, as name, 
 Offered: Slack, Microsoft Teams, Google Chat, Discord, Telegram, Mattermost, Rocket.Chat, Zulip, Email (SMTP), PagerDuty, Opsgenie, ntfy, Gotify, Pushover and Twilio SMS.
 
 - **Adding a service** Shoutrrr supports is one entry in `offered` (`notify.go`) and a sample URL in its test. Offer only services that send through the client the driver supplies (`types.HTTPClientSetter`); the test fails otherwise.
-- **SSRF.** HTTP services send through the same SSRF-hardened client as webhooks. Hosts named in a self-hosted service's URL (Mattermost, Gotify, an SMTP relay, …) must resolve to public addresses when the destination is saved; SMTP does not go over HTTP, so its host is checked again before every send. `EVENTS_ALLOW_PRIVATE_DESTINATIONS` lifts both checks for local development.
+- **SSRF.** HTTP services send through the same SSRF-hardened client as webhooks. Hosts named in a self-hosted service's URL (Mattermost, Gotify, an SMTP relay, …) must resolve to public addresses when the destination is saved; SMTP does not go over HTTP, so its connection resolves and validates every address, then dials a validated IP directly while retaining the original hostname for TLS and authentication. `EVENTS_ALLOW_PRIVATE_DESTINATIONS` lifts both checks for local development.
 - **Upgrading Shoutrrr.** Releases from v0.19.0 need Go 1.27; the service pins v0.18.0 until it moves to Go 1.27. Update `libraryVersion` in `notify.go` with it, which versions the docs links.
 
 ## Adding a destination kind
@@ -98,3 +101,10 @@ Offered: Slack, Microsoft Teams, Google Chat, Discord, Telegram, Mattermost, Roc
 A kind whose settings include a credential the user enters implements `eventdestinations.CredentialDriver` too; one that delivers to several services implements `eventdestinations.ServiceCatalog`.
 
 Matching, queuing, retries, the delivery log and the API stay as they are.
+
+
+## Upgrading event durability
+
+Migration 051 adds the outbox and `monitor_runs.event_queued_at`. It preserves existing rows and marks pre-upgrade terminal runs as already handled; pending/running and newly created runs remain replayable. New workers coexist through expiring leases. Old application replicas still use their original publication behavior, so complete the rollout before relying on durable acceptance.
+
+Rollback leaves the additive table and column in place, preserving pending work for a subsequent upgrade. Start the older binary without running its migration command (its migration validator rejects newer schema versions). Do not drop pending outbox rows. Embedded mode still loses events already published into its in-memory bus on restart; use NATS mode for durable downstream delivery.

@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	eventFanoutConsumer   = "event-fanout"
+	eventFanoutConsumer   = events.EventFanoutConsumer
 	eventDeliveryConsumer = "event-delivery"
 	eventFanoutRetryDelay = 5 * time.Second
 	eventDeliveryWorkers  = 8
@@ -130,7 +130,11 @@ func (d *eventDispatcher) Start(ctx context.Context) error {
 			// Deliveries run on a bounded pool so one slow destination does
 			// not stall the rest; the pool blocks the consumer when every
 			// worker is busy.
-			d.workers <- struct{}{}
+			select {
+			case d.workers <- struct{}{}:
+			case <-runCtx.Done():
+				return
+			}
 			d.wg.Add(1)
 			go func() {
 				defer func() { <-d.workers; d.wg.Done() }()
@@ -138,8 +142,8 @@ func (d *eventDispatcher) Start(ctx context.Context) error {
 			}()
 		})
 	if err != nil {
-		fanout.Stop()
 		cancel()
+		fanout.Stop()
 		return fmt.Errorf("failed to consume event deliveries: %w", err)
 	}
 	d.subs = []events.Subscription{fanout, delivery}
@@ -152,11 +156,11 @@ func (d *eventDispatcher) Start(ctx context.Context) error {
 }
 
 func (d *eventDispatcher) Stop() error {
-	for _, sub := range d.subs {
-		sub.Stop()
-	}
 	if d.cancel != nil {
 		d.cancel()
+	}
+	for _, sub := range d.subs {
+		sub.Stop()
 	}
 	d.wg.Wait()
 	return nil
@@ -293,13 +297,19 @@ func (d *eventDispatcher) handleDelivery(ctx context.Context, msg events.Message
 		return
 	}
 	if !stillWanted {
-		d.record(ctx, delivery, models.EventDeliverySkipped, delivery.Attempts, nil, "no subscription wants this event any more", nil)
+		if err := d.record(ctx, delivery, models.EventDeliverySkipped, delivery.Attempts, nil, "no subscription wants this event any more", nil); err != nil {
+			_ = msg.Retry(eventFanoutRetryDelay)
+			return
+		}
 		_ = msg.Drop()
 		return
 	}
 	driver, target, err := d.resolver.Resolve(dest)
 	if err != nil {
-		d.record(ctx, delivery, models.EventDeliveryFailed, delivery.Attempts, nil, "destination settings unreadable", nil)
+		if err := d.record(ctx, delivery, models.EventDeliveryFailed, delivery.Attempts, nil, "destination settings unreadable", nil); err != nil {
+			_ = msg.Retry(eventFanoutRetryDelay)
+			return
+		}
 		log.Error("Cannot deliver to event destination", "error", err)
 		_ = msg.Drop()
 		return
@@ -313,17 +323,26 @@ func (d *eventDispatcher) handleDelivery(ctx context.Context, msg events.Message
 	}
 	if res.Err == nil {
 		now := d.now()
-		d.record(ctx, delivery, models.EventDeliveryDelivered, attempt, code, "", &now)
+		if err := d.record(ctx, delivery, models.EventDeliveryDelivered, attempt, code, "", &now); err != nil {
+			_ = msg.Retry(eventFanoutRetryDelay)
+			return
+		}
 		_ = msg.Ack()
 		return
 	}
 	if attempt >= d.maxAttempts() || !res.Retryable {
-		d.record(ctx, delivery, models.EventDeliveryFailed, attempt, code, res.Err.Error(), nil)
+		if err := d.record(ctx, delivery, models.EventDeliveryFailed, attempt, code, res.Err.Error(), nil); err != nil {
+			_ = msg.Retry(eventFanoutRetryDelay)
+			return
+		}
 		log.Warn("Event delivery failed", "kind", dest.Kind, "attempts", attempt, "error", res.Err)
 		_ = msg.Drop()
 		return
 	}
-	d.record(ctx, delivery, models.EventDeliveryPending, attempt, code, res.Err.Error(), nil)
+	if err := d.record(ctx, delivery, models.EventDeliveryPending, attempt, code, res.Err.Error(), nil); err != nil {
+		_ = msg.Retry(eventFanoutRetryDelay)
+		return
+	}
 	_ = msg.Retry(eventBackoff(attempt))
 }
 
@@ -367,7 +386,7 @@ func eventBackoff(attempt int) time.Duration {
 func (d *eventDispatcher) record(
 	ctx context.Context, delivery *models.EventDelivery, status string,
 	attempts int, code *int, lastErr string, deliveredAt *time.Time,
-) {
+) error {
 	update := *delivery
 	// A fresh row ID: the upsert matches the existing row by destination
 	// and event.
@@ -380,7 +399,9 @@ func (d *eventDispatcher) record(
 	if err := d.repo.RecordDelivery(ctx, &update); err != nil {
 		d.logger.Error("Failed to record event delivery", "destinationId", delivery.DestinationID,
 			"eventId", delivery.EventID, "error", err)
+		return fmt.Errorf("failed to record event delivery: %w", err)
 	}
+	return nil
 }
 
 func (d *eventDispatcher) pruneLoop(ctx context.Context) {

@@ -494,6 +494,8 @@ func writeEventsError(w http.ResponseWriter, r *http.Request, err error, fallbac
 		utils.WriteErrorResponse(w, http.StatusNotFound, "Event destination not found")
 	case errors.Is(err, utils.ErrEventSubscriptionNotFound):
 		utils.WriteErrorResponse(w, http.StatusNotFound, "Event subscription not found")
+	case errors.Is(err, utils.ErrConflict):
+		utils.WriteErrorResponse(w, http.StatusConflict, "Destination changed concurrently; reload and retry")
 	case errors.Is(err, utils.ErrEventDestinationInUse):
 		utils.WriteErrorResponse(w, http.StatusConflict, err.Error())
 	case errors.Is(err, utils.ErrEventDestinationNameTaken):

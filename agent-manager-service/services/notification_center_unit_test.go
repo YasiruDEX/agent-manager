@@ -30,6 +30,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/events"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
+	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
 )
 
@@ -61,6 +62,20 @@ func scoresData(evaluator string, mean float64) map[string]any {
 }
 
 func newTestNotificationCenter(repo *repomocks.NotificationRepositoryMock) *notificationCenter {
+	if repo.WithWatchFunc == nil {
+		repo.WithWatchFunc = func(ctx context.Context, id uuid.UUID, evaluate func(*models.MonitorWatch, repositories.NotificationRepository) error) error {
+			watches, err := repo.ListWatches(ctx, uuid.Nil)
+			if err != nil {
+				return err
+			}
+			for i := range watches {
+				if watches[i].ID == id {
+					return evaluate(&watches[i], repo)
+				}
+			}
+			return nil
+		}
+	}
 	return NewNotificationCenterService(nil, repo, config.Config{}, discardSlog()).(*notificationCenter)
 }
 
@@ -96,7 +111,7 @@ func TestNotificationCenter_NotifiesWatchersAndRecordsBreaches(t *testing.T) {
 	var evaluatedAt time.Time
 	repo := &repomocks.NotificationRepositoryMock{
 		ListWatchesFunc: func(_ context.Context, id uuid.UUID) ([]models.MonitorWatch, error) {
-			assert.Equal(t, monitorID, id)
+			assert.True(t, id == monitorID || id == uuid.Nil)
 			return []models.MonitorWatch{watcher, stranger}, nil
 		},
 		CreateNotificationsFunc: func(_ context.Context, n []models.Notification) error {
